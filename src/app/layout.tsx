@@ -29,7 +29,7 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col bg-gray-50">
         <nav className="bg-white border-b border-gray-200 shadow-sm">
-          <div className="max-w-7xl mx-auto px-4 py-3 flex items-center gap-8">
+          <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
             <a href="/" className="text-xl font-bold text-gray-900">생산 스케줄링</a>
             <div className="flex gap-1">
               <a href="/" className="px-4 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 transition">대시보드</a>
