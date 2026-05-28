@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import ProcessTabs from "../components/ProcessTabs";
+import { DEFAULT_FACTORY, DEFAULT_PROCESS } from "@/lib/factory-config";
 
 interface Machine {
   id: number;
@@ -19,6 +21,8 @@ interface Machine {
 const ALL_CAPABILITIES = ["일반", "항바니쉬", "UV", "IR코팅", "양면", "패키지", "비닐스티커", "유포지", "OHP"];
 
 export default function MachinesPage() {
+  const [factory, setFactory] = useState(DEFAULT_FACTORY);
+  const [processLine, setProcessLine] = useState(DEFAULT_PROCESS);
   const [machines, setMachines] = useState<Machine[]>([]);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState({
@@ -36,13 +40,14 @@ export default function MachinesPage() {
   const [showForm, setShowForm] = useState(false);
 
   const fetchMachines = async () => {
-    const res = await fetch("/api/machines");
+    const qs = `?factory=${encodeURIComponent(factory)}&process_line=${encodeURIComponent(processLine)}`;
+    const res = await fetch(`/api/machines${qs}`);
     setMachines(await res.json());
   };
 
   useEffect(() => {
     fetchMachines();
-  }, []);
+  }, [factory, processLine]);
 
   const handleEdit = (m: Machine) => {
     let caps: string[] = [];
@@ -73,13 +78,13 @@ export default function MachinesPage() {
       await fetch(`/api/machines/${editingId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, factory, process_line: processLine }),
       });
     } else {
       await fetch("/api/machines", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, factory, process_line: processLine }),
       });
     }
     setShowForm(false);
@@ -102,6 +107,12 @@ export default function MachinesPage() {
 
   return (
     <div>
+      <ProcessTabs
+        factory={factory}
+        processLine={processLine}
+        onFactoryChange={setFactory}
+        onProcessChange={setProcessLine}
+      />
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-2xl font-bold text-gray-900">기계 관리</h2>
         <button

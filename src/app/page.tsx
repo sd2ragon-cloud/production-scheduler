@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
+import ProcessTabs from "./components/ProcessTabs";
+import { DEFAULT_FACTORY, DEFAULT_PROCESS } from "@/lib/factory-config";
 
 interface Machine {
   id: number;
@@ -87,6 +89,8 @@ function deadlineColor(deadline: string): string {
 }
 
 export default function ScheduleBoard() {
+  const [factory, setFactory] = useState(DEFAULT_FACTORY);
+  const [processLine, setProcessLine] = useState(DEFAULT_PROCESS);
   const [machines, setMachines] = useState<Machine[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [schedule, setSchedule] = useState<ScheduleEntry[]>([]);
@@ -104,8 +108,9 @@ export default function ScheduleBoard() {
   const [machineStartTimes, setMachineStartTimes] = useState<Record<number, string>>({});
 
   const fetchAll = useCallback(async () => {
+    const qs = `?factory=${encodeURIComponent(factory)}&process_line=${encodeURIComponent(processLine)}`;
     const [machRes, orderRes, schedRes] = await Promise.all([
-      fetch("/api/machines"), fetch("/api/orders"), fetch("/api/schedule"),
+      fetch(`/api/machines${qs}`), fetch(`/api/orders${qs}`), fetch(`/api/schedule${qs}`),
     ]);
     const machData = await machRes.json();
     const orderData = await orderRes.json();
@@ -123,7 +128,7 @@ export default function ScheduleBoard() {
       }
       return next;
     });
-  }, []);
+  }, [factory, processLine]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
@@ -208,7 +213,7 @@ export default function ScheduleBoard() {
     await fetch("/api/orders", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(newOrder),
+      body: JSON.stringify({ ...newOrder, factory, process_line: processLine }),
     });
     setNewOrder({
       order_code: "", product_name: "", component: "", quantity_sheets: 0,
@@ -278,7 +283,14 @@ export default function ScheduleBoard() {
   const dateStr = `${now.getFullYear()}년 ${now.getMonth() + 1}월 ${now.getDate()}일`;
 
   return (
-    <div className="flex gap-4 h-[calc(100vh-80px)]">
+    <div>
+    <ProcessTabs
+      factory={factory}
+      processLine={processLine}
+      onFactoryChange={setFactory}
+      onProcessChange={setProcessLine}
+    />
+    <div className="flex gap-4 h-[calc(100vh-140px)]">
       {/* 좌측: 설비별 배정 현황 */}
       <div className="flex-1 overflow-y-auto space-y-3 pr-2">
         <div className="flex items-center justify-between mb-2 sticky top-0 bg-gray-50 py-2 z-10">
@@ -565,6 +577,7 @@ export default function ScheduleBoard() {
           )}
         </div>
       </div>
+    </div>
     </div>
   );
 }

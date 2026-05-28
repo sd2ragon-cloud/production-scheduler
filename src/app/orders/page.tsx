@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import ProcessTabs from "../components/ProcessTabs";
+import { DEFAULT_FACTORY, DEFAULT_PROCESS } from "@/lib/factory-config";
 
 interface Order {
   id: number;
@@ -29,6 +31,8 @@ const emptyOrder = {
 };
 
 export default function OrdersPage() {
+  const [factory, setFactory] = useState(DEFAULT_FACTORY);
+  const [processLine, setProcessLine] = useState(DEFAULT_PROCESS);
   const [orders, setOrders] = useState<Order[]>([]);
   const [form, setForm] = useState(emptyOrder);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -36,14 +40,15 @@ export default function OrdersPage() {
   const [selected, setSelected] = useState<Set<number>>(new Set());
 
   const fetchOrders = async () => {
-    const res = await fetch("/api/orders");
+    const qs = `?factory=${encodeURIComponent(factory)}&process_line=${encodeURIComponent(processLine)}`;
+    const res = await fetch(`/api/orders${qs}`);
     setOrders(await res.json());
     setSelected(new Set());
   };
 
   useEffect(() => {
     fetchOrders();
-  }, []);
+  }, [factory, processLine]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,13 +56,13 @@ export default function OrdersPage() {
       await fetch(`/api/orders/${editingId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, status: "pending" }),
+        body: JSON.stringify({ ...form, status: "pending", factory, process_line: processLine }),
       });
     } else {
       await fetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, factory, process_line: processLine }),
       });
     }
     setForm(emptyOrder);
@@ -138,6 +143,12 @@ export default function OrdersPage() {
 
   return (
     <div>
+      <ProcessTabs
+        factory={factory}
+        processLine={processLine}
+        onFactoryChange={setFactory}
+        onProcessChange={setProcessLine}
+      />
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-2xl font-bold text-gray-900">주문 관리</h2>
         <div className="flex gap-2">

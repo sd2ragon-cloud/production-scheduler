@@ -1,10 +1,12 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const db = await getDb();
+  const factory = req.nextUrl.searchParams.get('factory');
+  const processLine = req.nextUrl.searchParams.get('process_line');
 
-  const result = await db.execute(`
+  let sql = `
     SELECT
       se.*,
       o.product_name,
@@ -17,9 +19,17 @@ export async function GET() {
       m.name as machine_name
     FROM schedule_entries se
     JOIN orders o ON se.order_id = o.id
-    JOIN machines m ON se.machine_id = m.id
-    ORDER BY m.id, se.sequence
-  `);
+    JOIN machines m ON se.machine_id = m.id`;
 
+  const args: string[] = [];
+
+  if (factory && processLine) {
+    sql += ' WHERE m.factory = ? AND m.process_line = ?';
+    args.push(factory, processLine);
+  }
+
+  sql += ' ORDER BY m.id, se.sequence';
+
+  const result = await db.execute({ sql, args });
   return NextResponse.json(result.rows);
 }

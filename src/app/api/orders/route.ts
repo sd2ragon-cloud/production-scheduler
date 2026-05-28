@@ -1,9 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const db = await getDb();
-  const result = await db.execute('SELECT * FROM orders ORDER BY priority DESC, deadline ASC');
+  const factory = req.nextUrl.searchParams.get('factory');
+  const processLine = req.nextUrl.searchParams.get('process_line');
+
+  let sql = 'SELECT * FROM orders';
+  const args: string[] = [];
+
+  if (factory && processLine) {
+    sql += ' WHERE factory = ? AND process_line = ?';
+    args.push(factory, processLine);
+  }
+  sql += ' ORDER BY priority DESC, deadline ASC';
+
+  const result = await db.execute({ sql, args });
   return NextResponse.json(result.rows);
 }
 
@@ -12,7 +24,7 @@ export async function POST(req: NextRequest) {
   const db = await getDb();
 
   const result = await db.execute({
-    sql: `INSERT INTO orders (order_code, product_name, component, quantity_sheets, deadline, special_process, priority, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    sql: `INSERT INTO orders (order_code, product_name, component, quantity_sheets, deadline, special_process, priority, notes, factory, process_line) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       body.order_code || '',
       body.product_name,
@@ -22,6 +34,8 @@ export async function POST(req: NextRequest) {
       body.special_process || '일반',
       body.priority || 5,
       body.notes || '',
+      body.factory || '본공장',
+      body.process_line || '매엽',
     ],
   });
 

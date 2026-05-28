@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import ProcessTabs from "../components/ProcessTabs";
+import { DEFAULT_FACTORY, DEFAULT_PROCESS } from "@/lib/factory-config";
 
 interface ScheduleEntry {
   id: number;
@@ -24,14 +26,17 @@ const MACHINE_COLORS = [
 ];
 
 export default function SchedulePage() {
+  const [factory, setFactory] = useState(DEFAULT_FACTORY);
+  const [processLine, setProcessLine] = useState(DEFAULT_PROCESS);
   const [entries, setEntries] = useState<ScheduleEntry[]>([]);
   const [view, setView] = useState<"gantt" | "table">("gantt");
 
   useEffect(() => {
-    fetch("/api/schedule")
+    const qs = `?factory=${encodeURIComponent(factory)}&process_line=${encodeURIComponent(processLine)}`;
+    fetch(`/api/schedule${qs}`)
       .then((r) => r.json())
       .then(setEntries);
-  }, []);
+  }, [factory, processLine]);
 
   const machines = Array.from(new Set(entries.map((e) => e.machine_name)));
 
@@ -63,6 +68,12 @@ export default function SchedulePage() {
 
   return (
     <div>
+      <ProcessTabs
+        factory={factory}
+        processLine={processLine}
+        onFactoryChange={setFactory}
+        onProcessChange={setProcessLine}
+      />
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-2xl font-bold text-gray-900">스케줄 보기</h2>
         <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
