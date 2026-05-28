@@ -68,15 +68,15 @@ function canMachineHandle(machine: Machine, order: Order): boolean {
 }
 
 function calcProcessingMinutes(machine: Machine, order: Order): number {
-  const sheets = order.quantity_sheets;
-  const hoursNeeded = sheets / machine.speed_sheets_per_hour;
-  return Math.ceil(hoursNeeded * 60) + machine.setup_time_minutes;
+  const sheets = Number(order.quantity_sheets);
+  const hoursNeeded = sheets / Number(machine.speed_sheets_per_hour);
+  return Math.ceil(hoursNeeded * 60) + Number(machine.setup_time_minutes);
 }
 
 function isWorkDay(date: Date, machine: Machine): boolean {
   const day = date.getDay();
-  if (day === 0) return machine.works_sunday === 1;
-  if (day === 6) return machine.works_saturday === 1;
+  if (day === 0) return Number(machine.works_sunday) === 1;
+  if (day === 6) return Number(machine.works_saturday) === 1;
   return true;
 }
 
@@ -93,7 +93,7 @@ function addMinutesToWorkTime(
   let currentMinute = startMinute;
 
   while (remaining > 0) {
-    const minutesLeftInDay = (machine.work_end_hour - currentHour) * 60 - currentMinute;
+    const minutesLeftInDay = (Number(machine.work_end_hour) - currentHour) * 60 - currentMinute;
 
     if (remaining <= minutesLeftInDay) {
       currentMinute += remaining;
@@ -106,7 +106,7 @@ function addMinutesToWorkTime(
       while (!isWorkDay(currentDate, machine)) {
         currentDate.setDate(currentDate.getDate() + 1);
       }
-      currentHour = machine.work_start_hour;
+      currentHour = Number(machine.work_start_hour);
       currentMinute = 0;
     }
   }
@@ -125,20 +125,20 @@ function formatDate(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
-export function generateSchedule(targetDate?: string): {
+export async function generateSchedule(targetDate?: string): Promise<{
   entries: ScheduleEntry[];
   warnings: string[];
-} {
-  const db = getDb();
+}> {
+  const db = await getDb();
   const warnings: string[] = [];
 
-  const machines = db.prepare(
-    'SELECT * FROM machines WHERE is_active = 1 ORDER BY id'
-  ).all() as Machine[];
+  const machinesResult = await db.execute('SELECT * FROM machines WHERE is_active = 1 ORDER BY id');
+  const machines = machinesResult.rows as unknown as Machine[];
 
-  const orders = db.prepare(
+  const ordersResult = await db.execute(
     "SELECT * FROM orders WHERE status = 'pending' ORDER BY priority DESC, deadline ASC, quantity_sheets DESC"
-  ).all() as Order[];
+  );
+  const orders = ordersResult.rows as unknown as Order[];
 
   if (machines.length === 0) {
     return { entries: [], warnings: ['등록된 기계가 없습니다.'] };
@@ -154,12 +154,13 @@ export function generateSchedule(targetDate?: string): {
   const machineSequences: Map<number, number> = new Map();
 
   for (const m of machines) {
-    machineEndTimes.set(m.id, {
+    const mid = Number(m.id);
+    machineEndTimes.set(mid, {
       date: new Date(baseDate),
-      hour: m.work_start_hour,
+      hour: Number(m.work_start_hour),
       minute: 0,
     });
-    machineSequences.set(m.id, 0);
+    machineSequences.set(mid, 0);
   }
 
   const entries: ScheduleEntry[] = [];
@@ -178,7 +179,8 @@ export function generateSchedule(targetDate?: string): {
     let bestEndTime: { date: Date; hour: number; minute: number } | null = null;
 
     for (const m of capableMachines) {
-      const currentEnd = machineEndTimes.get(m.id)!;
+      const mid = Number(m.id);
+      const currentEnd = machineEndTimes.get(mid)!;
       const processingMinutes = calcProcessingMinutes(m, order);
       const endTime = addMinutesToWorkTime(
         currentEnd.date,
@@ -200,13 +202,14 @@ export function generateSchedule(targetDate?: string): {
     }
 
     if (bestMachine && bestEndTime) {
-      const currentStart = machineEndTimes.get(bestMachine.id)!;
-      const seq = (machineSequences.get(bestMachine.id) || 0) + 1;
-      machineSequences.set(bestMachine.id, seq);
+      const bmid = Number(bestMachine.id);
+      const currentStart = machineEndTimes.get(bmid)!;
+      const seq = (machineSequences.get(bmid) || 0) + 1;
+      machineSequences.set(bmid, seq);
 
       const entry: ScheduleEntry = {
-        order_id: order.id,
-        machine_id: bestMachine.id,
+        order_id: Number(order.id),
+        machine_id: bmid,
         sequence: seq,
         scheduled_date: formatDate(currentStart.date),
         start_time: `${formatDate(currentStart.date)} ${formatTime(currentStart.hour, currentStart.minute)}`,
@@ -214,7 +217,7 @@ export function generateSchedule(targetDate?: string): {
       };
       entries.push(entry);
 
-      machineEndTimes.set(bestMachine.id, {
+      machineEndTimes.set(bmid, {
         date: new Date(bestEndTime.date),
         hour: bestEndTime.hour,
         minute: bestEndTime.minute,
@@ -232,25 +235,23 @@ export function generateSchedule(targetDate?: string): {
   return { entries, warnings };
 }
 
-export function saveSchedule(entries: ScheduleEntry[]) {
-  const db = getDb();
+export async function saveSchedule(entries: ScheduleEntry[]) {
+  const db = await getDb();
 
-  const deleteStmt = db.prepare('DELETE FROM schedule_entries');
-  const insertStmt = db.prepare(`
-    INSERT INTO schedule_entries (order_id, machine_id, sequence, scheduled_date, start_time, end_time)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `);
-  const updateOrderStmt = db.prepare(
-    "UPDATE orders SET status = 'scheduled' WHERE id = ?"
-  );
+  const stmts: { sql: string; args: (string | number)[] }[] = [
+    { sql: 'DELETE FROM schedule_entries', args: [] },
+  ];
 
-  const transaction = db.transaction(() => {
-    deleteStmt.run();
-    for (const e of entries) {
-      insertStmt.run(e.order_id, e.machine_id, e.sequence, e.scheduled_date, e.start_time, e.end_time);
-      updateOrderStmt.run(e.order_id);
-    }
-  });
+  for (const e of entries) {
+    stmts.push({
+      sql: 'INSERT INTO schedule_entries (order_id, machine_id, sequence, scheduled_date, start_time, end_time) VALUES (?, ?, ?, ?, ?, ?)',
+      args: [e.order_id, e.machine_id, e.sequence, e.scheduled_date, e.start_time, e.end_time],
+    });
+    stmts.push({
+      sql: "UPDATE orders SET status = 'scheduled' WHERE id = ?",
+      args: [e.order_id],
+    });
+  }
 
-  transaction();
+  await db.batch(stmts, 'write');
 }

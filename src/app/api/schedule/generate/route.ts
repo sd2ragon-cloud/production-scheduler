@@ -5,10 +5,10 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   const targetDate = body.target_date || undefined;
 
-  const { entries, warnings } = generateSchedule(targetDate);
+  const { entries, warnings } = await generateSchedule(targetDate);
 
   if (entries.length > 0) {
-    saveSchedule(entries);
+    await saveSchedule(entries);
   }
 
   return NextResponse.json({

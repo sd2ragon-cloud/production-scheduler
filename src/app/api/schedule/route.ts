@@ -2,9 +2,9 @@ import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 
 export async function GET() {
-  const db = getDb();
+  const db = await getDb();
 
-  const entries = db.prepare(`
+  const result = await db.execute(`
     SELECT
       se.*,
       o.product_name,
@@ -19,7 +19,7 @@ export async function GET() {
     JOIN orders o ON se.order_id = o.id
     JOIN machines m ON se.machine_id = m.id
     ORDER BY m.id, se.sequence
-  `).all();
+  `);
 
-  return NextResponse.json(entries);
+  return NextResponse.json(result.rows);
 }

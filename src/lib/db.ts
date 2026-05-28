@@ -1,28 +1,25 @@
-import Database from 'better-sqlite3';
-import path from 'path';
+import { createClient, Client } from '@libsql/client';
 
-const DB_PATH = path.join(process.cwd(), 'data', 'production.db');
+let client: Client | null = null;
+let initialized = false;
 
-let db: Database.Database | null = null;
-
-export function getDb(): Database.Database {
-  if (!db) {
-    const fs = require('fs');
-    const dir = path.dirname(DB_PATH);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    db = new Database(DB_PATH);
-    db.pragma('journal_mode = WAL');
-    db.pragma('foreign_keys = ON');
-    initializeDb(db);
+export async function getDb(): Promise<Client> {
+  if (!client) {
+    client = createClient({
+      url: process.env.TURSO_DATABASE_URL || 'file:data/production.db',
+      authToken: process.env.TURSO_AUTH_TOKEN,
+    });
   }
-  return db;
+  if (!initialized) {
+    await initializeDb(client);
+    initialized = true;
+  }
+  return client;
 }
 
-function initializeDb(db: Database.Database) {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS machines (
+async function initializeDb(db: Client) {
+  await db.batch([
+    `CREATE TABLE IF NOT EXISTS machines (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL UNIQUE,
       description TEXT DEFAULT '',
@@ -35,9 +32,8 @@ function initializeDb(db: Database.Database) {
       works_saturday INTEGER NOT NULL DEFAULT 1,
       works_sunday INTEGER NOT NULL DEFAULT 0,
       created_at TEXT DEFAULT (datetime('now', 'localtime'))
-    );
-
-    CREATE TABLE IF NOT EXISTS orders (
+    )`,
+    `CREATE TABLE IF NOT EXISTS orders (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       order_code TEXT DEFAULT '',
       product_name TEXT NOT NULL,
@@ -49,9 +45,8 @@ function initializeDb(db: Database.Database) {
       notes TEXT DEFAULT '',
       status TEXT NOT NULL DEFAULT 'pending',
       created_at TEXT DEFAULT (datetime('now', 'localtime'))
-    );
-
-    CREATE TABLE IF NOT EXISTS schedule_entries (
+    )`,
+    `CREATE TABLE IF NOT EXISTS schedule_entries (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       order_id INTEGER NOT NULL,
       machine_id INTEGER NOT NULL,
@@ -64,25 +59,20 @@ function initializeDb(db: Database.Database) {
       created_at TEXT DEFAULT (datetime('now', 'localtime')),
       FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
       FOREIGN KEY (machine_id) REFERENCES machines(id) ON DELETE CASCADE
-    );
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_schedule_date ON schedule_entries(scheduled_date)`,
+    `CREATE INDEX IF NOT EXISTS idx_schedule_machine ON schedule_entries(machine_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)`,
+  ], 'write');
 
-    CREATE INDEX IF NOT EXISTS idx_schedule_date ON schedule_entries(scheduled_date);
-    CREATE INDEX IF NOT EXISTS idx_schedule_machine ON schedule_entries(machine_id);
-    CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
-  `);
-
-  const machineCount = db.prepare('SELECT COUNT(*) as count FROM machines').get() as { count: number };
-  if (machineCount.count === 0) {
-    seedData(db);
+  const result = await db.execute('SELECT COUNT(*) as count FROM machines');
+  const count = Number(result.rows[0].count);
+  if (count === 0) {
+    await seedData(db);
   }
 }
 
-function seedData(db: Database.Database) {
-  const insertMachine = db.prepare(`
-    INSERT INTO machines (name, description, speed_sheets_per_hour, setup_time_minutes, capabilities, work_start_hour, work_end_hour, works_saturday)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-
+async function seedData(db: Client) {
   const machines = [
     ['MB10', '매엽 10색 인쇄기', 3000, 30, '["일반","항바니쉬"]', 8, 22, 1],
     ['MBTP', '매엽 TP 인쇄기', 2800, 30, '["일반","항바니쉬"]', 8, 22, 1],
@@ -92,18 +82,6 @@ function seedData(db: Database.Database) {
     ['MB6', '매엽 6색 (UV/IR)', 2000, 35, '["UV","IR코팅","OHP"]', 8, 22, 1],
     ['HDP', 'HDP 인쇄기', 2200, 30, '["일반","양면","패키지"]', 8, 22, 1],
   ];
-
-  const insertMany = db.transaction(() => {
-    for (const m of machines) {
-      insertMachine.run(...m);
-    }
-  });
-  insertMany();
-
-  const insertOrder = db.prepare(`
-    INSERT INTO orders (order_code, product_name, component, quantity_sheets, deadline, special_process, priority, notes)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `);
 
   const orders = [
     ['', '골드앤와이즈', '본문1대~3대', 21, '2026-06-05', '일반', 3, ''],
@@ -163,10 +141,21 @@ function seedData(db: Database.Database) {
     ['0527', '두드림슬림웨어쾌변직빵', '패키지', 1, '2026-06-02', 'IR코팅', 5, '웰파인, 6/2(화) 감리有'],
   ];
 
-  const insertOrders = db.transaction(() => {
-    for (const o of orders) {
-      insertOrder.run(...o);
-    }
-  });
-  insertOrders();
+  const stmts: { sql: string; args: (string | number)[] }[] = [];
+
+  for (const m of machines) {
+    stmts.push({
+      sql: `INSERT INTO machines (name, description, speed_sheets_per_hour, setup_time_minutes, capabilities, work_start_hour, work_end_hour, works_saturday) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: m as (string | number)[],
+    });
+  }
+
+  for (const o of orders) {
+    stmts.push({
+      sql: `INSERT INTO orders (order_code, product_name, component, quantity_sheets, deadline, special_process, priority, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: o as (string | number)[],
+    });
+  }
+
+  await db.batch(stmts, 'write');
 }

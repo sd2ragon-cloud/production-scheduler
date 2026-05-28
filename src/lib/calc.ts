@@ -35,24 +35,24 @@ function formatDate(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
-export function recalcMachine(machineId: number, baseDate?: string, startTimeStr?: string) {
-  const db = getDb();
+export async function recalcMachine(machineId: number, baseDate?: string, startTimeStr?: string) {
+  const db = await getDb();
 
-  const machine = db.prepare('SELECT * FROM machines WHERE id = ?').get(machineId) as Machine | undefined;
+  const machineResult = await db.execute({ sql: 'SELECT * FROM machines WHERE id = ?', args: [machineId] });
+  const machine = machineResult.rows[0] as unknown as Machine | undefined;
   if (!machine) return;
 
-  const entries = db.prepare(`
-    SELECT se.id, se.duration_minutes
-    FROM schedule_entries se
-    WHERE se.machine_id = ?
-    ORDER BY se.sequence ASC
-  `).all(machineId) as AssignedEntry[];
+  const entriesResult = await db.execute({
+    sql: 'SELECT se.id, se.duration_minutes FROM schedule_entries se WHERE se.machine_id = ? ORDER BY se.sequence ASC',
+    args: [machineId],
+  });
+  const entries = entriesResult.rows as unknown as AssignedEntry[];
 
   const startDate = baseDate ? new Date(baseDate) : new Date();
   startDate.setHours(0, 0, 0, 0);
 
   let currentDate = new Date(startDate);
-  let currentHour = machine.work_start_hour;
+  let currentHour = Number(machine.work_start_hour);
   let currentMinute = 0;
 
   if (startTimeStr) {
@@ -65,42 +65,42 @@ export function recalcMachine(machineId: number, baseDate?: string, startTimeStr
     currentDate.setDate(currentDate.getDate() + 1);
   }
 
-  const updateStmt = db.prepare(
-    'UPDATE schedule_entries SET start_time = ?, end_time = ?, scheduled_date = ? WHERE id = ?'
-  );
+  const updates: { sql: string; args: (string | number)[] }[] = [];
 
-  const transaction = db.transaction(() => {
-    for (const entry of entries) {
-      const startTime = formatDateTime(currentDate, currentHour, currentMinute);
-      const scheduledDate = formatDate(currentDate);
+  for (const entry of entries) {
+    const startTime = formatDateTime(currentDate, currentHour, currentMinute);
+    const scheduledDate = formatDate(currentDate);
+    const totalMinutes = Number(entry.duration_minutes);
 
-      const totalMinutes = entry.duration_minutes;
-
-      if (totalMinutes > 0) {
-        let remaining = totalMinutes;
-        while (remaining > 0) {
-          const minutesLeftInDay = (machine.work_end_hour - currentHour) * 60 - currentMinute;
-          if (remaining <= minutesLeftInDay) {
-            currentMinute += remaining;
-            currentHour += Math.floor(currentMinute / 60);
-            currentMinute = currentMinute % 60;
-            remaining = 0;
-          } else {
-            remaining -= minutesLeftInDay;
+    if (totalMinutes > 0) {
+      let remaining = totalMinutes;
+      while (remaining > 0) {
+        const minutesLeftInDay = (Number(machine.work_end_hour) - currentHour) * 60 - currentMinute;
+        if (remaining <= minutesLeftInDay) {
+          currentMinute += remaining;
+          currentHour += Math.floor(currentMinute / 60);
+          currentMinute = currentMinute % 60;
+          remaining = 0;
+        } else {
+          remaining -= minutesLeftInDay;
+          currentDate.setDate(currentDate.getDate() + 1);
+          while (!isWorkDay(currentDate, machine)) {
             currentDate.setDate(currentDate.getDate() + 1);
-            while (!isWorkDay(currentDate, machine)) {
-              currentDate.setDate(currentDate.getDate() + 1);
-            }
-            currentHour = machine.work_start_hour;
-            currentMinute = 0;
           }
+          currentHour = Number(machine.work_start_hour);
+          currentMinute = 0;
         }
       }
-
-      const endTime = formatDateTime(currentDate, currentHour, currentMinute);
-      updateStmt.run(startTime, endTime, scheduledDate, entry.id);
     }
-  });
 
-  transaction();
+    const endTime = formatDateTime(currentDate, currentHour, currentMinute);
+    updates.push({
+      sql: 'UPDATE schedule_entries SET start_time = ?, end_time = ?, scheduled_date = ? WHERE id = ?',
+      args: [startTime, endTime, scheduledDate, Number(entry.id)],
+    });
+  }
+
+  if (updates.length > 0) {
+    await db.batch(updates, 'write');
+  }
 }
