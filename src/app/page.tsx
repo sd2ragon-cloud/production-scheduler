@@ -186,9 +186,10 @@ export default function ScheduleBoard() {
 
   const durationTimers = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
 
-  const handleDurationChange = (entryId: number, value: number) => {
+  const handleDurationChange = (entryId: number, hours: number) => {
+    const minutes = Math.round(hours * 60);
     setSchedule((prev) =>
-      prev.map((e) => (e.id === entryId ? { ...e, duration_minutes: value } : e))
+      prev.map((e) => (e.id === entryId ? { ...e, duration_minutes: minutes } : e))
     );
     const existing = durationTimers.current.get(entryId);
     if (existing) clearTimeout(existing);
@@ -198,7 +199,7 @@ export default function ScheduleBoard() {
         await fetch("/api/schedule/duration", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ entry_id: entryId, duration_minutes: value }),
+          body: JSON.stringify({ entry_id: entryId, duration_minutes: minutes }),
         });
         await fetchAll();
         durationTimers.current.delete(entryId);
@@ -344,7 +345,7 @@ export default function ScheduleBoard() {
                       <th className="px-2 py-1.5 text-left">작업명</th>
                       <th className="px-2 py-1.5 text-left w-14">수량</th>
                       <th className="px-2 py-1.5 text-left w-16">공정</th>
-                      <th className="px-2 py-1.5 text-center w-20">소요(분)</th>
+                      <th className="px-2 py-1.5 text-center w-20">소요(시간)</th>
                       <th className="px-2 py-1.5 text-left w-20">예상완료</th>
                       <th className="px-2 py-1.5 text-left w-24">납기</th>
                       <th className="px-2 py-1.5 text-center w-8"></th>
@@ -416,9 +417,10 @@ export default function ScheduleBoard() {
                             <input
                               type="number"
                               min="0"
+                              step="0.5"
                               className="w-16 border border-gray-300 rounded px-1.5 py-0.5 text-xs text-center font-mono focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
-                              value={entry.duration_minutes || ""}
-                              placeholder="분"
+                              value={entry.duration_minutes ? Math.round((entry.duration_minutes / 60) * 10) / 10 : ""}
+                              placeholder="시간"
                               onChange={(e) => handleDurationChange(entry.id, Number(e.target.value) || 0)}
                             />
                           </td>
