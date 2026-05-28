@@ -290,7 +290,7 @@ export default function ScheduleBoard() {
       onFactoryChange={setFactory}
       onProcessChange={setProcessLine}
     />
-    <div className="flex gap-4 h-[calc(100vh-140px)]">
+    <div className="flex gap-4 h-[calc(100vh-110px)]">
       {/* 좌측: 설비별 배정 현황 */}
       <div className="flex-1 overflow-y-auto space-y-3 pr-2">
         <div className="flex items-center justify-between mb-2 sticky top-0 bg-gray-50 py-2 z-10">

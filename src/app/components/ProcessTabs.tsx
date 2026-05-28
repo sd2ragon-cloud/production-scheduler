@@ -13,8 +13,8 @@ export default function ProcessTabs({ factory, processLine, onFactoryChange, onP
   const processes = FACTORY_PROCESS_MAP[factory] || [];
 
   return (
-    <div className="mb-4">
-      <div className="flex gap-1 mb-2">
+    <div className="flex items-center gap-3 mb-3">
+      <div className="flex gap-0.5 bg-gray-100 rounded-lg p-0.5">
         {FACTORIES.map((f) => (
           <button
             key={f}
@@ -22,22 +22,23 @@ export default function ProcessTabs({ factory, processLine, onFactoryChange, onP
               onFactoryChange(f);
               onProcessChange(FACTORY_PROCESS_MAP[f][0]);
             }}
-            className={`px-5 py-2 rounded-t-lg text-sm font-bold border-b-2 transition ${
+            className={`px-3 py-1 rounded-md text-xs font-bold transition ${
               factory === f
-                ? "bg-gray-800 text-white border-gray-800"
-                : "bg-gray-100 text-gray-500 border-transparent hover:bg-gray-200"
+                ? "bg-gray-800 text-white"
+                : "text-gray-500 hover:text-gray-700"
             }`}
           >
             {f}
           </button>
         ))}
       </div>
-      <div className="flex gap-1 bg-gray-100 rounded-lg p-1 inline-flex">
+      <span className="text-gray-300">|</span>
+      <div className="flex gap-0.5 bg-gray-100 rounded-lg p-0.5">
         {processes.map((p) => (
           <button
             key={p}
             onClick={() => onProcessChange(p)}
-            className={`px-4 py-1.5 rounded-md text-sm font-medium transition ${
+            className={`px-3 py-1 rounded-md text-xs font-medium transition ${
               processLine === p
                 ? "bg-white shadow text-gray-900"
                 : "text-gray-500 hover:text-gray-700"
