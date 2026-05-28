@@ -58,10 +58,9 @@ const PROCESS_COLORS: Record<string, string> = {
 function formatEndTime(endTimeStr: string): string {
   const dt = new Date(endTimeStr);
   if (isNaN(dt.getTime())) return "-";
-  const day = DAY_NAMES[dt.getDay()];
   const h = String(dt.getHours()).padStart(2, "0");
   const m = String(dt.getMinutes()).padStart(2, "0");
-  return `${day} ${h}:${m}`;
+  return `${h}:${m}`;
 }
 
 function isOverDeadline(endTime: string, deadline: string): boolean {
@@ -417,9 +416,9 @@ export default function ScheduleBoard() {
                             <input
                               type="number"
                               min="0"
-                              step="0.5"
+                              step="1"
                               className="w-16 border border-gray-300 rounded px-1.5 py-0.5 text-xs text-center font-mono focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
-                              value={entry.duration_minutes ? Math.round((entry.duration_minutes / 60) * 10) / 10 : ""}
+                              value={entry.duration_minutes ? Math.round(entry.duration_minutes / 60) : ""}
                               placeholder="시간"
                               onChange={(e) => handleDurationChange(entry.id, Number(e.target.value) || 0)}
                             />
