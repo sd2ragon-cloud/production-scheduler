@@ -58,9 +58,10 @@ const PROCESS_COLORS: Record<string, string> = {
 function formatEndTime(endTimeStr: string): string {
   const dt = new Date(endTimeStr);
   if (isNaN(dt.getTime())) return "-";
+  const day = DAY_NAMES[dt.getDay()];
   const h = String(dt.getHours()).padStart(2, "0");
   const m = String(dt.getMinutes()).padStart(2, "0");
-  return `${h}:${m}`;
+  return `${day} ${h}:${m}`;
 }
 
 function isOverDeadline(endTime: string, deadline: string): boolean {
@@ -343,7 +344,7 @@ export default function ScheduleBoard() {
                       <th className="px-2 py-1.5 text-left w-8">#</th>
                       <th className="px-2 py-1.5 text-left">작업명</th>
                       <th className="px-2 py-1.5 text-left w-14">수량</th>
-                      <th className="px-2 py-1.5 text-left w-16">공정</th>
+                      <th className="px-2 py-1.5 text-left w-24">구분</th>
                       <th className="px-2 py-1.5 text-center w-20">소요(시간)</th>
                       <th className="px-2 py-1.5 text-left w-20">예상완료</th>
                       <th className="px-2 py-1.5 text-left w-24">납기</th>
@@ -405,8 +406,8 @@ export default function ScheduleBoard() {
                             <span className="text-gray-400 text-xs ml-1">({entry.component})</span>
                           </td>
                           <td className="px-2 py-1.5 text-xs">{entry.quantity_sheets}</td>
-                          <td className="px-2 py-1.5">
-                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium border ${
+                          <td className="px-2 py-1.5 whitespace-nowrap">
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium border whitespace-nowrap ${
                               PROCESS_COLORS[entry.special_process] || "bg-gray-100 text-gray-600 border-gray-200"
                             }`}>
                               {entry.special_process}
