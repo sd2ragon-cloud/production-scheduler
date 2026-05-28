@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
-import ProcessTabs from "./components/ProcessTabs";
-import { DEFAULT_FACTORY, DEFAULT_PROCESS } from "@/lib/factory-config";
+import { useProcess } from "./components/ProcessContext";
 
 interface Machine {
   id: number;
@@ -89,8 +88,7 @@ function deadlineColor(deadline: string): string {
 }
 
 export default function ScheduleBoard() {
-  const [factory, setFactory] = useState(DEFAULT_FACTORY);
-  const [processLine, setProcessLine] = useState(DEFAULT_PROCESS);
+  const { factory, processLine } = useProcess();
   const [machines, setMachines] = useState<Machine[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [schedule, setSchedule] = useState<ScheduleEntry[]>([]);
@@ -284,13 +282,7 @@ export default function ScheduleBoard() {
 
   return (
     <div>
-    <ProcessTabs
-      factory={factory}
-      processLine={processLine}
-      onFactoryChange={setFactory}
-      onProcessChange={setProcessLine}
-    />
-    <div className="flex gap-4 h-[calc(100vh-110px)]">
+    <div className="flex gap-4 h-[calc(100vh-80px)]">
       {/* 좌측: 설비별 배정 현황 */}
       <div className="flex-1 overflow-y-auto space-y-3 pr-2">
         <div className="flex items-center justify-between mb-2 sticky top-0 bg-gray-50 py-2 z-10">

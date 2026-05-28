@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import ProcessTabs from "../components/ProcessTabs";
-import { DEFAULT_FACTORY, DEFAULT_PROCESS } from "@/lib/factory-config";
+import { useProcess } from "../components/ProcessContext";
 
 interface Order {
   id: number;
@@ -31,8 +30,7 @@ const emptyOrder = {
 };
 
 export default function OrdersPage() {
-  const [factory, setFactory] = useState(DEFAULT_FACTORY);
-  const [processLine, setProcessLine] = useState(DEFAULT_PROCESS);
+  const { factory, processLine } = useProcess();
   const [orders, setOrders] = useState<Order[]>([]);
   const [form, setForm] = useState(emptyOrder);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -143,12 +141,6 @@ export default function OrdersPage() {
 
   return (
     <div>
-      <ProcessTabs
-        factory={factory}
-        processLine={processLine}
-        onFactoryChange={setFactory}
-        onProcessChange={setProcessLine}
-      />
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-2xl font-bold text-gray-900">주문 관리</h2>
         <div className="flex gap-2">

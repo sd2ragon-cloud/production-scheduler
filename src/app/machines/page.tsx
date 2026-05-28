@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import ProcessTabs from "../components/ProcessTabs";
-import { DEFAULT_FACTORY, DEFAULT_PROCESS } from "@/lib/factory-config";
+import { useProcess } from "../components/ProcessContext";
 
 interface Machine {
   id: number;
@@ -21,8 +20,7 @@ interface Machine {
 const ALL_CAPABILITIES = ["일반", "항바니쉬", "UV", "IR코팅", "양면", "패키지", "비닐스티커", "유포지", "OHP"];
 
 export default function MachinesPage() {
-  const [factory, setFactory] = useState(DEFAULT_FACTORY);
-  const [processLine, setProcessLine] = useState(DEFAULT_PROCESS);
+  const { factory, processLine } = useProcess();
   const [machines, setMachines] = useState<Machine[]>([]);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState({
@@ -107,12 +105,6 @@ export default function MachinesPage() {
 
   return (
     <div>
-      <ProcessTabs
-        factory={factory}
-        processLine={processLine}
-        onFactoryChange={setFactory}
-        onProcessChange={setProcessLine}
-      />
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-2xl font-bold text-gray-900">기계 관리</h2>
         <button
