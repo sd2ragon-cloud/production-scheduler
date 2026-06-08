@@ -17,6 +17,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "생산 스케줄링 시스템",
   description: "인쇄 생산 스케줄 자동화",
+  other: { "deploy-check": "live-1" },
 };
 
 export default function RootLayout({
