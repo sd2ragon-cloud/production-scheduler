@@ -19,7 +19,7 @@ while ($true) {
       Write-Host "[$(Get-Date -Format HH:mm:ss)] 새 버전 $($sha.Substring(0,7)) — 적용 시작"
       $zip = Join-Path $env:TEMP "ps-update.zip"
       $ext = Join-Path $env:TEMP "ps-update"
-      Invoke-WebRequest -Uri "https://github.com/$repo/archive/refs/heads/$branch.zip" -OutFile $zip -Headers $headers -TimeoutSec 180
+      Invoke-WebRequest -Uri "https://github.com/$repo/archive/refs/heads/$branch.zip" -OutFile $zip -Headers $headers -TimeoutSec 180 -UseBasicParsing
       if (Test-Path $ext) { Remove-Item $ext -Recurse -Force }
       Expand-Archive -Path $zip -DestinationPath $ext -Force
       $src = Join-Path $ext "production-scheduler-$branch"
