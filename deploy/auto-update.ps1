@@ -1,22 +1,28 @@
-# [노트북에서 상시 실행] GitHub(master)의 최신 커밋을 60초마다 확인.
-# 새 버전이 올라오면: 코드 다운로드 → npm install → 빌드 → 서버 재시작 (자동).
-# 공개(public) 저장소라 git/토큰 불필요. 데이터(data/)와 빌드(.next)/모듈(node_modules)은 건드리지 않음.
+# [Run on laptop, always] Poll GitHub(master) every 20s. On a new commit:
+#   download -> sync code -> (npm install only if deps changed) -> build -> restart server.
+# Public repo so no git/token needed. data/, .next, node_modules are never touched.
 $ErrorActionPreference = "Continue"
 $proj    = "C:\production-scheduler"
 $repo    = "sd2ragon-cloud/production-scheduler"
 $branch  = "master"
-$shaFile = Join-Path $proj ".last_sha"            # 루트에 저장(동기화 대상 아님)
+$shaFile = Join-Path $proj ".last_sha"
 $headers = @{ "User-Agent" = "ps-auto-update" }
 $lastSha = if (Test-Path $shaFile) { (Get-Content $shaFile -Raw).Trim() } else { "" }
 
 Set-Location $proj
-Write-Host "[자동 업데이트 감시 시작] $repo ($branch) — 60초 간격"
+Write-Host "[auto-update started] $repo ($branch) - checking every 20s"
+
+function Get-LockHash {
+  $p = Join-Path $proj "package-lock.json"
+  if (Test-Path $p) { (Get-FileHash $p -Algorithm MD5).Hash } else { "" }
+}
 
 while ($true) {
   try {
     $sha = (Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/commits/$branch" -Headers $headers -TimeoutSec 30).sha
     if ($sha -and $sha -ne $lastSha) {
-      Write-Host "[$(Get-Date -Format HH:mm:ss)] 새 버전 $($sha.Substring(0,7)) — 적용 시작"
+      $short = $sha.Substring(0,7)
+      Write-Host "[$(Get-Date -Format HH:mm:ss)] new version $short - applying"
       $zip = Join-Path $env:TEMP "ps-update.zip"
       $ext = Join-Path $env:TEMP "ps-update"
       Invoke-WebRequest -Uri "https://github.com/$repo/archive/refs/heads/$branch.zip" -OutFile $zip -Headers $headers -TimeoutSec 180 -UseBasicParsing
@@ -24,6 +30,7 @@ while ($true) {
       Expand-Archive -Path $zip -DestinationPath $ext -Force
       $src = Join-Path $ext "production-scheduler-$branch"
 
+      $lockBefore = Get-LockHash
       foreach ($d in @("src", "public", "deploy")) {
         $from = Join-Path $src $d
         if (Test-Path $from) { robocopy $from (Join-Path $proj $d) /MIR /NFL /NDL /NJH /NJS /NP | Out-Null }
@@ -32,20 +39,23 @@ while ($true) {
         $from = Join-Path $src $f
         if (Test-Path $from) { Copy-Item $from $proj -Force }
       }
+      $lockAfter = Get-LockHash
 
-      & cmd /c "npm install"
+      if ($lockBefore -ne $lockAfter) {
+        Write-Host "[$(Get-Date -Format HH:mm:ss)] dependencies changed - running npm install"
+        & cmd /c "npm install"
+      }
       & cmd /c "npm run build"
 
-      # 3000 포트 서버 종료 → start-server 루프가 새 빌드로 자동 재시작
       $conns = Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue
       foreach ($c in $conns) { Stop-Process -Id $c.OwningProcess -Force -ErrorAction SilentlyContinue }
 
       Set-Content -Path $shaFile -Value $sha -Encoding ascii
       $lastSha = $sha
-      Write-Host "[$(Get-Date -Format HH:mm:ss)] 적용 완료 — 서버 재시작됨"
+      Write-Host "[$(Get-Date -Format HH:mm:ss)] done - server restarted ($short)"
     }
   } catch {
-    Write-Host "[확인 오류] $($_.Exception.Message)"
+    Write-Host "[$(Get-Date -Format HH:mm:ss)] check error: $($_.Exception.Message)"
   }
-  Start-Sleep -Seconds 60
+  Start-Sleep -Seconds 20
 }
