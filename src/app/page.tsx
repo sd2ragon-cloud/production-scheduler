@@ -2,6 +2,8 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useProcess } from "./components/ProcessContext";
+import { parseParts, parsePartDurations, parsePartProcesses, partTotals } from "@/lib/parts";
+import { isDoubleSided } from "@/lib/print";
 
 interface Machine {
   id: number;
@@ -24,6 +26,9 @@ interface Order {
   priority: number;
   notes: string;
   status: string;
+  duration_minutes: number;
+  part_durations: string;
+  part_processes: string;
 }
 
 interface ScheduleEntry {
@@ -33,6 +38,11 @@ interface ScheduleEntry {
   machine_name: string;
   product_name: string;
   component: string;
+  component_part: string;
+  part_durations: string;
+  part_processes: string;
+  print_mode: string;
+  base_minutes: number;
   quantity_sheets: number;
   deadline: string;
   special_process: string;
@@ -54,6 +64,18 @@ const PROCESS_COLORS: Record<string, string> = {
   "양면": "bg-cyan-100 text-cyan-800 border-cyan-200",
   "패키지": "bg-orange-100 text-orange-800 border-orange-200",
 };
+
+// 파트 목록의 구분(공정)을 중복 없이 구한다. 파트별 지정이 없으면 주문 기본 구분(fallback) 사용.
+function processesForParts(parts: string[], partProcessesJson: string, fallback: string): string[] {
+  const pp = parsePartProcesses(partProcessesJson);
+  if (parts.length === 0) return [fallback];
+  const seen: string[] = [];
+  for (const p of parts) {
+    const proc = pp[p] || fallback;
+    if (!seen.includes(proc)) seen.push(proc);
+  }
+  return seen.length > 0 ? seen : [fallback];
+}
 
 function formatEndTime(endTimeStr: string): string {
   const dt = new Date(endTimeStr);
@@ -87,26 +109,41 @@ function deadlineColor(deadline: string): string {
   return "text-gray-500";
 }
 
+// 숫자 입력(예: 20260608)을 자동으로 YYYY-MM-DD 형태로 포맷
+function formatDeadlineInput(value: string): string {
+  const digits = value.replace(/\D/g, "").slice(0, 8);
+  const parts = [digits.slice(0, 4), digits.slice(4, 6), digits.slice(6, 8)].filter(Boolean);
+  return parts.join("-");
+}
+
 export default function ScheduleBoard() {
-  const { factory, processLine } = useProcess();
+  const { processLine } = useProcess();
   const [machines, setMachines] = useState<Machine[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [schedule, setSchedule] = useState<ScheduleEntry[]>([]);
   const [dragOrderId, setDragOrderId] = useState<number | null>(null);
+  const [dragPart, setDragPart] = useState<string>("");
   const [dragEntryId, setDragEntryId] = useState<number | null>(null);
+  const [dragSplit, setDragSplit] = useState<{ entryId: number; part: string } | null>(null);
+  const [dragAll, setDragAll] = useState(false);
+  const [waitingDrop, setWaitingDrop] = useState(false);
+  const [partReorderTarget, setPartReorderTarget] = useState<{ part: string; after: boolean } | null>(null);
   const [dropTarget, setDropTarget] = useState<number | null>(null);
   const [reorderTarget, setReorderTarget] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [editingOrderId, setEditingOrderId] = useState<number | null>(null);
   const [newOrder, setNewOrder] = useState({
     order_code: "", product_name: "", component: "", quantity_sheets: 0,
-    deadline: "", special_process: "일반", priority: 5, notes: "",
+    deadline: "", special_process: "일반", priority: 5, notes: "", duration_hours: 0,
+    partHours: {} as Record<string, number>,
+    partProcesses: {} as Record<string, string>,
   });
   const dragOverMachine = useRef<number | null>(null);
   const [machineStartTimes, setMachineStartTimes] = useState<Record<number, string>>({});
 
   const fetchAll = useCallback(async () => {
-    const qs = `?factory=${encodeURIComponent(factory)}&process_line=${encodeURIComponent(processLine)}`;
+    const qs = `?process_line=${encodeURIComponent(processLine)}`;
     const [machRes, orderRes, schedRes] = await Promise.all([
       fetch(`/api/machines${qs}`), fetch(`/api/orders${qs}`), fetch(`/api/schedule${qs}`),
     ]);
@@ -126,7 +163,7 @@ export default function ScheduleBoard() {
       }
       return next;
     });
-  }, [factory, processLine]);
+  }, [processLine]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
@@ -150,13 +187,89 @@ export default function ScheduleBoard() {
     );
   };
 
-  const handleAssign = async (orderId: number, machineId: number) => {
+  const handleAssign = async (orderId: number, machineId: number, part: string = "", allocMinutes: number = 0, beforeEntryId: number | null = null) => {
     setLoading(true);
     const startTime = machineStartTimes[machineId] || "08:00";
     await fetch("/api/schedule/assign", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ order_id: orderId, machine_id: machineId, start_time: startTime }),
+      body: JSON.stringify({ order_id: orderId, machine_id: machineId, start_time: startTime, component_part: part, alloc_minutes: allocMinutes, before_entry_id: beforeEntryId }),
+    });
+    await fetchAll();
+    setLoading(false);
+  };
+
+  // 주문의 남은 파트 전체를 한 설비에 배정 (각 파트의 남은 시간만큼)
+  const handleAssignAll = async (orderId: number, machineId: number, beforeEntryId: number | null = null) => {
+    const order = orders.find((o) => o.id === orderId);
+    if (!order) return;
+    setLoading(true);
+    const startTime = machineStartTimes[machineId] || "08:00";
+    const parts = parseParts(order.component);
+    const totals = partTotals(order.component, order.part_durations, order.duration_minutes);
+    const present = new Set<string>();
+    const alloc: Record<string, number> = {};
+    for (const s of schedule) {
+      if (s.order_id !== orderId) continue;
+      parseParts(s.component_part).forEach((p) => present.add(p));
+      for (const [p, m] of Object.entries(parsePartDurations(s.part_durations))) {
+        alloc[p] = (alloc[p] || 0) + (Number(m) || 0);
+      }
+    }
+    if (parts.length === 0) {
+      // 구성 없는 주문: 통째 배정
+      await fetch("/api/schedule/assign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ order_id: orderId, machine_id: machineId, start_time: startTime, component_part: "", before_entry_id: beforeEntryId }),
+      });
+    } else {
+      for (const p of parts) {
+        const t = Number(totals[p]) || 0;
+        let allocMin = 0;
+        if (t > 0) {
+          const rem = t - (alloc[p] || 0);
+          if (rem <= 0) continue;
+          allocMin = rem;
+        } else if (present.has(p)) {
+          continue;
+        }
+        await fetch("/api/schedule/assign", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ order_id: orderId, machine_id: machineId, start_time: startTime, component_part: p, alloc_minutes: allocMin, before_entry_id: beforeEntryId }),
+        });
+      }
+    }
+    await fetchAll();
+    setLoading(false);
+  };
+
+  const handleReorderParts = async (entryId: number, parts: string[]) => {
+    setLoading(true);
+    await fetch("/api/schedule/reorder-parts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ entry_id: entryId, parts }),
+    });
+    await fetchAll();
+    setLoading(false);
+  };
+
+  const handleMovePart = async (entryId: number, part: string, targetMachineId: number, srcMachineId: number, moveMinutes: number = 0, beforeEntryId: number | null = null) => {
+    setLoading(true);
+    await fetch("/api/schedule/move-part", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        entry_id: entryId,
+        part,
+        target_machine_id: targetMachineId,
+        move_minutes: moveMinutes,
+        source_start_time: machineStartTimes[srcMachineId] || "08:00",
+        target_start_time: machineStartTimes[targetMachineId] || "08:00",
+        before_entry_id: beforeEntryId,
+      }),
     });
     await fetchAll();
     setLoading(false);
@@ -173,6 +286,32 @@ export default function ScheduleBoard() {
     setLoading(false);
   };
 
+  const handleUnassignPart = async (entryId: number, part: string) => {
+    setLoading(true);
+    await fetch("/api/schedule/unassign-part", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ entry_id: entryId, part }),
+    });
+    await fetchAll();
+    setLoading(false);
+  };
+
+  // 배정 대기 영역에 드롭 = 배정 취소
+  const onDropOnWaiting = async () => {
+    if (dragSplit !== null) {
+      await handleUnassignPart(dragSplit.entryId, dragSplit.part);
+    } else if (dragEntryId !== null) {
+      await handleUnassign(dragEntryId);
+    }
+    setDragOrderId(null);
+    setDragPart("");
+    setDragEntryId(null);
+    setDragSplit(null);
+    setDragAll(false);
+    setDropTarget(null);
+  };
+
   const handleReorder = async (machineId: number, entryIds: number[]) => {
     setLoading(true);
     await fetch("/api/schedule/reorder", {
@@ -187,6 +326,7 @@ export default function ScheduleBoard() {
   const durationTimers = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
 
   const handleDurationChange = (entryId: number, hours: number) => {
+    // 입력값은 실제(인쇄 모드 적용 후) 소요시간. 서버에서 단면 기준 base로 환산해 저장한다.
     const minutes = Math.round(hours * 60);
     setSchedule((prev) =>
       prev.map((e) => (e.id === entryId ? { ...e, duration_minutes: minutes } : e))
@@ -207,74 +347,195 @@ export default function ScheduleBoard() {
     );
   };
 
-  const handleAddOrder = async (e: React.FormEvent) => {
-    e.preventDefault();
-    await fetch("/api/orders", {
+  const handlePrintModeToggle = async (entry: ScheduleEntry) => {
+    setLoading(true);
+    const newMode = entry.print_mode === "single" ? "double" : "single";
+    await fetch("/api/schedule/print-mode", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...newOrder, factory, process_line: processLine }),
+      body: JSON.stringify({ entry_id: entry.id, mode: newMode }),
     });
+    await fetchAll();
+    setLoading(false);
+  };
+
+  const resetForm = () => {
     setNewOrder({
       order_code: "", product_name: "", component: "", quantity_sheets: 0,
-      deadline: "", special_process: "일반", priority: 5, notes: "",
+      deadline: "", special_process: "일반", priority: 5, notes: "", duration_hours: 0,
+      partHours: {},
+      partProcesses: {},
     });
     setShowAddForm(false);
+    setEditingOrderId(null);
+  };
+
+  // 대기 주문 편집 시작: 폼을 해당 주문 값으로 채운다
+  const startEditOrder = (order: Order) => {
+    const parts = parseParts(order.component);
+    const pd = parsePartDurations(order.part_durations);
+    const pp = parsePartProcesses(order.part_processes);
+    const partHours: Record<string, number> = {};
+    const partProcesses: Record<string, string> = {};
+    for (const p of parts) {
+      partHours[p] = Math.round(((Number(pd[p]) || 0) / 60));
+      partProcesses[p] = pp[p] || order.special_process || "일반";
+    }
+    setNewOrder({
+      order_code: order.order_code || "",
+      product_name: order.product_name,
+      component: order.component || "",
+      quantity_sheets: order.quantity_sheets || 0,
+      deadline: order.deadline || "",
+      special_process: order.special_process || "일반",
+      priority: order.priority || 5,
+      notes: order.notes || "",
+      duration_hours: parts.length >= 2 ? 0 : Math.round((order.duration_minutes || 0) / 60),
+      partHours,
+      partProcesses,
+    });
+    setEditingOrderId(order.id);
+    setShowAddForm(true);
+  };
+
+  const handleAddOrder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const parts = parseParts(newOrder.component);
+    let partDurations: Record<string, number> = {};
+    const partProcesses: Record<string, string> = {};
+    let durationMinutes = 0;
+    if (parts.length >= 2) {
+      // 구성이 여러 개면 파트별 소요시간/구분을 저장, 전체 소요는 합계
+      for (const p of parts) {
+        partDurations[p] = Math.round((newOrder.partHours[p] || 0) * 60);
+        partProcesses[p] = newOrder.partProcesses[p] || newOrder.special_process || "일반";
+      }
+      durationMinutes = Object.values(partDurations).reduce((a, b) => a + b, 0);
+    } else {
+      durationMinutes = Math.round((newOrder.duration_hours || 0) * 60);
+    }
+    if (editingOrderId !== null) {
+      await fetch(`/api/orders/${editingOrderId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...newOrder,
+          duration_minutes: durationMinutes,
+          part_durations: partDurations,
+          part_processes: partProcesses,
+          status: "pending",
+        }),
+      });
+    } else {
+      await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...newOrder,
+          duration_minutes: durationMinutes,
+          part_durations: partDurations,
+          part_processes: partProcesses,
+          process_line: processLine,
+        }),
+      });
+    }
+    resetForm();
     await fetchAll();
   };
 
-  const onDragStartOrder = (orderId: number) => {
+  const onDragStartOrder = (orderId: number, part: string = "") => {
     setDragOrderId(orderId);
+    setDragPart(part);
     setDragEntryId(null);
+    setDragSplit(null);
+    setDragAll(false);
   };
 
-  const onDragStartEntry = (entryId: number) => {
-    setDragEntryId(entryId);
-    setDragOrderId(null);
+  // 제품 카드 본문을 드래그 = 남은 파트 전체를 한 설비로
+  const onDragStartAll = (orderId: number) => {
+    setDragOrderId(orderId);
+    setDragPart("");
+    setDragAll(true);
+    setDragEntryId(null);
+    setDragSplit(null);
   };
 
   const onDragOverMachine = (e: React.DragEvent, machineId: number) => {
     e.preventDefault();
     dragOverMachine.current = machineId;
-    setDropTarget(machineId);
+    if (dropTarget !== machineId) setDropTarget(machineId);
   };
 
-  const onDropOnMachine = async (machineId: number) => {
-    if (dragOrderId !== null) {
-      await handleAssign(dragOrderId, machineId);
+  // 주문의 특정 파트가 아직 배정되지 않은 남은 시간(분)
+  const partRemaining = (order: Order, part: string) => {
+    const totals = partTotals(order.component, order.part_durations, order.duration_minutes);
+    const total = Number(totals[part]) || 0;
+    let allocated = 0;
+    for (const s of schedule) {
+      if (s.order_id !== order.id) continue;
+      allocated += Number(parsePartDurations(s.part_durations)[part]) || 0;
+    }
+    return { total, allocated, remaining: total - allocated };
+  };
+
+  const onDropOnMachine = async (machineId: number, beforeEntryId: number | null = null) => {
+    if (dragSplit !== null) {
+      const srcEntry = schedule.find((s) => s.id === dragSplit.entryId);
+      if (srcEntry && srcEntry.machine_id !== machineId) {
+        // 설비→설비: 옮길 시간을 입력받아 일부만 이동 가능 (기본=현재 배정량 전체)
+        const srcAlloc = Number(parsePartDurations(srcEntry.part_durations)[dragSplit.part]) || 0;
+        if (srcAlloc > 0) {
+          const defH = Math.round(srcAlloc / 60);
+          const input = window.prompt(`'${dragSplit.part}' 이 설비로 옮길 시간(시간)\n현재 ${defH}시간`, String(defH));
+          if (input === null) { setDragSplit(null); setDropTarget(null); return; }
+          const hours = Number(input);
+          if (!Number.isFinite(hours) || hours <= 0) { setDragSplit(null); setDropTarget(null); return; }
+          const mins = Math.min(Math.round(hours * 60), srcAlloc);
+          await handleMovePart(dragSplit.entryId, dragSplit.part, machineId, srcEntry.machine_id, mins, beforeEntryId);
+        } else {
+          await handleMovePart(dragSplit.entryId, dragSplit.part, machineId, srcEntry.machine_id, 0, beforeEntryId);
+        }
+      }
+    } else if (dragOrderId !== null) {
+      if (dragAll) {
+        // 제품 전체(남은 파트 모두)를 이 설비로 배정
+        await handleAssignAll(dragOrderId, machineId, beforeEntryId);
+      } else if (dragPart) {
+        // 파트 배정: 이 설비에 배정할 시간을 입력받아 분할 배정 (남은 시간 추적)
+        const order = orders.find((o) => o.id === dragOrderId);
+        const { total, remaining } = order ? partRemaining(order, dragPart) : { total: 0, remaining: 0 };
+        if (total > 0) {
+          const defHours = Math.round((remaining > 0 ? remaining : total) / 60);
+          const input = window.prompt(`'${dragPart}' 이 설비에 배정할 시간(시간)\n남은 시간: ${Math.round(remaining / 60)}시간`, String(defHours));
+          if (input === null) { setDragOrderId(null); setDragPart(""); setDropTarget(null); return; }
+          const hours = Number(input);
+          if (!Number.isFinite(hours) || hours <= 0) { setDragOrderId(null); setDragPart(""); setDropTarget(null); return; }
+          const mins = Math.min(Math.round(hours * 60), remaining > 0 ? remaining : Math.round(hours * 60));
+          await handleAssign(dragOrderId, machineId, dragPart, mins, beforeEntryId);
+        } else {
+          await handleAssign(dragOrderId, machineId, dragPart, 0, beforeEntryId);
+        }
+      } else {
+        await handleAssign(dragOrderId, machineId, "", 0, beforeEntryId);
+      }
     } else if (dragEntryId !== null) {
       const entry = schedule.find((s) => s.id === dragEntryId);
       if (entry && entry.machine_id !== machineId) {
         await handleUnassign(dragEntryId);
-        await handleAssign(entry.order_id, machineId);
+        await handleAssign(entry.order_id, machineId, entry.component_part || "", 0, beforeEntryId);
       }
     }
     setDragOrderId(null);
+    setDragPart("");
     setDragEntryId(null);
+    setDragSplit(null);
+    setDragAll(false);
     setDropTarget(null);
-  };
-
-  const moveEntry = async (machineId: number, entryId: number, direction: "up" | "down") => {
-    const machineEntries = schedule
-      .filter((s) => s.machine_id === machineId)
-      .sort((a, b) => a.sequence - b.sequence);
-    const idx = machineEntries.findIndex((e) => e.id === entryId);
-    if (idx < 0) return;
-    if (direction === "up" && idx === 0) return;
-    if (direction === "down" && idx === machineEntries.length - 1) return;
-
-    const newEntries = [...machineEntries];
-    const swapIdx = direction === "up" ? idx - 1 : idx + 1;
-    [newEntries[idx], newEntries[swapIdx]] = [newEntries[swapIdx], newEntries[idx]];
-
-    await handleReorder(machineId, newEntries.map((e) => e.id));
   };
 
   const getEntriesForMachine = (machineId: number) =>
     schedule.filter((s) => s.machine_id === machineId).sort((a, b) => a.sequence - b.sequence);
 
-  const parseCaps = (s: string): string[] => {
-    try { return JSON.parse(s); } catch { return []; }
-  };
 
   const PROCESSES = ["일반", "항바니쉬", "UV", "IR코팅", "양면", "패키지"];
 
@@ -295,41 +556,32 @@ export default function ScheduleBoard() {
 
         {machines.map((machine) => {
           const entries = getEntriesForMachine(machine.id);
-          const caps = parseCaps(machine.capabilities);
           const isTarget = dropTarget === machine.id;
 
           return (
             <div
               key={machine.id}
-              className={`bg-white rounded-xl border shadow-sm transition-all ${
+              className={`bg-white border shadow-sm transition-all ${
                 isTarget ? "ring-2 ring-blue-500 border-blue-300 bg-blue-50/30" : ""
               }`}
               onDragOver={(e) => onDragOverMachine(e, machine.id)}
               onDragLeave={() => { if (dragOverMachine.current === machine.id) setDropTarget(null); }}
               onDrop={() => onDropOnMachine(machine.id)}
             >
-              <div className="bg-gray-800 text-white px-4 py-2 rounded-t-xl flex items-center justify-between">
+              <div className="bg-gray-800 text-white px-4 py-2 flex items-center justify-between">
+                <span className="font-bold">{machine.name}</span>
                 <div className="flex items-center gap-3">
-                  <span className="font-bold">{machine.name}</span>
-                  <span className="text-xs text-gray-400">{machine.description}</span>
-                  <div className="flex items-center gap-1.5 ml-2">
+                  <div className="flex items-center gap-1.5">
                     <span className="text-xs text-gray-400">시작</span>
                     <input
                       type="time"
-                      className="bg-gray-700 text-white text-xs rounded px-2 py-0.5 border border-gray-500 focus:border-blue-400 outline-none"
+                      className="bg-gray-700 text-white text-xs px-2 py-0.5 border border-gray-500 focus:border-blue-400 outline-none"
                       style={{ width: "7rem", colorScheme: "dark" }}
                       value={machineStartTimes[machine.id] || "08:00"}
                       onChange={(e) => handleStartTimeChange(machine.id, e.target.value)}
                     />
                   </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="flex gap-1">
-                    {caps.map((c) => (
-                      <span key={c} className="text-[10px] px-1.5 py-0.5 bg-gray-700 rounded">{c}</span>
-                    ))}
-                  </div>
-                  <span className="text-sm text-gray-300 ml-2">{entries.length}건</span>
+                  <span className="text-sm text-gray-300">{entries.length}건</span>
                 </div>
               </div>
 
@@ -338,21 +590,21 @@ export default function ScheduleBoard() {
                   우측에서 작업을 드래그하여 배정하세요
                 </div>
               ) : (
-                <table className="w-full text-sm">
+                <table className="w-full">
                   <thead>
-                    <tr className="text-gray-500 text-xs border-b">
-                      <th className="px-2 py-1.5 text-left w-8">#</th>
-                      <th className="px-2 py-1.5 text-left">작업명</th>
-                      <th className="px-2 py-1.5 text-left w-14">수량</th>
-                      <th className="px-2 py-1.5 text-left w-24">구분</th>
-                      <th className="px-2 py-1.5 text-center w-20">소요(시간)</th>
-                      <th className="px-2 py-1.5 text-left w-20">예상완료</th>
-                      <th className="px-2 py-1.5 text-left w-24">납기</th>
-                      <th className="px-2 py-1.5 text-center w-8"></th>
+                    <tr className="text-gray-500 text-[10px] border-b h-7">
+                      <th className="px-1.5 py-0 text-left w-6">#</th>
+                      <th className="px-1.5 py-0 text-left">작업명</th>
+                      <th className="px-1.5 py-0 text-center w-28">비고</th>
+                      <th className="px-1.5 py-0 text-center w-20">구분</th>
+                      <th className="px-1.5 py-0 text-center w-28">소요(시간)</th>
+                      <th className="px-1.5 py-0 text-left w-20">예상완료</th>
+                      <th className="px-1.5 py-0 text-left w-20">납기</th>
+                      <th className="px-1.5 py-0 text-center w-6"></th>
                     </tr>
                   </thead>
                   <tbody>
-                    {entries.map((entry, idx) => {
+                    {entries.map((entry) => {
                       const over = isOverDeadline(entry.end_time, entry.deadline);
                       const isReorderHover = reorderTarget === entry.id;
                       return (
@@ -362,75 +614,224 @@ export default function ScheduleBoard() {
                           onDragStart={() => {
                             setDragEntryId(entry.id);
                             setDragOrderId(null);
+                            setDragPart("");
+                            setDragSplit(null);
                           }}
                           onDragEnd={() => { setDragEntryId(null); setReorderTarget(null); }}
-                          className={`border-t cursor-grab active:cursor-grabbing ${
+                          className={`border-t cursor-grab active:cursor-grabbing h-7 ${
                             over ? "bg-red-50" : "hover:bg-gray-50"
                           } ${dragEntryId === entry.id ? "opacity-40" : ""} ${
                             isReorderHover ? "border-t-2 border-t-blue-500" : ""
                           }`}
                           onDragOver={(e) => {
-                            if (dragEntryId !== null && dragEntryId !== entry.id) {
+                            // 드래그 중인 자기 자신 / 같은 행 파트 재정렬은 무시 (칩 핸들러가 처리)
+                            if (dragEntryId === entry.id) return;
+                            if (dragSplit !== null && dragSplit.entryId === entry.id) return;
+                            // 기존 재정렬 + 새 배정/이동 모두 이 행을 드롭 대상으로 허용하고 삽입 위치 표시
+                            if (dragEntryId !== null || dragOrderId !== null || dragSplit !== null) {
                               e.preventDefault();
                               e.stopPropagation();
-                              setReorderTarget(entry.id);
+                              if (reorderTarget !== entry.id) setReorderTarget(entry.id);
+                              if (dropTarget !== null) setDropTarget(null);
                             }
                           }}
                           onDragLeave={() => {
                             if (reorderTarget === entry.id) setReorderTarget(null);
                           }}
                           onDrop={(e) => {
-                            if (dragEntryId !== null && dragEntryId !== entry.id) {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              setReorderTarget(null);
-                              const fromEntry = schedule.find((s) => s.id === dragEntryId);
-                              if (fromEntry && fromEntry.machine_id === machine.id) {
-                                const currentEntries = [...entries];
-                                const fromIdx = currentEntries.findIndex((e) => e.id === dragEntryId);
-                                const toIdx = currentEntries.findIndex((e) => e.id === entry.id);
-                                if (fromIdx >= 0 && toIdx >= 0) {
-                                  const [moved] = currentEntries.splice(fromIdx, 1);
-                                  currentEntries.splice(toIdx, 0, moved);
-                                  handleReorder(machine.id, currentEntries.map((e) => e.id));
-                                }
+                            if (dragEntryId === entry.id) return;
+                            if (dragSplit !== null && dragSplit.entryId === entry.id) return;
+                            if (dragEntryId === null && dragOrderId === null && dragSplit === null) return;
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setReorderTarget(null);
+                            const fromEntry = dragEntryId !== null ? schedule.find((s) => s.id === dragEntryId) : null;
+                            if (fromEntry && fromEntry.machine_id === machine.id) {
+                              // 같은 설비 내 순서 변경
+                              const currentEntries = [...entries];
+                              const fromIdx = currentEntries.findIndex((x) => x.id === dragEntryId);
+                              const toIdx = currentEntries.findIndex((x) => x.id === entry.id);
+                              if (fromIdx >= 0 && toIdx >= 0) {
+                                const [moved] = currentEntries.splice(fromIdx, 1);
+                                currentEntries.splice(toIdx, 0, moved);
+                                handleReorder(machine.id, currentEntries.map((x) => x.id));
                               }
                               setDragEntryId(null);
                               setDragOrderId(null);
+                            } else {
+                              // 새 배정 또는 다른 설비에서 이동 → 이 행 앞 위치에 삽입
+                              onDropOnMachine(machine.id, entry.id);
                             }
                           }}
                         >
-                          <td className="px-2 py-1.5 text-gray-400 text-xs">{entry.sequence}</td>
-                          <td className="px-2 py-1.5">
-                            <span className="font-medium text-xs">{entry.product_name}</span>
-                            <span className="text-gray-400 text-xs ml-1">({entry.component})</span>
+                          <td className="px-1.5 py-0 text-gray-400 text-[10px]">{entry.sequence}</td>
+                          <td className="px-1.5 py-0">
+                            <div className="flex items-center gap-1">
+                            <span className="font-medium text-[11px] shrink-0">{entry.product_name}</span>
+                            {(() => {
+                              const eparts = parseParts(entry.component_part);
+                              if (eparts.length === 0) {
+                                // 구성이 단일(통째 배정)인 경우에도 칩으로 표시 (끌면 작업 전체가 이동)
+                                return entry.component ? (
+                                  <span
+                                    draggable
+                                    onDragStart={(e) => {
+                                      e.stopPropagation();
+                                      e.dataTransfer.effectAllowed = "move";
+                                      setDragEntryId(entry.id);
+                                      setDragOrderId(null);
+                                      setDragPart("");
+                                      setDragSplit(null);
+                                    }}
+                                    onDragEnd={() => setDragEntryId(null)}
+                                    className="px-1.5 py-0 ml-1 border border-gray-300 bg-gray-100 text-gray-700 text-[10px] cursor-grab active:cursor-grabbing hover:bg-blue-100 hover:border-blue-300"
+                                    title="다른 설비로 드래그하여 이동"
+                                  >
+                                    {entry.component}
+                                  </span>
+                                ) : null;
+                              }
+                              const isReorderZone = dragSplit !== null && dragSplit.entryId === entry.id;
+                              // 커서 X 위치에서 (끌고 있는 파트를 제외한) 가장 가까운 칩과 앞/뒤를 계산
+                              const nearestTarget = (container: HTMLElement, clientX: number): { part: string; after: boolean } | null => {
+                                if (!dragSplit) return null;
+                                const els = Array.from(container.querySelectorAll("[data-part]")) as HTMLElement[];
+                                let best: { part: string; after: boolean } | null = null;
+                                let bestDist = Infinity;
+                                for (const el of els) {
+                                  const part = el.getAttribute("data-part");
+                                  if (!part || part === dragSplit.part) continue;
+                                  const r = el.getBoundingClientRect();
+                                  const center = r.left + r.width / 2;
+                                  const dist = Math.abs(clientX - center);
+                                  if (dist < bestDist) {
+                                    bestDist = dist;
+                                    best = { part, after: clientX > center };
+                                  }
+                                }
+                                return best;
+                              };
+                              const applyReorder = (t: { part: string; after: boolean } | null) => {
+                                if (!dragSplit || !t) return;
+                                const order = eparts.filter((x) => x !== dragSplit.part);
+                                const idx = order.indexOf(t.part);
+                                if (idx < 0) return;
+                                order.splice(t.after ? idx + 1 : idx, 0, dragSplit.part);
+                                handleReorderParts(entry.id, order);
+                              };
+                              return (
+                                <span
+                                  className="inline-flex flex-wrap items-center gap-1 align-middle flex-1"
+                                  onDragOver={(e) => {
+                                    if (isReorderZone) {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      const t = nearestTarget(e.currentTarget, e.clientX);
+                                      // 값이 실제로 바뀔 때만 상태 갱신 (불필요한 리렌더 방지)
+                                      setPartReorderTarget((prev) =>
+                                        prev?.part === t?.part && prev?.after === t?.after ? prev : t
+                                      );
+                                    }
+                                  }}
+                                  onDragLeave={(e) => {
+                                    if (!e.currentTarget.contains(e.relatedTarget as Node)) setPartReorderTarget(null);
+                                  }}
+                                  onDrop={(e) => {
+                                    if (isReorderZone) {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      applyReorder(nearestTarget(e.currentTarget, e.clientX));
+                                      setDragSplit(null);
+                                      setPartReorderTarget(null);
+                                    }
+                                  }}
+                                >
+                                  {eparts.map((p) => {
+                                    const isTarget = isReorderZone && dragSplit!.part !== p && partReorderTarget?.part === p;
+                                    return (
+                                      <span
+                                        key={p}
+                                        data-part={p}
+                                        draggable
+                                        onDragStart={(e) => {
+                                          e.stopPropagation();
+                                          e.dataTransfer.effectAllowed = "move";
+                                          e.dataTransfer.setData("text/plain", p);
+                                          setDragSplit({ entryId: entry.id, part: p });
+                                          setDragEntryId(null);
+                                          setDragOrderId(null);
+                                          setDragPart("");
+                                        }}
+                                        onDragEnd={() => { setDragSplit(null); setPartReorderTarget(null); }}
+                                        className={`px-1.5 py-0 border text-[10px] cursor-grab active:cursor-grabbing ${
+                                          isTarget
+                                            ? `bg-blue-50 text-blue-700 border-blue-500 ${partReorderTarget?.after ? "border-r-4" : "border-l-4"}`
+                                            : "border-gray-300 bg-gray-100 text-gray-700 hover:bg-blue-100 hover:border-blue-300"
+                                        }`}
+                                        title="다른 설비로 드래그하면 분리, 같은 행에서 칩의 왼쪽/오른쪽으로 드롭하면 앞/뒤로 이동"
+                                      >
+                                        {p}
+                                      </span>
+                                    );
+                                  })}
+                                </span>
+                              );
+                            })()}
+                            </div>
                           </td>
-                          <td className="px-2 py-1.5 text-xs">{entry.quantity_sheets}</td>
-                          <td className="px-2 py-1.5 whitespace-nowrap">
-                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium border whitespace-nowrap ${
-                              PROCESS_COLORS[entry.special_process] || "bg-gray-100 text-gray-600 border-gray-200"
-                            }`}>
-                              {entry.special_process}
-                            </span>
+                          <td className="px-1.5 py-0 text-center text-[10px] text-gray-500 truncate max-w-[10rem]" title={entry.order_notes}>
+                            {entry.order_notes}
                           </td>
-                          <td className="px-2 py-1.5 text-center">
-                            <input
-                              type="number"
-                              min="0"
-                              step="1"
-                              className="w-16 border border-gray-300 rounded px-1.5 py-0.5 text-xs text-center font-mono focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
-                              value={entry.duration_minutes ? Math.round(entry.duration_minutes / 60) : ""}
-                              placeholder="시간"
-                              onChange={(e) => handleDurationChange(entry.id, Number(e.target.value) || 0)}
-                            />
+                          <td className="px-1.5 py-0 text-center whitespace-nowrap">
+                            <div className="flex flex-wrap items-center justify-center gap-0.5">
+                              {processesForParts(parseParts(entry.component_part), entry.part_processes, entry.special_process).map((proc) => (
+                                <span key={proc} className={`px-1.5 py-0 text-[10px] font-medium border whitespace-nowrap ${
+                                  PROCESS_COLORS[proc] || "bg-gray-100 text-gray-600 border-gray-200"
+                                }`}>
+                                  {proc}
+                                </span>
+                              ))}
+                            </div>
                           </td>
-                          <td className={`px-2 py-1.5 font-mono text-xs ${over ? "text-red-600 font-bold" : "text-gray-700"}`}>
+                          <td className="px-1.5 py-0 text-center">
+                            <div className="flex items-center justify-center gap-1">
+                              <input
+                                type="number"
+                                min="0"
+                                step="1"
+                                className="w-14 h-6 border border-gray-300 px-1 py-0 text-[11px] text-center font-mono focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                                value={entry.duration_minutes ? Math.round(entry.duration_minutes / 60) : ""}
+                                placeholder="시간"
+                                title="실제 소요시간 (양면 설비는 절반 적용)"
+                                onMouseDown={(e) => e.stopPropagation()}
+                                onClick={(e) => e.stopPropagation()}
+                                onChange={(e) => handleDurationChange(entry.id, Number(e.target.value) || 0)}
+                              />
+                              {isDoubleSided(machine.name) ? (
+                                <button
+                                  onClick={() => handlePrintModeToggle(entry)}
+                                  disabled={loading}
+                                  title="양면/단면 전환 (양면은 소요시간 절반)"
+                                  className={`px-1 py-0 text-[9px] border ${
+                                    entry.print_mode === "single"
+                                      ? "bg-amber-100 text-amber-700 border-amber-300"
+                                      : "bg-green-100 text-green-700 border-green-300"
+                                  }`}
+                                >
+                                  {entry.print_mode === "single" ? "단면" : "양면"}
+                                </button>
+                              ) : (
+                                <span className="text-[9px] text-gray-400">단면</span>
+                              )}
+                            </div>
+                          </td>
+                          <td className={`px-1.5 py-0 font-mono text-[11px] ${over ? "text-red-600 font-bold" : "text-gray-700"}`}>
                             {formatEndTime(entry.end_time)}
                           </td>
-                          <td className={`px-2 py-1.5 text-xs ${deadlineColor(entry.deadline)}`}>
+                          <td className={`px-1.5 py-0 text-[11px] ${deadlineColor(entry.deadline)}`}>
                             {entry.deadline}
                           </td>
-                          <td className="px-2 py-1.5 text-center">
+                          <td className="px-1.5 py-0 text-center">
                             <button
                               onClick={() => handleUnassign(entry.id)}
                               disabled={loading}
@@ -452,15 +853,29 @@ export default function ScheduleBoard() {
       </div>
 
       {/* 우측: 배정 대기 주문 목록 */}
-      <div className="w-96 bg-white rounded-xl border shadow-sm flex flex-col overflow-hidden shrink-0">
+      <div
+        className={`w-96 bg-white border shadow-sm flex flex-col overflow-hidden shrink-0 ${
+          waitingDrop ? "ring-2 ring-red-400 bg-red-50/30" : ""
+        }`}
+        onDragOver={(e) => {
+          if (dragSplit !== null || dragEntryId !== null) {
+            e.preventDefault();
+            if (!waitingDrop) setWaitingDrop(true);
+          }
+        }}
+        onDragLeave={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node)) setWaitingDrop(false);
+        }}
+        onDrop={() => { setWaitingDrop(false); onDropOnWaiting(); }}
+      >
         <div className="px-4 py-3 border-b bg-gray-50 flex items-center justify-between">
           <div>
             <h3 className="font-bold text-gray-900">배정 대기</h3>
             <p className="text-xs text-gray-500">{orders.length}건</p>
           </div>
           <button
-            onClick={() => setShowAddForm(!showAddForm)}
-            className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700"
+            onClick={() => (showAddForm ? resetForm() : (setEditingOrderId(null), setShowAddForm(true)))}
+            className="px-3 py-1.5 bg-blue-600 text-white text-xs font-medium hover:bg-blue-700"
           >
             {showAddForm ? "닫기" : "+ 주문 추가"}
           </button>
@@ -468,57 +883,96 @@ export default function ScheduleBoard() {
 
         {showAddForm && (
           <div className="p-3 border-b bg-blue-50/50">
+            {editingOrderId !== null && (
+              <p className="text-[11px] font-medium text-blue-700 mb-2">주문 수정 중</p>
+            )}
             <form onSubmit={handleAddOrder} className="space-y-2">
               <div className="grid grid-cols-2 gap-2">
                 <input
-                  type="text" placeholder="작업지시번호"
-                  className="border rounded px-2 py-1.5 text-xs w-full col-span-2"
-                  value={newOrder.order_code}
-                  onChange={(e) => setNewOrder({ ...newOrder, order_code: e.target.value })}
-                />
-                <input
                   type="text" placeholder="제품명 *" required
-                  className="border rounded px-2 py-1.5 text-xs w-full"
+                  className="border px-2 py-1.5 text-xs w-full"
                   value={newOrder.product_name}
                   onChange={(e) => setNewOrder({ ...newOrder, product_name: e.target.value })}
                 />
                 <input
                   type="text" placeholder="구성 (표지, 본문 등)"
-                  className="border rounded px-2 py-1.5 text-xs w-full"
+                  className="border px-2 py-1.5 text-xs w-full"
                   value={newOrder.component}
                   onChange={(e) => setNewOrder({ ...newOrder, component: e.target.value })}
                 />
-                <input
-                  type="number" placeholder="수량 *" required min="1"
-                  className="border rounded px-2 py-1.5 text-xs w-full"
-                  value={newOrder.quantity_sheets || ""}
-                  onChange={(e) => setNewOrder({ ...newOrder, quantity_sheets: Number(e.target.value) })}
-                />
-                <div>
-                  <label className="text-[10px] text-gray-500">납기일</label>
-                  <input
-                    type="date" required
-                    className="border rounded px-2 py-1.5 text-xs w-full"
-                    value={newOrder.deadline}
-                    onChange={(e) => setNewOrder({ ...newOrder, deadline: e.target.value })}
-                  />
-                </div>
                 <select
-                  className="border rounded px-2 py-1.5 text-xs w-full"
+                  className="border px-2 py-1.5 text-xs w-full col-span-2"
                   value={newOrder.special_process}
                   onChange={(e) => setNewOrder({ ...newOrder, special_process: e.target.value })}
                 >
                   {PROCESSES.map((p) => <option key={p} value={p}>{p}</option>)}
                 </select>
+                {(() => {
+                  const newParts = parseParts(newOrder.component);
+                  const multi = newParts.length >= 2;
+                  return (
+                    <>
+                      <div className={multi ? "col-span-2" : ""}>
+                        <label className="text-[10px] text-gray-500">납기일</label>
+                        <input
+                          type="text" inputMode="numeric" required placeholder="YYYYMMDD"
+                          maxLength={10}
+                          className="border px-2 py-1.5 text-xs w-full"
+                          value={newOrder.deadline}
+                          onChange={(e) => setNewOrder({ ...newOrder, deadline: formatDeadlineInput(e.target.value) })}
+                        />
+                      </div>
+                      {multi ? (
+                        <div className="col-span-2">
+                          <div className="grid grid-cols-3 gap-1 mb-1">
+                            <span className="text-[10px] text-gray-500">구성</span>
+                            <span className="text-[10px] text-gray-500">소요(시간)</span>
+                            <span className="text-[10px] text-gray-500">구분</span>
+                          </div>
+                          <div className="space-y-1">
+                            {newParts.map((p) => (
+                              <div key={p} className="grid grid-cols-3 gap-1 items-center">
+                                <span className="text-[11px] text-gray-700 truncate" title={p}>{p}</span>
+                                <input
+                                  type="number" min="0" step="1" placeholder="시간"
+                                  className="border px-2 py-1 text-xs w-full min-w-0"
+                                  value={newOrder.partHours[p] || ""}
+                                  onChange={(e) => setNewOrder({ ...newOrder, partHours: { ...newOrder.partHours, [p]: Number(e.target.value) } })}
+                                />
+                                <select
+                                  className="border px-1 py-1 text-xs w-full min-w-0"
+                                  value={newOrder.partProcesses[p] || newOrder.special_process}
+                                  onChange={(e) => setNewOrder({ ...newOrder, partProcesses: { ...newOrder.partProcesses, [p]: e.target.value } })}
+                                >
+                                  {PROCESSES.map((proc) => <option key={proc} value={proc}>{proc}</option>)}
+                                </select>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <div>
+                          <label className="text-[10px] text-gray-500">소요시간 (시간)</label>
+                          <input
+                            type="number" min="0" step="1" placeholder="자동"
+                            className="border px-2 py-1.5 text-xs w-full"
+                            value={newOrder.duration_hours || ""}
+                            onChange={(e) => setNewOrder({ ...newOrder, duration_hours: Number(e.target.value) })}
+                          />
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
                 <input
                   type="text" placeholder="비고"
-                  className="border rounded px-2 py-1.5 text-xs w-full"
+                  className="border px-2 py-1.5 text-xs w-full col-span-2"
                   value={newOrder.notes}
                   onChange={(e) => setNewOrder({ ...newOrder, notes: e.target.value })}
                 />
               </div>
-              <button type="submit" className="w-full py-1.5 bg-blue-600 text-white rounded text-xs font-medium">
-                등록
+              <button type="submit" className="w-full py-1.5 bg-blue-600 text-white text-xs font-medium">
+                {editingOrderId !== null ? "수정 저장" : "등록"}
               </button>
             </form>
           </div>
@@ -532,38 +986,99 @@ export default function ScheduleBoard() {
           ) : (
             orders.map((order) => {
               const days = daysUntilDeadline(order.deadline);
+              const parts = parseParts(order.component);
+              const hasParts = parts.length >= 1;
+              const totals = partTotals(order.component, order.part_durations, order.duration_minutes);
+              const present = new Set<string>();
+              const alloc: Record<string, number> = {};
+              for (const s of schedule) {
+                if (s.order_id !== order.id) continue;
+                parseParts(s.component_part).forEach((p) => present.add(p));
+                for (const [p, m] of Object.entries(parsePartDurations(s.part_durations))) {
+                  alloc[p] = (alloc[p] || 0) + (Number(m) || 0);
+                }
+              }
+              const remainingParts = hasParts
+                ? parts.filter((p) => {
+                    const t = Number(totals[p]) || 0;
+                    return t > 0 ? (alloc[p] || 0) < t : !present.has(p);
+                  })
+                : [];
+              if (hasParts && remainingParts.length === 0) return null;
               return (
                 <div
                   key={order.id}
                   draggable
-                  onDragStart={() => onDragStartOrder(order.id)}
-                  className={`p-2.5 rounded-lg border cursor-grab active:cursor-grabbing transition hover:shadow-sm ${
-                    dragOrderId === order.id ? "opacity-40" : ""
-                  } ${days < 0 ? "border-red-300 bg-red-50" : days <= 2 ? "border-orange-200 bg-orange-50/50" : "border-gray-200 bg-white"}`}
+                  onDragStart={() => (hasParts ? onDragStartAll(order.id) : onDragStartOrder(order.id))}
+                  title={hasParts ? "제품 전체(남은 파트 모두)를 설비로 드래그" : undefined}
+                  className={`p-2.5 border transition hover:shadow-sm cursor-grab active:cursor-grabbing ${
+                    dragOrderId === order.id && !dragPart ? "opacity-40" : ""
+                  } ${
+                    days < 0 ? "border-red-300 bg-red-50" : days <= 2 ? "border-orange-200 bg-orange-50/50" : "border-gray-200 bg-white"
+                  }`}
                 >
                   <div>
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1.5">
-                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium border shrink-0 ${
-                          PROCESS_COLORS[order.special_process] || "bg-gray-100 text-gray-600 border-gray-200"
-                        }`}>
-                          {order.special_process}
-                        </span>
-                        <span className="text-xs text-gray-500 font-mono">{order.order_code || "-"}</span>
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <div className="flex flex-wrap items-center gap-0.5 shrink-0">
+                          {processesForParts(parts, order.part_processes, order.special_process).map((proc) => (
+                            <span key={proc} className={`px-1.5 py-0 text-[10px] font-medium border ${
+                              PROCESS_COLORS[proc] || "bg-gray-100 text-gray-600 border-gray-200"
+                            }`}>
+                              {proc}
+                            </span>
+                          ))}
+                        </div>
+                        {order.notes && (
+                          <span className="text-xs text-gray-500 truncate" title={order.notes}>비고 : {order.notes}</span>
+                        )}
                       </div>
-                      <p className={`text-xs font-mono shrink-0 ${deadlineColor(order.deadline)}`}>
-                        {order.deadline}
-                      </p>
+                      <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                        <p className={`text-xs font-mono ${deadlineColor(order.deadline)}`}>
+                          {order.deadline}
+                        </p>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); startEditOrder(order); }}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          className="text-gray-400 hover:text-blue-600 text-xs leading-none"
+                          title="주문 수정"
+                        >
+                          ✎
+                        </button>
+                      </div>
                     </div>
                     <div className="flex items-center justify-between mt-1">
-                      <p className="font-medium text-sm truncate min-w-0 flex-1">{order.product_name}{order.component && `(${order.component})`}</p>
+                      <p className="font-medium text-xs leading-tight min-w-0 flex-1 break-all">{order.product_name}</p>
                       <div className="flex items-center gap-2 shrink-0 ml-2">
-                        <span className="text-sm font-medium">{order.quantity_sheets}매</span>
                         <p className={`text-xs ${days < 0 ? "text-red-600" : days <= 2 ? "text-orange-500" : "text-gray-400"}`}>
                           {days < 0 ? `${Math.abs(days)}일 초과` : days === 0 ? "오늘" : `D-${days}`}
                         </p>
                       </div>
                     </div>
+                    {hasParts && (
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {remainingParts.map((p) => {
+                          const t = Number(totals[p]) || 0;
+                          const rem = t > 0 ? t - (alloc[p] || 0) : 0;
+                          const proc = parsePartProcesses(order.part_processes)[p] || order.special_process;
+                          const label = t > 0 ? `${p} (${Math.round(rem / 60)}h)` : p;
+                          return (
+                            <span
+                              key={p}
+                              draggable
+                              onDragStart={(e) => { e.stopPropagation(); onDragStartOrder(order.id, p); }}
+                              onDragEnd={() => { setDragOrderId(null); setDragPart(""); }}
+                              className={`px-2 py-0.5 border text-[11px] font-medium cursor-grab active:cursor-grabbing hover:opacity-80 ${
+                                PROCESS_COLORS[proc] || "bg-gray-100 text-gray-600 border-gray-200"
+                              } ${dragOrderId === order.id && dragPart === p ? "opacity-40" : ""}`}
+                              title={`${p} · ${proc} · 이 파트를 설비로 드래그하여 배정 (남은 시간 내에서 분할 가능)`}
+                            >
+                              {label} <span className="opacity-70">· {proc}</span>
+                            </span>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 </div>
               );

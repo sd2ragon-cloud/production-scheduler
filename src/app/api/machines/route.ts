@@ -3,17 +3,16 @@ import { getDb } from '@/lib/db';
 
 export async function GET(req: NextRequest) {
   const db = await getDb();
-  const factory = req.nextUrl.searchParams.get('factory');
   const processLine = req.nextUrl.searchParams.get('process_line');
 
   let sql = 'SELECT * FROM machines';
   const args: string[] = [];
 
-  if (factory && processLine) {
-    sql += ' WHERE factory = ? AND process_line = ?';
-    args.push(factory, processLine);
+  if (processLine) {
+    sql += ' WHERE process_line = ?';
+    args.push(processLine);
   }
-  sql += ' ORDER BY id';
+  sql += ' ORDER BY sort_order, id';
 
   const result = await db.execute({ sql, args });
   return NextResponse.json(result.rows);
@@ -23,8 +22,12 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const db = await getDb();
 
+  // 새 설비는 맨 뒤에 표시되도록 sort_order를 최대값+1로
+  const maxResult = await db.execute('SELECT COALESCE(MAX(sort_order), 0) as max_order FROM machines');
+  const nextOrder = Number((maxResult.rows[0] as unknown as { max_order: number }).max_order) + 1;
+
   const result = await db.execute({
-    sql: `INSERT INTO machines (name, description, speed_sheets_per_hour, setup_time_minutes, capabilities, work_start_hour, work_end_hour, works_saturday, works_sunday, factory, process_line) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    sql: `INSERT INTO machines (name, description, speed_sheets_per_hour, setup_time_minutes, capabilities, work_start_hour, work_end_hour, works_saturday, works_sunday, factory, process_line, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       body.name,
       body.description || '',
@@ -37,6 +40,7 @@ export async function POST(req: NextRequest) {
       body.works_sunday ? 1 : 0,
       body.factory || '본공장',
       body.process_line || '매엽',
+      nextOrder,
     ],
   });
 

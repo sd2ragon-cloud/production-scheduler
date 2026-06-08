@@ -3,7 +3,6 @@ import { getDb } from '@/lib/db';
 
 export async function GET(req: NextRequest) {
   const db = await getDb();
-  const factory = req.nextUrl.searchParams.get('factory');
   const processLine = req.nextUrl.searchParams.get('process_line');
 
   let sql = `
@@ -14,6 +13,7 @@ export async function GET(req: NextRequest) {
       o.quantity_sheets,
       o.deadline,
       o.special_process,
+      o.part_processes,
       o.priority,
       o.notes as order_notes,
       m.name as machine_name
@@ -23,9 +23,9 @@ export async function GET(req: NextRequest) {
 
   const args: string[] = [];
 
-  if (factory && processLine) {
-    sql += ' WHERE m.factory = ? AND m.process_line = ?';
-    args.push(factory, processLine);
+  if (processLine) {
+    sql += ' WHERE m.process_line = ?';
+    args.push(processLine);
   }
 
   sql += ' ORDER BY m.id, se.sequence';

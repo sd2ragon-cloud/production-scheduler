@@ -45,6 +45,8 @@ async function initializeDb(db: Client) {
       special_process TEXT DEFAULT '',
       priority INTEGER NOT NULL DEFAULT 5,
       notes TEXT DEFAULT '',
+      duration_minutes INTEGER NOT NULL DEFAULT 0,
+      part_durations TEXT NOT NULL DEFAULT '{}',
       status TEXT NOT NULL DEFAULT 'pending',
       factory TEXT NOT NULL DEFAULT '본공장',
       process_line TEXT NOT NULL DEFAULT '매엽',
@@ -56,6 +58,9 @@ async function initializeDb(db: Client) {
       machine_id INTEGER NOT NULL,
       sequence INTEGER NOT NULL,
       duration_minutes INTEGER NOT NULL DEFAULT 0,
+      component_part TEXT NOT NULL DEFAULT '',
+      part_durations TEXT NOT NULL DEFAULT '{}',
+      print_mode TEXT NOT NULL DEFAULT 'single',
       scheduled_date TEXT NOT NULL,
       start_time TEXT NOT NULL,
       end_time TEXT NOT NULL,
@@ -81,6 +86,66 @@ async function initializeDb(db: Client) {
         // column already exists
       }
     }
+  }
+
+  // Migrate orders: add duration_minutes column if missing
+  try {
+    await db.execute(`ALTER TABLE orders ADD COLUMN duration_minutes INTEGER NOT NULL DEFAULT 0`);
+  } catch {
+    // column already exists
+  }
+
+  // Migrate orders: add part_durations column if missing
+  try {
+    await db.execute(`ALTER TABLE orders ADD COLUMN part_durations TEXT NOT NULL DEFAULT '{}'`);
+  } catch {
+    // column already exists
+  }
+
+  // Migrate orders: add part_processes (파트별 구분/공정) column if missing
+  try {
+    await db.execute(`ALTER TABLE orders ADD COLUMN part_processes TEXT NOT NULL DEFAULT '{}'`);
+  } catch {
+    // column already exists
+  }
+
+  // Migrate schedule_entries: add component_part column if missing
+  try {
+    await db.execute(`ALTER TABLE schedule_entries ADD COLUMN component_part TEXT NOT NULL DEFAULT ''`);
+  } catch {
+    // column already exists
+  }
+
+  // Migrate schedule_entries: add part_durations column if missing
+  try {
+    await db.execute(`ALTER TABLE schedule_entries ADD COLUMN part_durations TEXT NOT NULL DEFAULT '{}'`);
+  } catch {
+    // column already exists
+  }
+
+  // Migrate schedule_entries: add print_mode column if missing
+  try {
+    await db.execute(`ALTER TABLE schedule_entries ADD COLUMN print_mode TEXT NOT NULL DEFAULT 'single'`);
+  } catch {
+    // column already exists
+  }
+
+  // Migrate machines: add sort_order (대시보드 표시 순서) column if missing
+  try {
+    await db.execute(`ALTER TABLE machines ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0`);
+    // 기존 설비는 id 순서를 초기 표시 순서로 사용
+    await db.execute(`UPDATE machines SET sort_order = id WHERE sort_order = 0`);
+  } catch {
+    // column already exists
+  }
+
+  // Migrate schedule_entries: add base_minutes (단면 기준 원본 소요시간) column if missing
+  try {
+    await db.execute(`ALTER TABLE schedule_entries ADD COLUMN base_minutes INTEGER NOT NULL DEFAULT 0`);
+    // 기존 행 백필: 단면 기준 base를 현재 소요시간으로 간주 (기존 통째 작업은 모두 단면이었음)
+    await db.execute(`UPDATE schedule_entries SET base_minutes = duration_minutes WHERE base_minutes = 0`);
+  } catch {
+    // column already exists
   }
 
   const result = await db.execute('SELECT COUNT(*) as count FROM machines');

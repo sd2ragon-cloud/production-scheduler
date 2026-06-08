@@ -9,6 +9,7 @@ interface ScheduleEntry {
   machine_id: number;
   product_name: string;
   component: string;
+  component_part: string;
   quantity_sheets: number;
   deadline: string;
   special_process: string;
@@ -25,16 +26,16 @@ const MACHINE_COLORS = [
 ];
 
 export default function SchedulePage() {
-  const { factory, processLine } = useProcess();
+  const { processLine } = useProcess();
   const [entries, setEntries] = useState<ScheduleEntry[]>([]);
   const [view, setView] = useState<"gantt" | "table">("gantt");
 
   useEffect(() => {
-    const qs = `?factory=${encodeURIComponent(factory)}&process_line=${encodeURIComponent(processLine)}`;
+    const qs = `?process_line=${encodeURIComponent(processLine)}`;
     fetch(`/api/schedule${qs}`)
       .then((r) => r.json())
       .then(setEntries);
-  }, [factory, processLine]);
+  }, [processLine]);
 
   const machines = Array.from(new Set(entries.map((e) => e.machine_name)));
 
@@ -68,16 +69,16 @@ export default function SchedulePage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-2xl font-bold text-gray-900">스케줄 보기</h2>
-        <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
+        <div className="flex gap-1 bg-gray-100 p-1">
           <button
             onClick={() => setView("gantt")}
-            className={`px-4 py-1.5 rounded-md text-sm font-medium transition ${view === "gantt" ? "bg-white shadow text-gray-900" : "text-gray-500"}`}
+            className={`px-4 py-1.5 text-sm font-medium transition ${view === "gantt" ? "bg-white shadow text-gray-900" : "text-gray-500"}`}
           >
             간트차트
           </button>
           <button
             onClick={() => setView("table")}
-            className={`px-4 py-1.5 rounded-md text-sm font-medium transition ${view === "table" ? "bg-white shadow text-gray-900" : "text-gray-500"}`}
+            className={`px-4 py-1.5 text-sm font-medium transition ${view === "table" ? "bg-white shadow text-gray-900" : "text-gray-500"}`}
           >
             테이블
           </button>
@@ -85,12 +86,12 @@ export default function SchedulePage() {
       </div>
 
       {entries.length === 0 ? (
-        <div className="bg-white rounded-xl p-12 text-center shadow-sm border">
+        <div className="bg-white p-12 text-center shadow-sm border">
           <p className="text-gray-500 text-lg">생성된 스케줄이 없습니다.</p>
           <p className="text-gray-400 text-sm mt-2">대시보드에서 스케줄을 생성해주세요.</p>
         </div>
       ) : view === "gantt" ? (
-        <div className="bg-white rounded-xl shadow-sm border p-6">
+        <div className="bg-white shadow-sm border p-6">
           <div className="relative">
             <div className="relative h-8 mb-2 border-b">
               {getDayLabels().map((d, i) => (
@@ -112,7 +113,7 @@ export default function SchedulePage() {
               return (
                 <div key={machineName} className="flex items-center mb-2">
                   <div className="w-20 text-sm font-bold text-gray-700 shrink-0">{machineName}</div>
-                  <div className="flex-1 relative h-10 bg-gray-50 rounded border">
+                  <div className="flex-1 relative h-10 bg-gray-50 border">
                     {machineEntries.map((entry) => {
                       const start = new Date(entry.start_time).getTime();
                       const end = new Date(entry.end_time).getTime();
@@ -123,13 +124,13 @@ export default function SchedulePage() {
                       return (
                         <div
                           key={entry.id}
-                          className={`absolute top-1 h-8 rounded text-xs text-white flex items-center px-1 overflow-hidden cursor-default ${
+                          className={`absolute top-1 h-8 text-xs text-white flex items-center px-1 overflow-hidden cursor-default ${
                             isOverDeadline ? "bg-red-500" : MACHINE_COLORS[mi % MACHINE_COLORS.length]
                           }`}
                           style={{ left: `${left}%`, width: `${width}%`, minWidth: "4px" }}
-                          title={`${entry.product_name}(${entry.component}) - ${entry.quantity_sheets}매\n시작: ${entry.start_time}\n완료: ${entry.end_time}\n납기: ${entry.deadline}`}
+                          title={`${entry.product_name}(${entry.component_part || entry.component}) - ${entry.quantity_sheets}매\n시작: ${entry.start_time}\n완료: ${entry.end_time}\n납기: ${entry.deadline}`}
                         >
-                          <span className="truncate">{entry.product_name}({entry.component})</span>
+                          <span className="truncate">{entry.product_name}({entry.component_part || entry.component})</span>
                         </div>
                       );
                     })}
@@ -141,18 +142,18 @@ export default function SchedulePage() {
 
           <div className="mt-4 flex items-center gap-4 text-xs text-gray-500">
             <span className="flex items-center gap-1">
-              <span className="w-3 h-3 rounded bg-red-500 inline-block"></span> 납기 초과
+              <span className="w-3 h-3 bg-red-500 inline-block"></span> 납기 초과
             </span>
             {machines.map((m, i) => (
               <span key={m} className="flex items-center gap-1">
-                <span className={`w-3 h-3 rounded ${MACHINE_COLORS[i % MACHINE_COLORS.length]} inline-block`}></span>
+                <span className={`w-3 h-3 ${MACHINE_COLORS[i % MACHINE_COLORS.length]} inline-block`}></span>
                 {m}
               </span>
             ))}
           </div>
         </div>
       ) : (
-        <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
+        <div className="bg-white shadow-sm border overflow-hidden">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 text-gray-600 text-left">
@@ -175,7 +176,7 @@ export default function SchedulePage() {
                     <td className="px-3 py-2 font-bold">{entry.machine_name}</td>
                     <td className="px-3 py-2 text-gray-400">{entry.sequence}</td>
                     <td className="px-3 py-2">
-                      {entry.product_name} <span className="text-gray-500">({entry.component})</span>
+                      {entry.product_name} <span className="text-gray-500">({entry.component_part || entry.component})</span>
                     </td>
                     <td className="px-3 py-2">{entry.quantity_sheets}</td>
                     <td className="px-3 py-2">{entry.special_process}</td>
@@ -186,9 +187,9 @@ export default function SchedulePage() {
                     <td className="px-3 py-2 text-xs">{entry.deadline.slice(5)}</td>
                     <td className="px-3 py-2">
                       {isOver ? (
-                        <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded text-xs font-medium">납기초과</span>
+                        <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs font-medium">납기초과</span>
                       ) : (
-                        <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs font-medium">정상</span>
+                        <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs font-medium">정상</span>
                       )}
                     </td>
                   </tr>

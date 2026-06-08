@@ -26,6 +26,19 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   return NextResponse.json({ success: true });
 }
 
+// 설비명만 변경 (다른 설정은 유지)
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const body = await req.json();
+  const db = await getDb();
+
+  if (typeof body.name === 'string' && body.name.trim()) {
+    await db.execute({ sql: 'UPDATE machines SET name = ? WHERE id = ?', args: [body.name.trim(), id] });
+  }
+
+  return NextResponse.json({ success: true });
+}
+
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const db = await getDb();

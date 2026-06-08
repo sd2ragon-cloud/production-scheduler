@@ -30,7 +30,7 @@ const emptyOrder = {
 };
 
 export default function OrdersPage() {
-  const { factory, processLine } = useProcess();
+  const { processLine } = useProcess();
   const [orders, setOrders] = useState<Order[]>([]);
   const [form, setForm] = useState(emptyOrder);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -38,7 +38,7 @@ export default function OrdersPage() {
   const [selected, setSelected] = useState<Set<number>>(new Set());
 
   const fetchOrders = async () => {
-    const qs = `?factory=${encodeURIComponent(factory)}&process_line=${encodeURIComponent(processLine)}`;
+    const qs = `?process_line=${encodeURIComponent(processLine)}`;
     const res = await fetch(`/api/orders${qs}`);
     setOrders(await res.json());
     setSelected(new Set());
@@ -46,7 +46,7 @@ export default function OrdersPage() {
 
   useEffect(() => {
     fetchOrders();
-  }, [factory, processLine]);
+  }, [processLine]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -54,13 +54,13 @@ export default function OrdersPage() {
       await fetch(`/api/orders/${editingId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, status: "pending", factory, process_line: processLine }),
+        body: JSON.stringify({ ...form, status: "pending", process_line: processLine }),
       });
     } else {
       await fetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, factory, process_line: processLine }),
+        body: JSON.stringify({ ...form, process_line: processLine }),
       });
     }
     setForm(emptyOrder);
@@ -147,20 +147,20 @@ export default function OrdersPage() {
           {selected.size > 0 && (
             <button
               onClick={handleDeleteSelected}
-              className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition"
+              className="px-4 py-2 bg-red-600 text-white text-sm font-medium hover:bg-red-700 transition"
             >
               선택 삭제 ({selected.size}건)
             </button>
           )}
           <button
             onClick={handleResetStatus}
-            className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-300 transition"
+            className="px-4 py-2 bg-gray-200 text-gray-700 text-sm font-medium hover:bg-gray-300 transition"
           >
             전체 대기 상태로
           </button>
           <button
             onClick={() => { setShowForm(true); setEditingId(null); setForm(emptyOrder); }}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition"
+            className="px-4 py-2 bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition"
           >
             + 주문 추가
           </button>
@@ -168,14 +168,14 @@ export default function OrdersPage() {
       </div>
 
       {showForm && (
-        <div className="bg-white rounded-xl shadow-sm border p-6 mb-6">
+        <div className="bg-white shadow-sm border p-6 mb-6">
           <h3 className="font-bold text-lg mb-4">{editingId ? "주문 수정" : "새 주문"}</h3>
           <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">발주코드</label>
               <input
                 type="text"
-                className="w-full border rounded-lg px-3 py-2 text-sm"
+                className="w-full border px-3 py-2 text-sm"
                 value={form.order_code}
                 onChange={(e) => setForm({ ...form, order_code: e.target.value })}
               />
@@ -185,7 +185,7 @@ export default function OrdersPage() {
               <input
                 type="text"
                 required
-                className="w-full border rounded-lg px-3 py-2 text-sm"
+                className="w-full border px-3 py-2 text-sm"
                 value={form.product_name}
                 onChange={(e) => setForm({ ...form, product_name: e.target.value })}
                 placeholder="예: 국어1-2 가"
@@ -196,7 +196,7 @@ export default function OrdersPage() {
               <input
                 type="text"
                 required
-                className="w-full border rounded-lg px-3 py-2 text-sm"
+                className="w-full border px-3 py-2 text-sm"
                 value={form.component}
                 onChange={(e) => setForm({ ...form, component: e.target.value })}
                 placeholder="예: 표지, 본문1대, 부록3대"
@@ -208,7 +208,7 @@ export default function OrdersPage() {
                 type="number"
                 required
                 min="1"
-                className="w-full border rounded-lg px-3 py-2 text-sm"
+                className="w-full border px-3 py-2 text-sm"
                 value={form.quantity_sheets || ""}
                 onChange={(e) => setForm({ ...form, quantity_sheets: Number(e.target.value) })}
               />
@@ -218,7 +218,7 @@ export default function OrdersPage() {
               <input
                 type="date"
                 required
-                className="w-full border rounded-lg px-3 py-2 text-sm"
+                className="w-full border px-3 py-2 text-sm"
                 value={form.deadline}
                 onChange={(e) => setForm({ ...form, deadline: e.target.value })}
               />
@@ -226,7 +226,7 @@ export default function OrdersPage() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">특수공정</label>
               <select
-                className="w-full border rounded-lg px-3 py-2 text-sm"
+                className="w-full border px-3 py-2 text-sm"
                 value={form.special_process}
                 onChange={(e) => setForm({ ...form, special_process: e.target.value })}
               >
@@ -241,7 +241,7 @@ export default function OrdersPage() {
                 type="number"
                 min="1"
                 max="10"
-                className="w-full border rounded-lg px-3 py-2 text-sm"
+                className="w-full border px-3 py-2 text-sm"
                 value={form.priority}
                 onChange={(e) => setForm({ ...form, priority: Number(e.target.value) })}
               />
@@ -250,7 +250,7 @@ export default function OrdersPage() {
               <label className="block text-sm font-medium text-gray-700 mb-1">비고</label>
               <input
                 type="text"
-                className="w-full border rounded-lg px-3 py-2 text-sm"
+                className="w-full border px-3 py-2 text-sm"
                 value={form.notes}
                 onChange={(e) => setForm({ ...form, notes: e.target.value })}
                 placeholder="감리, 거래처 등"
@@ -260,13 +260,13 @@ export default function OrdersPage() {
               <button
                 type="button"
                 onClick={() => { setShowForm(false); setEditingId(null); setForm(emptyOrder); }}
-                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm"
+                className="px-4 py-2 bg-gray-200 text-gray-700 text-sm"
               >
                 취소
               </button>
               <button
                 type="submit"
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium"
+                className="px-4 py-2 bg-blue-600 text-white text-sm font-medium"
               >
                 {editingId ? "수정" : "등록"}
               </button>
@@ -275,7 +275,7 @@ export default function OrdersPage() {
         </div>
       )}
 
-      <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
+      <div className="bg-white shadow-sm border overflow-hidden">
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-gray-50 text-gray-600 text-left">
@@ -284,7 +284,7 @@ export default function OrdersPage() {
                   type="checkbox"
                   checked={isAllSelected}
                   onChange={toggleAll}
-                  className="rounded border-gray-300"
+                  className="border-gray-300"
                 />
               </th>
               <th className="px-3 py-2">ID</th>
@@ -311,7 +311,7 @@ export default function OrdersPage() {
                       type="checkbox"
                       checked={isChecked}
                       onChange={() => toggleSelect(order.id)}
-                      className="rounded border-gray-300"
+                      className="border-gray-300"
                     />
                   </td>
                   <td className="px-3 py-2 text-gray-400">{order.id}</td>
@@ -323,7 +323,7 @@ export default function OrdersPage() {
                   <td className="px-3 py-2">{order.special_process}</td>
                   <td className="px-3 py-2">{order.priority}</td>
                   <td className="px-3 py-2">
-                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${st.color}`}>
+                    <span className={`px-2 py-0.5 text-xs font-medium ${st.color}`}>
                       {st.label}
                     </span>
                   </td>
