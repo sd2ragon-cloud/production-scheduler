@@ -310,6 +310,15 @@ export default function ScheduleBoard() {
     setLoading(false);
   };
 
+  // 주문(물량) 영구 삭제: 설비 배정·1차 배정 내역도 FK CASCADE로 함께 삭제된다.
+  const handleDeleteOrder = async (orderId: number, productName: string) => {
+    if (!window.confirm(`'${productName}' 주문을 영구 삭제할까요?\n설비 배정·1차 배정 내역이 모두 함께 삭제되며 되돌릴 수 없습니다.`)) return;
+    setLoading(true);
+    await fetch(`/api/orders/${orderId}`, { method: "DELETE" });
+    await fetchAll();
+    setLoading(false);
+  };
+
   // 배정 대기 영역에 드롭 = 배정/1차배정 취소
   const onDropOnWaiting = async () => {
     if (dragSplit !== null) {
@@ -691,6 +700,15 @@ export default function ScheduleBoard() {
               >
                 ✎
               </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); handleDeleteOrder(order.id, order.product_name); }}
+                onMouseDown={(e) => e.stopPropagation()}
+                disabled={loading}
+                className="text-gray-400 hover:text-red-600 text-xs leading-none"
+                title="주문 삭제"
+              >
+                🗑
+              </button>
             </div>
           </div>
           {hasParts ? (
@@ -1027,14 +1045,24 @@ export default function ScheduleBoard() {
                             {entry.deadline}
                           </td>
                           <td className="px-1.5 py-0 text-center">
-                            <button
-                              onClick={() => handleUnassign(entry.id)}
-                              disabled={loading}
-                              className="text-red-400 hover:text-red-600 text-xs"
-                              title="배정 해제"
-                            >
-                              ✕
-                            </button>
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button
+                                onClick={() => handleUnassign(entry.id)}
+                                disabled={loading}
+                                className="text-red-400 hover:text-red-600 text-xs"
+                                title="배정 해제 (대기로 복귀)"
+                              >
+                                ✕
+                              </button>
+                              <button
+                                onClick={() => handleDeleteOrder(entry.order_id, entry.product_name)}
+                                disabled={loading}
+                                className="text-gray-400 hover:text-red-600 text-xs leading-none"
+                                title="주문 영구 삭제"
+                              >
+                                🗑
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );
