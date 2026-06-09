@@ -32,7 +32,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col bg-gray-50">
         <ProcessProvider>
           <NavBar />
-          <main className="max-w-7xl mx-auto px-4 py-4 flex-1 w-full">
+          <main className="w-full px-3 py-3 flex-1">
             {children}
           </main>
         </ProcessProvider>
