@@ -871,31 +871,31 @@ export default function ScheduleBoard() {
                           <td className="px-1.5 py-0 whitespace-nowrap">
                             <div className="flex items-center gap-1">
                             <span className="font-medium text-[11px] shrink-0">{entry.product_name}</span>
-                            {processesForParts(parseParts(entry.component_part), entry.part_processes, entry.special_process).map((proc) => (
-                              <span key={proc} className={`px-1.5 py-0 text-[10px] font-medium border whitespace-nowrap shrink-0 ${PROCESS_COLORS[proc] || "bg-gray-100 text-gray-600 border-gray-200"}`}>
-                                {proc}
-                              </span>
-                            ))}
                             {(() => {
                               const eparts = parseParts(entry.component_part);
                               if (eparts.length === 0) {
                                 // 구성이 단일(통째 배정)인 경우에도 칩으로 표시 (끌면 작업 전체가 이동)
                                 return entry.component ? (
-                                  <span
-                                    draggable
-                                    onDragStart={(e) => {
-                                      e.stopPropagation();
-                                      e.dataTransfer.effectAllowed = "move";
-                                      setDragEntryId(entry.id);
-                                      setDragOrderId(null);
-                                      setDragPart("");
-                                      setDragSplit(null);
-                                    }}
-                                    onDragEnd={() => setDragEntryId(null)}
-                                    className="px-1.5 py-0 ml-1 border border-gray-300 bg-gray-100 text-gray-700 text-[10px] cursor-grab active:cursor-grabbing hover:bg-blue-100 hover:border-blue-300"
-                                    title="다른 설비로 드래그하여 이동"
-                                  >
-                                    {entry.component}
+                                  <span className="inline-flex items-center gap-0.5 shrink-0">
+                                    <span className={`px-1.5 py-0 text-[10px] font-medium border whitespace-nowrap ${PROCESS_COLORS[entry.special_process] || "bg-gray-100 text-gray-600 border-gray-200"}`}>
+                                      {entry.special_process}
+                                    </span>
+                                    <span
+                                      draggable
+                                      onDragStart={(e) => {
+                                        e.stopPropagation();
+                                        e.dataTransfer.effectAllowed = "move";
+                                        setDragEntryId(entry.id);
+                                        setDragOrderId(null);
+                                        setDragPart("");
+                                        setDragSplit(null);
+                                      }}
+                                      onDragEnd={() => setDragEntryId(null)}
+                                      className="px-1.5 py-0 border border-gray-300 bg-gray-100 text-gray-700 text-[10px] cursor-grab active:cursor-grabbing hover:bg-blue-100 hover:border-blue-300"
+                                      title="다른 설비로 드래그하여 이동"
+                                    >
+                                      {entry.component}
+                                    </span>
                                   </span>
                                 ) : null;
                               }
@@ -956,29 +956,34 @@ export default function ScheduleBoard() {
                                 >
                                   {eparts.map((p) => {
                                     const isTarget = isReorderZone && dragSplit!.part !== p && partReorderTarget?.part === p;
+                                    const proc = parsePartProcesses(entry.part_processes)[p] || entry.special_process;
                                     return (
-                                      <span
-                                        key={p}
-                                        data-part={p}
-                                        draggable
-                                        onDragStart={(e) => {
-                                          e.stopPropagation();
-                                          e.dataTransfer.effectAllowed = "move";
-                                          e.dataTransfer.setData("text/plain", p);
-                                          setDragSplit({ entryId: entry.id, part: p });
-                                          setDragEntryId(null);
-                                          setDragOrderId(null);
-                                          setDragPart("");
-                                        }}
-                                        onDragEnd={() => { setDragSplit(null); setPartReorderTarget(null); }}
-                                        className={`px-1.5 py-0 border text-[10px] cursor-grab active:cursor-grabbing ${
-                                          isTarget
-                                            ? `bg-blue-50 text-blue-700 border-blue-500 ${partReorderTarget?.after ? "border-r-4" : "border-l-4"}`
-                                            : "border-gray-300 bg-gray-100 text-gray-700 hover:bg-blue-100 hover:border-blue-300"
-                                        }`}
-                                        title="다른 설비로 드래그하면 분리, 같은 행에서 칩의 왼쪽/오른쪽으로 드롭하면 앞/뒤로 이동"
-                                      >
-                                        {p}
+                                      <span key={p} className="inline-flex items-center gap-0.5 shrink-0">
+                                        <span className={`px-1.5 py-0 text-[10px] font-medium border whitespace-nowrap ${PROCESS_COLORS[proc] || "bg-gray-100 text-gray-600 border-gray-200"}`}>
+                                          {proc}
+                                        </span>
+                                        <span
+                                          data-part={p}
+                                          draggable
+                                          onDragStart={(e) => {
+                                            e.stopPropagation();
+                                            e.dataTransfer.effectAllowed = "move";
+                                            e.dataTransfer.setData("text/plain", p);
+                                            setDragSplit({ entryId: entry.id, part: p });
+                                            setDragEntryId(null);
+                                            setDragOrderId(null);
+                                            setDragPart("");
+                                          }}
+                                          onDragEnd={() => { setDragSplit(null); setPartReorderTarget(null); }}
+                                          className={`px-1.5 py-0 border text-[10px] cursor-grab active:cursor-grabbing ${
+                                            isTarget
+                                              ? `bg-blue-50 text-blue-700 border-blue-500 ${partReorderTarget?.after ? "border-r-4" : "border-l-4"}`
+                                              : "border-gray-300 bg-gray-100 text-gray-700 hover:bg-blue-100 hover:border-blue-300"
+                                          }`}
+                                          title="다른 설비로 드래그하면 분리, 같은 행에서 칩의 왼쪽/오른쪽으로 드롭하면 앞/뒤로 이동"
+                                        >
+                                          {p}
+                                        </span>
                                       </span>
                                     );
                                   })}
