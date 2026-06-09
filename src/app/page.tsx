@@ -1054,7 +1054,7 @@ export default function ScheduleBoard() {
       </div>
 
       {/* 가운데: 1차 배정 (국/4×6/MB6/HDP 등 칸) */}
-      <div className="w-72 bg-white border shadow-sm flex flex-col overflow-hidden shrink-0">
+      <div className="w-96 bg-white border shadow-sm flex flex-col overflow-hidden shrink-0">
         <div className="px-3 py-3 border-b bg-gray-50 flex items-center justify-between">
           <div>
             <h3 className="font-bold text-gray-900">1차 배정</h3>
