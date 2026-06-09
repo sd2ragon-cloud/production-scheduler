@@ -695,7 +695,7 @@ export default function ScheduleBoard() {
               <button
                 onClick={(e) => { e.stopPropagation(); startEditOrder(order); }}
                 onMouseDown={(e) => e.stopPropagation()}
-                className="text-gray-400 hover:text-blue-600 text-xs leading-none"
+                className="text-gray-400 hover:text-blue-600 text-base leading-none px-1 py-0.5"
                 title="주문 수정"
               >
                 ✎
@@ -704,7 +704,7 @@ export default function ScheduleBoard() {
                 onClick={(e) => { e.stopPropagation(); handleDeleteOrder(order.id, order.product_name); }}
                 onMouseDown={(e) => e.stopPropagation()}
                 disabled={loading}
-                className="text-gray-400 hover:text-red-600 text-xs leading-none"
+                className="text-gray-400 hover:text-red-600 text-base leading-none px-1 py-0.5"
                 title="주문 삭제"
               >
                 🗑
@@ -1049,7 +1049,7 @@ export default function ScheduleBoard() {
                               <button
                                 onClick={() => handleUnassign(entry.id)}
                                 disabled={loading}
-                                className="text-red-400 hover:text-red-600 text-xs"
+                                className="text-red-400 hover:text-red-600 text-sm px-0.5"
                                 title="배정 해제 (대기로 복귀)"
                               >
                                 ✕
@@ -1057,7 +1057,7 @@ export default function ScheduleBoard() {
                               <button
                                 onClick={() => handleDeleteOrder(entry.order_id, entry.product_name)}
                                 disabled={loading}
-                                className="text-gray-400 hover:text-red-600 text-xs leading-none"
+                                className="text-gray-400 hover:text-red-600 text-sm leading-none px-0.5"
                                 title="주문 영구 삭제"
                               >
                                 🗑
