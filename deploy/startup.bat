@@ -1,11 +1,10 @@
 @echo off
-chcp 65001 >nul
 REM ===========================================================
-REM  노트북 시작프로그램에 '이 파일 하나만' 등록하세요.
-REM  (shell:startup 폴더에 이 파일의 바로가기를 넣으면 됩니다)
-REM  부팅 시 서버 창 + 자동 업데이트 창 두 개를 모두 띄웁니다.
-REM  하나만 등록되고 다른 하나가 누락되는 문제를 원천 차단합니다.
+REM  Single Startup launcher. Register ONLY this file's shortcut
+REM  in shell:startup (or point Startup straight at start-server.bat).
+REM  It opens the server window; the server batch itself also opens
+REM  the auto-update window, so both windows always appear.
+REM  NOTE: ASCII-only. chcp 65001 + non-ASCII bytes corrupts cmd parsing.
 REM ===========================================================
-start "생산스케줄 서버" "%~dp0start-server.bat"
-start "자동 업데이트"   "%~dp0auto-update.bat"
+start "production server" "%~dp0start-server.bat"
 exit
