@@ -746,9 +746,9 @@ export default function ScheduleBoard() {
   return (
     <div className="overflow-auto h-[calc(100vh-80px)]">
     {/* 고정 폭(반응형 축소 없음). 화면이 작으면 비율 축소 대신 가로/세로 스크롤로 본다. */}
-    <div className="flex gap-4 h-full min-w-[1776px]">
+    <div className="flex gap-4 min-h-full min-w-[1776px]">
       {/* 좌측: 설비별 배정 현황 */}
-      <div className="flex-1 overflow-y-auto space-y-3 pr-2">
+      <div className="flex-1 space-y-3 pr-2">
         <div className="flex items-center justify-between mb-2 sticky top-0 bg-gray-50 py-2 z-10">
           <div>
             <h2 className="text-xl font-bold text-gray-900">기계별 작업 계획</h2>
@@ -1055,7 +1055,7 @@ export default function ScheduleBoard() {
       </div>
 
       {/* 가운데: 1차 배정 (국/4×6/MB6/HDP 등 칸) */}
-      <div className="w-96 bg-white border shadow-sm flex flex-col overflow-hidden shrink-0">
+      <div className="w-96 bg-white border shadow-sm flex flex-col shrink-0">
         <div className="px-3 py-3 border-b bg-gray-50 flex items-center justify-between">
           <div>
             <h3 className="font-bold text-gray-900">1차 배정</h3>
@@ -1077,7 +1077,7 @@ export default function ScheduleBoard() {
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-2 space-y-2">
+        <div className="p-2 space-y-2">
           {buckets.length === 0 ? (
             <div className="text-center text-gray-400 text-sm py-8">
               위 + 칸 버튼으로 1차 배정 칸을 추가하세요
@@ -1139,7 +1139,7 @@ export default function ScheduleBoard() {
 
       {/* 우측: 배정 대기 주문 목록 */}
       <div
-        className={`w-96 bg-white border shadow-sm flex flex-col overflow-hidden shrink-0 ${
+        className={`w-96 bg-white border shadow-sm flex flex-col shrink-0 ${
           waitingDrop ? "ring-2 ring-red-400 bg-red-50/30" : ""
         }`}
         onDragOver={(e) => {
@@ -1269,7 +1269,7 @@ export default function ScheduleBoard() {
           </div>
         )}
 
-        <div className="flex-1 overflow-y-auto p-2 space-y-1">
+        <div className="p-2 space-y-1">
           {waitingOrders.length === 0 ? (
             <div className="text-center text-gray-400 text-sm py-8">
               대기 중인 주문이 없습니다
