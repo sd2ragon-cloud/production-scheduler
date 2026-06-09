@@ -12,6 +12,17 @@ $lastSha = if (Test-Path $shaFile) { (Get-Content $shaFile -Raw).Trim() } else {
 Set-Location $proj
 Write-Host "[auto-update started] $repo ($branch) - checking every 20s"
 
+# Keep the boot server launcher (in the user's Startup folder) as the looping version,
+# so a deploy that kills the server never leaves it down until a manual restart. Idempotent.
+try {
+  $startupDir = [Environment]::GetFolderPath('Startup')
+  $srcLauncher = Join-Path $PSScriptRoot "start-server.bat"
+  if ((Test-Path $startupDir) -and (Test-Path $srcLauncher)) {
+    Copy-Item $srcLauncher (Join-Path $startupDir "start-server.bat") -Force
+    Write-Host "[auto-update] synced Startup\start-server.bat to the looping launcher"
+  }
+} catch { Write-Host "[auto-update] startup launcher sync skipped: $($_.Exception.Message)" }
+
 function Get-LockHash {
   $p = Join-Path $proj "package-lock.json"
   if (Test-Path $p) { (Get-FileHash $p -Algorithm MD5).Hash } else { "" }
