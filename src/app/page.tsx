@@ -676,15 +676,17 @@ export default function ScheduleBoard() {
         <div>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5 min-w-0">
-              <div className="flex flex-wrap items-center gap-0.5 shrink-0">
-                {processesForParts(parts, order.part_processes, order.special_process).map((proc) => (
-                  <span key={proc} className={`px-1.5 py-0 text-[10px] font-medium border ${
-                    PROCESS_COLORS[proc] || "bg-gray-100 text-gray-600 border-gray-200"
-                  }`}>
-                    {proc}
-                  </span>
-                ))}
-              </div>
+              {!hasParts && (
+                <div className="flex flex-wrap items-center gap-0.5 shrink-0">
+                  {processesForParts(parts, order.part_processes, order.special_process).map((proc) => (
+                    <span key={proc} className={`px-1.5 py-0 text-[10px] font-medium border ${
+                      PROCESS_COLORS[proc] || "bg-gray-100 text-gray-600 border-gray-200"
+                    }`}>
+                      {proc}
+                    </span>
+                  ))}
+                </div>
+              )}
               {order.notes && (
                 <span className="text-xs text-gray-500 truncate" title={order.notes}>비고 : {order.notes}</span>
               )}
@@ -798,7 +800,6 @@ export default function ScheduleBoard() {
                       <th className="px-1.5 py-0 text-left w-6">#</th>
                       <th className="px-1.5 py-0 text-left">작업명</th>
                       <th className="px-1.5 py-0 text-center w-28">비고</th>
-                      <th className="px-1.5 py-0 text-center w-20">구분</th>
                       <th className="px-1.5 py-0 text-center w-28">소요(시간)</th>
                       <th className="px-1.5 py-0 text-left w-20">예상완료</th>
                       <th className="px-1.5 py-0 text-left w-20">납기</th>
@@ -867,7 +868,7 @@ export default function ScheduleBoard() {
                           }}
                         >
                           <td className="px-1.5 py-0 text-gray-400 text-[10px]">{entry.sequence}</td>
-                          <td className="px-1.5 py-0">
+                          <td className="px-1.5 py-0 whitespace-nowrap">
                             <div className="flex items-center gap-1">
                             <span className="font-medium text-[11px] shrink-0">{entry.product_name}</span>
                             {(() => {
@@ -923,7 +924,7 @@ export default function ScheduleBoard() {
                               };
                               return (
                                 <span
-                                  className="inline-flex flex-wrap items-center gap-1 align-middle flex-1"
+                                  className="inline-flex flex-nowrap items-center gap-1 align-middle"
                                   onDragOver={(e) => {
                                     if (isReorderZone) {
                                       e.preventDefault();
@@ -979,21 +980,15 @@ export default function ScheduleBoard() {
                                 </span>
                               );
                             })()}
+                            {processesForParts(parseParts(entry.component_part), entry.part_processes, entry.special_process).map((proc) => (
+                              <span key={proc} className={`px-1.5 py-0 text-[10px] font-medium border whitespace-nowrap shrink-0 ${PROCESS_COLORS[proc] || "bg-gray-100 text-gray-600 border-gray-200"}`}>
+                                {proc}
+                              </span>
+                            ))}
                             </div>
                           </td>
                           <td className="px-1.5 py-0 text-center text-[10px] text-gray-500 truncate max-w-[10rem]" title={entry.order_notes}>
                             {entry.order_notes}
-                          </td>
-                          <td className="px-1.5 py-0 text-center whitespace-nowrap">
-                            <div className="flex flex-wrap items-center justify-center gap-0.5">
-                              {processesForParts(parseParts(entry.component_part), entry.part_processes, entry.special_process).map((proc) => (
-                                <span key={proc} className={`px-1.5 py-0 text-[10px] font-medium border whitespace-nowrap ${
-                                  PROCESS_COLORS[proc] || "bg-gray-100 text-gray-600 border-gray-200"
-                                }`}>
-                                  {proc}
-                                </span>
-                              ))}
-                            </div>
                           </td>
                           <td className="px-1.5 py-0 text-center">
                             <div className="flex items-center justify-center gap-1">
@@ -1055,7 +1050,7 @@ export default function ScheduleBoard() {
       </div>
 
       {/* 가운데: 1차 배정 (국/4×6/MB6/HDP 등 칸) */}
-      <div className="w-96 bg-white border shadow-sm flex flex-col shrink-0">
+      <div className="w-[420px] bg-white border shadow-sm flex flex-col shrink-0">
         <div className="px-3 py-3 border-b bg-gray-50 flex items-center justify-between">
           <div>
             <h3 className="font-bold text-gray-900">1차 배정</h3>
@@ -1139,7 +1134,7 @@ export default function ScheduleBoard() {
 
       {/* 우측: 배정 대기 주문 목록 */}
       <div
-        className={`w-96 bg-white border shadow-sm flex flex-col shrink-0 ${
+        className={`w-[420px] bg-white border shadow-sm flex flex-col shrink-0 ${
           waitingDrop ? "ring-2 ring-red-400 bg-red-50/30" : ""
         }`}
         onDragOver={(e) => {
