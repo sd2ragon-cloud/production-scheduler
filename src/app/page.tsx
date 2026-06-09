@@ -675,25 +675,13 @@ export default function ScheduleBoard() {
       >
         <div>
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1.5 min-w-0">
-              {!hasParts && (
-                <div className="flex flex-wrap items-center gap-0.5 shrink-0">
-                  {processesForParts(parts, order.part_processes, order.special_process).map((proc) => (
-                    <span key={proc} className={`px-1.5 py-0 text-[10px] font-medium border ${
-                      PROCESS_COLORS[proc] || "bg-gray-100 text-gray-600 border-gray-200"
-                    }`}>
-                      {proc}
-                    </span>
-                  ))}
-                </div>
-              )}
-              {order.notes && (
-                <span className="text-xs text-gray-500 truncate" title={order.notes}>비고 : {order.notes}</span>
-              )}
-            </div>
+            <p className="font-medium text-xs leading-tight min-w-0 flex-1 break-all">{order.product_name}</p>
             <div className="flex items-center gap-1.5 shrink-0 ml-2">
               <p className={`text-xs font-mono ${deadlineColor(order.deadline)}`}>
                 {order.deadline}
+              </p>
+              <p className={`text-xs ${days < 0 ? "text-red-600" : days <= 2 ? "text-orange-500" : "text-gray-400"}`}>
+                {days < 0 ? `${Math.abs(days)}일 초과` : days === 0 ? "오늘" : `D-${days}`}
               </p>
               <button
                 onClick={(e) => { e.stopPropagation(); startEditOrder(order); }}
@@ -705,16 +693,8 @@ export default function ScheduleBoard() {
               </button>
             </div>
           </div>
-          <div className="flex items-center justify-between mt-1">
-            <p className="font-medium text-xs leading-tight min-w-0 flex-1 break-all">{order.product_name}</p>
-            <div className="flex items-center gap-2 shrink-0 ml-2">
-              <p className={`text-xs ${days < 0 ? "text-red-600" : days <= 2 ? "text-orange-500" : "text-gray-400"}`}>
-                {days < 0 ? `${Math.abs(days)}일 초과` : days === 0 ? "오늘" : `D-${days}`}
-              </p>
-            </div>
-          </div>
-          {hasParts && (
-            <div className="flex flex-wrap gap-1 mt-2">
+          {hasParts ? (
+            <div className="flex flex-wrap gap-1 mt-1.5">
               {remainingParts.map((p) => {
                 const t = Number(totals[p]) || 0;
                 const rem = t > 0 ? t - (alloc[p] || 0) : 0;
@@ -736,6 +716,19 @@ export default function ScheduleBoard() {
                 );
               })}
             </div>
+          ) : (
+            <div className="flex flex-wrap items-center gap-0.5 mt-1.5">
+              {processesForParts(parts, order.part_processes, order.special_process).map((proc) => (
+                <span key={proc} className={`px-1.5 py-0 text-[10px] font-medium border ${
+                  PROCESS_COLORS[proc] || "bg-gray-100 text-gray-600 border-gray-200"
+                }`}>
+                  {proc}
+                </span>
+              ))}
+            </div>
+          )}
+          {order.notes && (
+            <p className="text-xs text-gray-500 mt-1.5 break-all" title={order.notes}>비고 : {order.notes}</p>
           )}
         </div>
       </div>
