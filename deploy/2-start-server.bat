@@ -2,8 +2,7 @@
 REM === Production scheduler server (prod mode). Auto-restarts if it stops. ===
 REM NOTE: keep this file ASCII-only. chcp 65001 + non-ASCII bytes corrupts cmd batch parsing.
 cd /d "%~dp0.."
-REM Ride on the server autostart to also open the auto-update window.
-start "auto-update" "%~dp0auto-update.bat"
+REM Auto-update window is started separately by the HKCU Run key "ps-auto-update".
 :loop
 echo [%date% %time%] server starting (http://0.0.0.0:3000)
 call npm run start -- -H 0.0.0.0 -p 3000
