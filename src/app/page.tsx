@@ -744,9 +744,9 @@ export default function ScheduleBoard() {
   const dateStr = `${now.getFullYear()}년 ${now.getMonth() + 1}월 ${now.getDate()}일`;
 
   return (
-    <div className="overflow-hidden">
-    {/* 고정 폭(반응형 축소 없음). 화면이 작으면 비율 축소 대신 오른쪽이 잘려 보인다. */}
-    <div className="flex gap-4 h-[calc(100vh-80px)] min-w-[1776px]">
+    <div className="overflow-auto h-[calc(100vh-80px)]">
+    {/* 고정 폭(반응형 축소 없음). 화면이 작으면 비율 축소 대신 가로/세로 스크롤로 본다. */}
+    <div className="flex gap-4 h-full min-w-[1776px]">
       {/* 좌측: 설비별 배정 현황 */}
       <div className="flex-1 overflow-y-auto space-y-3 pr-2">
         <div className="flex items-center justify-between mb-2 sticky top-0 bg-gray-50 py-2 z-10">
