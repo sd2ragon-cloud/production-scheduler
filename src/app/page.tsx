@@ -29,6 +29,14 @@ interface Order {
   duration_minutes: number;
   part_durations: string;
   part_processes: string;
+  bucket_id: number | null;
+}
+
+interface Bucket {
+  id: number;
+  name: string;
+  process_line: string;
+  sort_order: number;
 }
 
 interface ScheduleEntry {
@@ -121,6 +129,7 @@ export default function ScheduleBoard() {
   const [machines, setMachines] = useState<Machine[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [schedule, setSchedule] = useState<ScheduleEntry[]>([]);
+  const [buckets, setBuckets] = useState<Bucket[]>([]);
   const [dragOrderId, setDragOrderId] = useState<number | null>(null);
   const [dragPart, setDragPart] = useState<string>("");
   const [dragEntryId, setDragEntryId] = useState<number | null>(null);
@@ -129,6 +138,8 @@ export default function ScheduleBoard() {
   const [waitingDrop, setWaitingDrop] = useState(false);
   const [partReorderTarget, setPartReorderTarget] = useState<{ part: string; after: boolean } | null>(null);
   const [dropTarget, setDropTarget] = useState<number | null>(null);
+  const [dropBucket, setDropBucket] = useState<number | null>(null);
+  const [manageBuckets, setManageBuckets] = useState(false);
   const [reorderTarget, setReorderTarget] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -144,16 +155,18 @@ export default function ScheduleBoard() {
 
   const fetchAll = useCallback(async () => {
     const qs = `?process_line=${encodeURIComponent(processLine)}`;
-    const [machRes, orderRes, schedRes] = await Promise.all([
-      fetch(`/api/machines${qs}`), fetch(`/api/orders${qs}`), fetch(`/api/schedule${qs}`),
+    const [machRes, orderRes, schedRes, bucketRes] = await Promise.all([
+      fetch(`/api/machines${qs}`), fetch(`/api/orders${qs}`), fetch(`/api/schedule${qs}`), fetch(`/api/buckets${qs}`),
     ]);
     const machData = await machRes.json();
     const orderData = await orderRes.json();
     const schedData = await schedRes.json();
+    const bucketData = await bucketRes.json();
     const activeMachines = machData.filter((m: Machine) => m.is_active);
     setMachines(activeMachines);
     setOrders(orderData.filter((o: Order) => o.status === "pending"));
     setSchedule(schedData);
+    setBuckets(Array.isArray(bucketData) ? bucketData : []);
     setMachineStartTimes((prev) => {
       const next = { ...prev };
       for (const m of activeMachines) {
@@ -297,12 +310,15 @@ export default function ScheduleBoard() {
     setLoading(false);
   };
 
-  // 배정 대기 영역에 드롭 = 배정 취소
+  // 배정 대기 영역에 드롭 = 배정/1차배정 취소
   const onDropOnWaiting = async () => {
     if (dragSplit !== null) {
       await handleUnassignPart(dragSplit.entryId, dragSplit.part);
     } else if (dragEntryId !== null) {
       await handleUnassign(dragEntryId);
+    } else if (dragOrderId !== null) {
+      // 1차 배정 칸에서 끌어온 주문을 대기로: 1차 배정 해제
+      await handleStage1(dragOrderId, null);
     }
     setDragOrderId(null);
     setDragPart("");
@@ -310,6 +326,87 @@ export default function ScheduleBoard() {
     setDragSplit(null);
     setDragAll(false);
     setDropTarget(null);
+  };
+
+  // 1차 배정: 주문을 칸에 넣거나(bucketId) 해제(null)
+  const handleStage1 = async (orderId: number, bucketId: number | null) => {
+    setLoading(true);
+    await fetch("/api/schedule/stage1", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ order_id: orderId, bucket_id: bucketId }),
+    });
+    await fetchAll();
+    setLoading(false);
+  };
+
+  // 칸(버킷)에 드롭 = 1차 배정. 대기/다른 칸의 주문, 또는 기계에 배정된 작업을 끌어다 넣을 수 있다.
+  const onDropOnBucket = async (bucketId: number) => {
+    let orderId: number | null = null;
+    if (dragSplit !== null) {
+      const e = schedule.find((s) => s.id === dragSplit.entryId);
+      if (e) { orderId = e.order_id; await handleUnassignPart(dragSplit.entryId, dragSplit.part); }
+    } else if (dragEntryId !== null) {
+      const e = schedule.find((s) => s.id === dragEntryId);
+      if (e) { orderId = e.order_id; await handleUnassign(dragEntryId); }
+    } else if (dragOrderId !== null) {
+      orderId = dragOrderId;
+    }
+    if (orderId !== null) await handleStage1(orderId, bucketId);
+    setDragOrderId(null);
+    setDragPart("");
+    setDragEntryId(null);
+    setDragSplit(null);
+    setDragAll(false);
+    setDropBucket(null);
+    setDropTarget(null);
+  };
+
+  const addBucket = async () => {
+    const name = window.prompt("새 1차 배정 칸 이름 (예: 국, 4×6, MB6, HDP)");
+    if (!name || !name.trim()) return;
+    setLoading(true);
+    await fetch("/api/buckets", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: name.trim(), process_line: processLine }),
+    });
+    await fetchAll();
+    setLoading(false);
+  };
+
+  const renameBucket = async (id: number, name: string) => {
+    const trimmed = name.trim();
+    const b = buckets.find((x) => x.id === id);
+    if (!trimmed || (b && b.name === trimmed)) return;
+    await fetch(`/api/buckets/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: trimmed }),
+    });
+    await fetchAll();
+  };
+
+  const deleteBucket = async (b: Bucket) => {
+    if (!window.confirm(`'${b.name}' 칸을 삭제할까요?\n이 칸에 있던 주문은 '배정 대기'로 돌아갑니다.`)) return;
+    setLoading(true);
+    await fetch(`/api/buckets/${b.id}`, { method: "DELETE" });
+    await fetchAll();
+    setLoading(false);
+  };
+
+  const moveBucket = async (idx: number, dir: number) => {
+    const arr = [...buckets];
+    const j = idx + dir;
+    if (j < 0 || j >= arr.length) return;
+    [arr[idx], arr[j]] = [arr[j], arr[idx]];
+    setBuckets(arr);
+    await fetch("/api/buckets/reorder", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids: arr.map((x) => x.id) }),
+    });
+    await fetchAll();
   };
 
   const handleReorder = async (machineId: number, entryIds: number[]) => {
@@ -538,6 +635,110 @@ export default function ScheduleBoard() {
 
 
   const PROCESSES = ["일반", "항바니쉬", "UV", "IR코팅", "양면", "패키지"];
+
+  // bucket_id가 없는(=1차 배정 안 된) 대기 주문
+  const waitingOrders = orders.filter((o) => o.bucket_id == null);
+
+  // 주문 카드 (배정 대기 / 1차 배정 칸 공용). 남은 파트가 없으면 렌더하지 않음.
+  const renderOrderCard = (order: Order) => {
+    const days = daysUntilDeadline(order.deadline);
+    const parts = parseParts(order.component);
+    const hasParts = parts.length >= 1;
+    const totals = partTotals(order.component, order.part_durations, order.duration_minutes);
+    const present = new Set<string>();
+    const alloc: Record<string, number> = {};
+    for (const s of schedule) {
+      if (s.order_id !== order.id) continue;
+      parseParts(s.component_part).forEach((p) => present.add(p));
+      for (const [p, m] of Object.entries(parsePartDurations(s.part_durations))) {
+        alloc[p] = (alloc[p] || 0) + (Number(m) || 0);
+      }
+    }
+    const remainingParts = hasParts
+      ? parts.filter((p) => {
+          const t = Number(totals[p]) || 0;
+          return t > 0 ? (alloc[p] || 0) < t : !present.has(p);
+        })
+      : [];
+    if (hasParts && remainingParts.length === 0) return null;
+    return (
+      <div
+        key={order.id}
+        draggable
+        onDragStart={() => (hasParts ? onDragStartAll(order.id) : onDragStartOrder(order.id))}
+        title={hasParts ? "제품 전체(남은 파트 모두)를 설비/칸으로 드래그" : undefined}
+        className={`p-2.5 border transition hover:shadow-sm cursor-grab active:cursor-grabbing ${
+          dragOrderId === order.id && !dragPart ? "opacity-40" : ""
+        } ${
+          days < 0 ? "border-red-300 bg-red-50" : days <= 2 ? "border-orange-200 bg-orange-50/50" : "border-gray-200 bg-white"
+        }`}
+      >
+        <div>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <div className="flex flex-wrap items-center gap-0.5 shrink-0">
+                {processesForParts(parts, order.part_processes, order.special_process).map((proc) => (
+                  <span key={proc} className={`px-1.5 py-0 text-[10px] font-medium border ${
+                    PROCESS_COLORS[proc] || "bg-gray-100 text-gray-600 border-gray-200"
+                  }`}>
+                    {proc}
+                  </span>
+                ))}
+              </div>
+              {order.notes && (
+                <span className="text-xs text-gray-500 truncate" title={order.notes}>비고 : {order.notes}</span>
+              )}
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0 ml-2">
+              <p className={`text-xs font-mono ${deadlineColor(order.deadline)}`}>
+                {order.deadline}
+              </p>
+              <button
+                onClick={(e) => { e.stopPropagation(); startEditOrder(order); }}
+                onMouseDown={(e) => e.stopPropagation()}
+                className="text-gray-400 hover:text-blue-600 text-xs leading-none"
+                title="주문 수정"
+              >
+                ✎
+              </button>
+            </div>
+          </div>
+          <div className="flex items-center justify-between mt-1">
+            <p className="font-medium text-xs leading-tight min-w-0 flex-1 break-all">{order.product_name}</p>
+            <div className="flex items-center gap-2 shrink-0 ml-2">
+              <p className={`text-xs ${days < 0 ? "text-red-600" : days <= 2 ? "text-orange-500" : "text-gray-400"}`}>
+                {days < 0 ? `${Math.abs(days)}일 초과` : days === 0 ? "오늘" : `D-${days}`}
+              </p>
+            </div>
+          </div>
+          {hasParts && (
+            <div className="flex flex-wrap gap-1 mt-2">
+              {remainingParts.map((p) => {
+                const t = Number(totals[p]) || 0;
+                const rem = t > 0 ? t - (alloc[p] || 0) : 0;
+                const proc = parsePartProcesses(order.part_processes)[p] || order.special_process;
+                const label = t > 0 ? `${p} (${Math.round(rem / 60)}h)` : p;
+                return (
+                  <span
+                    key={p}
+                    draggable
+                    onDragStart={(e) => { e.stopPropagation(); onDragStartOrder(order.id, p); }}
+                    onDragEnd={() => { setDragOrderId(null); setDragPart(""); }}
+                    className={`px-2 py-0.5 border text-[11px] font-medium cursor-grab active:cursor-grabbing hover:opacity-80 ${
+                      PROCESS_COLORS[proc] || "bg-gray-100 text-gray-600 border-gray-200"
+                    } ${dragOrderId === order.id && dragPart === p ? "opacity-40" : ""}`}
+                    title={`${p} · ${proc} · 이 파트를 설비로 드래그하여 배정 (남은 시간 내에서 분할 가능)`}
+                  >
+                    {label} <span className="opacity-70">· {proc}</span>
+                  </span>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
 
   const now = new Date();
   const dateStr = `${now.getFullYear()}년 ${now.getMonth() + 1}월 ${now.getDate()}일`;
@@ -852,13 +1053,96 @@ export default function ScheduleBoard() {
         })}
       </div>
 
+      {/* 가운데: 1차 배정 (국/4×6/MB6/HDP 등 칸) */}
+      <div className="w-72 bg-white border shadow-sm flex flex-col overflow-hidden shrink-0">
+        <div className="px-3 py-3 border-b bg-gray-50 flex items-center justify-between">
+          <div>
+            <h3 className="font-bold text-gray-900">1차 배정</h3>
+            <p className="text-xs text-gray-500">{buckets.length}칸</p>
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={addBucket}
+              className="px-2 py-1 bg-blue-600 text-white text-xs font-medium hover:bg-blue-700"
+            >
+              + 칸
+            </button>
+            <button
+              onClick={() => setManageBuckets((v) => !v)}
+              className={`px-2 py-1 text-xs border ${manageBuckets ? "bg-gray-800 text-white border-gray-800" : "bg-white text-gray-600 border-gray-300"}`}
+            >
+              관리
+            </button>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-2 space-y-2">
+          {buckets.length === 0 ? (
+            <div className="text-center text-gray-400 text-sm py-8">
+              위 + 칸 버튼으로 1차 배정 칸을 추가하세요
+            </div>
+          ) : (
+            buckets.map((b, idx) => {
+              const bucketOrders = orders.filter((o) => o.bucket_id === b.id);
+              const isTarget = dropBucket === b.id;
+              return (
+                <div
+                  key={b.id}
+                  onDragOver={(e) => {
+                    if (dragOrderId !== null || dragEntryId !== null || dragSplit !== null) {
+                      e.preventDefault();
+                      if (dropBucket !== b.id) setDropBucket(b.id);
+                    }
+                  }}
+                  onDragLeave={(e) => {
+                    if (!e.currentTarget.contains(e.relatedTarget as Node) && dropBucket === b.id) setDropBucket(null);
+                  }}
+                  onDrop={() => onDropOnBucket(b.id)}
+                  className={`border ${isTarget ? "ring-2 ring-blue-500 border-blue-300 bg-blue-50/40" : "border-gray-200"}`}
+                >
+                  <div className="bg-gray-100 px-2 py-1 flex items-center justify-between border-b">
+                    {manageBuckets ? (
+                      <input
+                        defaultValue={b.name}
+                        onBlur={(e) => renameBucket(b.id, e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                        className="text-xs font-bold border px-1 py-0.5 w-24"
+                      />
+                    ) : (
+                      <span className="text-xs font-bold text-gray-800">{b.name}</span>
+                    )}
+                    <div className="flex items-center gap-1">
+                      <span className="text-[10px] text-gray-400">{bucketOrders.length}건</span>
+                      {manageBuckets && (
+                        <>
+                          <button onClick={() => moveBucket(idx, -1)} disabled={idx === 0} className="text-gray-400 hover:text-gray-700 text-[10px] disabled:opacity-30" title="위로">▲</button>
+                          <button onClick={() => moveBucket(idx, 1)} disabled={idx === buckets.length - 1} className="text-gray-400 hover:text-gray-700 text-[10px] disabled:opacity-30" title="아래로">▼</button>
+                          <button onClick={() => deleteBucket(b)} className="text-red-400 hover:text-red-600 text-xs" title="칸 삭제">✕</button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  <div className="p-1.5 space-y-1 min-h-[2.5rem]">
+                    {bucketOrders.length === 0 ? (
+                      <div className="text-center text-gray-300 text-[11px] py-2">여기로 끌어다 1차 배정</div>
+                    ) : (
+                      bucketOrders.map(renderOrderCard)
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+
       {/* 우측: 배정 대기 주문 목록 */}
       <div
         className={`w-96 bg-white border shadow-sm flex flex-col overflow-hidden shrink-0 ${
           waitingDrop ? "ring-2 ring-red-400 bg-red-50/30" : ""
         }`}
         onDragOver={(e) => {
-          if (dragSplit !== null || dragEntryId !== null) {
+          if (dragSplit !== null || dragEntryId !== null || dragOrderId !== null) {
             e.preventDefault();
             if (!waitingDrop) setWaitingDrop(true);
           }
@@ -871,7 +1155,7 @@ export default function ScheduleBoard() {
         <div className="px-4 py-3 border-b bg-gray-50 flex items-center justify-between">
           <div>
             <h3 className="font-bold text-gray-900">배정 대기</h3>
-            <p className="text-xs text-gray-500">{orders.length}건</p>
+            <p className="text-xs text-gray-500">{waitingOrders.length}건</p>
           </div>
           <button
             onClick={() => (showAddForm ? resetForm() : (setEditingOrderId(null), setShowAddForm(true)))}
@@ -979,110 +1263,12 @@ export default function ScheduleBoard() {
         )}
 
         <div className="flex-1 overflow-y-auto p-2 space-y-1">
-          {orders.length === 0 ? (
+          {waitingOrders.length === 0 ? (
             <div className="text-center text-gray-400 text-sm py-8">
-              모든 주문이 배정되었습니다
+              대기 중인 주문이 없습니다
             </div>
           ) : (
-            orders.map((order) => {
-              const days = daysUntilDeadline(order.deadline);
-              const parts = parseParts(order.component);
-              const hasParts = parts.length >= 1;
-              const totals = partTotals(order.component, order.part_durations, order.duration_minutes);
-              const present = new Set<string>();
-              const alloc: Record<string, number> = {};
-              for (const s of schedule) {
-                if (s.order_id !== order.id) continue;
-                parseParts(s.component_part).forEach((p) => present.add(p));
-                for (const [p, m] of Object.entries(parsePartDurations(s.part_durations))) {
-                  alloc[p] = (alloc[p] || 0) + (Number(m) || 0);
-                }
-              }
-              const remainingParts = hasParts
-                ? parts.filter((p) => {
-                    const t = Number(totals[p]) || 0;
-                    return t > 0 ? (alloc[p] || 0) < t : !present.has(p);
-                  })
-                : [];
-              if (hasParts && remainingParts.length === 0) return null;
-              return (
-                <div
-                  key={order.id}
-                  draggable
-                  onDragStart={() => (hasParts ? onDragStartAll(order.id) : onDragStartOrder(order.id))}
-                  title={hasParts ? "제품 전체(남은 파트 모두)를 설비로 드래그" : undefined}
-                  className={`p-2.5 border transition hover:shadow-sm cursor-grab active:cursor-grabbing ${
-                    dragOrderId === order.id && !dragPart ? "opacity-40" : ""
-                  } ${
-                    days < 0 ? "border-red-300 bg-red-50" : days <= 2 ? "border-orange-200 bg-orange-50/50" : "border-gray-200 bg-white"
-                  }`}
-                >
-                  <div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <div className="flex flex-wrap items-center gap-0.5 shrink-0">
-                          {processesForParts(parts, order.part_processes, order.special_process).map((proc) => (
-                            <span key={proc} className={`px-1.5 py-0 text-[10px] font-medium border ${
-                              PROCESS_COLORS[proc] || "bg-gray-100 text-gray-600 border-gray-200"
-                            }`}>
-                              {proc}
-                            </span>
-                          ))}
-                        </div>
-                        {order.notes && (
-                          <span className="text-xs text-gray-500 truncate" title={order.notes}>비고 : {order.notes}</span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                        <p className={`text-xs font-mono ${deadlineColor(order.deadline)}`}>
-                          {order.deadline}
-                        </p>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); startEditOrder(order); }}
-                          onMouseDown={(e) => e.stopPropagation()}
-                          className="text-gray-400 hover:text-blue-600 text-xs leading-none"
-                          title="주문 수정"
-                        >
-                          ✎
-                        </button>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between mt-1">
-                      <p className="font-medium text-xs leading-tight min-w-0 flex-1 break-all">{order.product_name}</p>
-                      <div className="flex items-center gap-2 shrink-0 ml-2">
-                        <p className={`text-xs ${days < 0 ? "text-red-600" : days <= 2 ? "text-orange-500" : "text-gray-400"}`}>
-                          {days < 0 ? `${Math.abs(days)}일 초과` : days === 0 ? "오늘" : `D-${days}`}
-                        </p>
-                      </div>
-                    </div>
-                    {hasParts && (
-                      <div className="flex flex-wrap gap-1 mt-2">
-                        {remainingParts.map((p) => {
-                          const t = Number(totals[p]) || 0;
-                          const rem = t > 0 ? t - (alloc[p] || 0) : 0;
-                          const proc = parsePartProcesses(order.part_processes)[p] || order.special_process;
-                          const label = t > 0 ? `${p} (${Math.round(rem / 60)}h)` : p;
-                          return (
-                            <span
-                              key={p}
-                              draggable
-                              onDragStart={(e) => { e.stopPropagation(); onDragStartOrder(order.id, p); }}
-                              onDragEnd={() => { setDragOrderId(null); setDragPart(""); }}
-                              className={`px-2 py-0.5 border text-[11px] font-medium cursor-grab active:cursor-grabbing hover:opacity-80 ${
-                                PROCESS_COLORS[proc] || "bg-gray-100 text-gray-600 border-gray-200"
-                              } ${dragOrderId === order.id && dragPart === p ? "opacity-40" : ""}`}
-                              title={`${p} · ${proc} · 이 파트를 설비로 드래그하여 배정 (남은 시간 내에서 분할 가능)`}
-                            >
-                              {label} <span className="opacity-70">· {proc}</span>
-                            </span>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })
+            waitingOrders.map(renderOrderCard)
           )}
         </div>
       </div>

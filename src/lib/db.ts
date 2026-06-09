@@ -72,6 +72,13 @@ async function initializeDb(db: Client) {
     `CREATE INDEX IF NOT EXISTS idx_schedule_date ON schedule_entries(scheduled_date)`,
     `CREATE INDEX IF NOT EXISTS idx_schedule_machine ON schedule_entries(machine_id)`,
     `CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)`,
+    `CREATE TABLE IF NOT EXISTS buckets (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      process_line TEXT NOT NULL DEFAULT '매엽',
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now', 'localtime'))
+    )`,
   ], 'write');
 
   // Migrate existing tables: add factory/process_line columns if missing
@@ -105,6 +112,13 @@ async function initializeDb(db: Client) {
   // Migrate orders: add part_processes (파트별 구분/공정) column if missing
   try {
     await db.execute(`ALTER TABLE orders ADD COLUMN part_processes TEXT NOT NULL DEFAULT '{}'`);
+  } catch {
+    // column already exists
+  }
+
+  // Migrate orders: add bucket_id (1차 배정 칸) column if missing. NULL = 배정 대기.
+  try {
+    await db.execute(`ALTER TABLE orders ADD COLUMN bucket_id INTEGER`);
   } catch {
     // column already exists
   }
@@ -153,6 +167,23 @@ async function initializeDb(db: Client) {
   if (count === 0) {
     await seedData(db);
   }
+
+  // 1차 배정 칸 기본값 시드 (비어 있을 때만) — 기존 DB도 다음 기동 시 기본 칸이 생긴다.
+  const bucketResult = await db.execute('SELECT COUNT(*) as count FROM buckets');
+  if (Number(bucketResult.rows[0].count) === 0) {
+    await seedBuckets(db);
+  }
+}
+
+async function seedBuckets(db: Client) {
+  const names = ['국', '4×6', 'MB6', 'HDP'];
+  await db.batch(
+    names.map((name, i) => ({
+      sql: `INSERT INTO buckets (name, process_line, sort_order) VALUES (?, ?, ?)`,
+      args: [name, '매엽', i + 1] as (string | number)[],
+    })),
+    'write',
+  );
 }
 
 async function seedData(db: Client) {
