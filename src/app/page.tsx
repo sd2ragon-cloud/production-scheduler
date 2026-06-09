@@ -1184,13 +1184,19 @@ export default function ScheduleBoard() {
                   value={newOrder.component}
                   onChange={(e) => setNewOrder({ ...newOrder, component: e.target.value })}
                 />
-                <select
-                  className="border px-2 py-1.5 text-xs w-full col-span-2"
-                  value={newOrder.special_process}
-                  onChange={(e) => setNewOrder({ ...newOrder, special_process: e.target.value })}
-                >
-                  {PROCESSES.map((p) => <option key={p} value={p}>{p}</option>)}
-                </select>
+                {/* 구성이 여러 개면 파트별 구분으로 입력하므로 상단 구분란은 숨긴다 (2중 입력 방지) */}
+                {parseParts(newOrder.component).length < 2 && (
+                  <div className="col-span-2">
+                    <label className="text-[10px] text-gray-500">구분</label>
+                    <select
+                      className="border px-2 py-1.5 text-xs w-full"
+                      value={newOrder.special_process}
+                      onChange={(e) => setNewOrder({ ...newOrder, special_process: e.target.value })}
+                    >
+                      {PROCESSES.map((p) => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                  </div>
+                )}
                 {(() => {
                   const newParts = parseParts(newOrder.component);
                   const multi = newParts.length >= 2;
