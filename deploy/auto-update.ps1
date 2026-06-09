@@ -1,6 +1,9 @@
-# [Run on laptop, always] Poll GitHub(master) every 20s. On a new commit:
+# [Run on laptop, always] Poll GitHub(master) every 20s via the commits Atom feed. On a new commit:
 #   download -> sync code -> (npm install only if deps changed) -> build -> restart server.
 # Public repo so no git/token needed. data/, .next, node_modules are never touched.
+# NOTE: we read the latest SHA from the Atom feed (github.com), NOT the REST API
+#   (api.github.com), because the unauthenticated REST API is capped at 60 req/hour per IP
+#   and 20s polling (180/hour) exhausts it, stalling updates. The Atom feed is not under that cap.
 $ErrorActionPreference = "Continue"
 $proj    = "C:\production-scheduler"
 $repo    = "sd2ragon-cloud/production-scheduler"
@@ -30,7 +33,10 @@ function Get-LockHash {
 
 while ($true) {
   try {
-    $sha = (Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/commits/$branch" -Headers $headers -TimeoutSec 30).sha
+    $atom = (Invoke-WebRequest -Uri "https://github.com/$repo/commits/$branch.atom" -Headers $headers -TimeoutSec 30 -UseBasicParsing).Content
+    $m = [regex]::Match($atom, 'Grit::Commit/([0-9a-f]{40})')
+    if (-not $m.Success) { $m = [regex]::Match($atom, 'commit/([0-9a-f]{40})') }
+    $sha = if ($m.Success) { $m.Groups[1].Value } else { "" }
     if ($sha -and $sha -ne $lastSha) {
       $short = $sha.Substring(0,7)
       Write-Host "[$(Get-Date -Format HH:mm:ss)] new version $short - applying"
