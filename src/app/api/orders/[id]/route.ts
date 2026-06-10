@@ -21,7 +21,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       body.component || '',
       body.quantity_sheets,
       body.deadline,
-      body.special_process || '일반',
+      body.special_process ?? '일반',
       body.priority || 5,
       body.notes || '',
       body.duration_minutes || 0,
