@@ -34,6 +34,7 @@ async function initializeDb(db: Client) {
       factory TEXT NOT NULL DEFAULT '본공장',
       process_line TEXT NOT NULL DEFAULT '매엽',
       schedule_start_time TEXT NOT NULL DEFAULT '08:00',
+      memo TEXT NOT NULL DEFAULT '',
       created_at TEXT DEFAULT (datetime('now', 'localtime'))
     )`,
     `CREATE TABLE IF NOT EXISTS orders (
@@ -158,6 +159,13 @@ async function initializeDb(db: Client) {
   // 영속화하여 배정해제·소요시간변경 등 start_time 없는 재계산에서도 시작시각이 유지된다.
   try {
     await db.execute(`ALTER TABLE machines ADD COLUMN schedule_start_time TEXT NOT NULL DEFAULT '08:00'`);
+  } catch {
+    // column already exists
+  }
+
+  // Migrate machines: add memo (설비명 옆 수기 자유 메모) column if missing
+  try {
+    await db.execute(`ALTER TABLE machines ADD COLUMN memo TEXT NOT NULL DEFAULT ''`);
   } catch {
     // column already exists
   }

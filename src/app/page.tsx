@@ -15,6 +15,7 @@ interface Machine {
   is_active: number;
   work_start_hour: number;
   schedule_start_time: string;
+  memo: string;
 }
 
 interface Order {
@@ -155,6 +156,7 @@ export default function ScheduleBoard() {
   });
   const dragOverMachine = useRef<number | null>(null);
   const [machineStartTimes, setMachineStartTimes] = useState<Record<number, string>>({});
+  const [machineMemos, setMachineMemos] = useState<Record<number, string>>({});
 
   const fetchAll = useCallback(async () => {
     const qs = `?process_line=${encodeURIComponent(processLine)}`;
@@ -179,6 +181,13 @@ export default function ScheduleBoard() {
       }
       return next;
     });
+    setMachineMemos((prev) => {
+      const next = { ...prev };
+      for (const m of activeMachines) {
+        if (!(m.id in next)) next[m.id] = m.memo || "";
+      }
+      return next;
+    });
   }, [processLine]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
@@ -199,6 +208,26 @@ export default function ScheduleBoard() {
         });
         await fetchAll();
         startTimeTimers.current.delete(machineId);
+      }, 600)
+    );
+  };
+
+  const memoTimers = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
+
+  // 설비 메모(자유 수기) 저장. 스케줄에 영향 없으므로 재계산/전체조회 없이 PATCH만 한다.
+  const handleMemoChange = (machineId: number, value: string) => {
+    setMachineMemos((prev) => ({ ...prev, [machineId]: value }));
+    const existing = memoTimers.current.get(machineId);
+    if (existing) clearTimeout(existing);
+    memoTimers.current.set(
+      machineId,
+      setTimeout(async () => {
+        await fetch(`/api/machines/${machineId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ memo: value }),
+        });
+        memoTimers.current.delete(machineId);
       }, 600)
     );
   };
@@ -786,9 +815,16 @@ export default function ScheduleBoard() {
               onDragLeave={() => { if (dragOverMachine.current === machine.id) setDropTarget(null); }}
               onDrop={() => onDropOnMachine(machine.id)}
             >
-              <div className="bg-gray-800 text-white px-4 py-2 flex items-center justify-between">
-                <span className="font-bold">{machine.name}</span>
-                <div className="flex items-center gap-3">
+              <div className="bg-gray-800 text-white px-4 py-2 flex items-center gap-3">
+                <span className="font-bold w-16 shrink-0 whitespace-nowrap">{machine.name}</span>
+                <input
+                  type="text"
+                  className="flex-1 min-w-0 bg-gray-700 text-white text-xs px-2 py-0.5 border border-gray-500 focus:border-blue-400 outline-none"
+                  placeholder="메모"
+                  value={machineMemos[machine.id] ?? ""}
+                  onChange={(e) => handleMemoChange(machine.id, e.target.value)}
+                />
+                <div className="flex items-center gap-3 shrink-0">
                   <div className="flex items-center gap-1.5">
                     <span className="text-xs text-gray-400">시작</span>
                     <input
@@ -799,7 +835,7 @@ export default function ScheduleBoard() {
                       onChange={(e) => handleStartTimeChange(machine.id, e.target.value)}
                     />
                   </div>
-                  <span className="text-sm text-gray-300">{entries.length}건</span>
+                  <span className="text-sm text-gray-300 w-12 text-right shrink-0">{entries.length}건</span>
                 </div>
               </div>
 

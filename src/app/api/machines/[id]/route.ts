@@ -36,6 +36,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     await db.execute({ sql: 'UPDATE machines SET name = ? WHERE id = ?', args: [body.name.trim(), id] });
   }
 
+  if (typeof body.memo === 'string') {
+    await db.execute({ sql: 'UPDATE machines SET memo = ? WHERE id = ?', args: [body.memo, id] });
+  }
+
   return NextResponse.json({ success: true });
 }
 
