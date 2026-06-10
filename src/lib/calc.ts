@@ -65,9 +65,14 @@ function nextBreakBoundary(m: number, workEnd: number): number {
   return boundary;
 }
 
-// 자정 기준 분 → "YYYY-MM-DD HH:MM"
+// 자정 기준 분 → "YYYY-MM-DD HH:MM". totalMin이 하루(1440분)를 넘으면(예: 24:00)
+// 날짜를 넘겨 다음날 00:00으로 정규화한다. (24시간 가동 기계의 자정 종료 표기 대응)
 function formatDateTimeMin(date: Date, totalMin: number): string {
-  return formatDateTime(date, Math.floor(totalMin / 60), totalMin % 60);
+  const days = Math.floor(totalMin / (24 * 60));
+  const minOfDay = totalMin - days * 24 * 60;
+  const d = new Date(date);
+  d.setDate(d.getDate() + days);
+  return formatDateTime(d, Math.floor(minOfDay / 60), minOfDay % 60);
 }
 
 export async function recalcMachine(machineId: number, baseDate?: string, startTimeStr?: string) {
