@@ -33,6 +33,7 @@ async function initializeDb(db: Client) {
       works_sunday INTEGER NOT NULL DEFAULT 0,
       factory TEXT NOT NULL DEFAULT '본공장',
       process_line TEXT NOT NULL DEFAULT '매엽',
+      schedule_start_time TEXT NOT NULL DEFAULT '08:00',
       created_at TEXT DEFAULT (datetime('now', 'localtime'))
     )`,
     `CREATE TABLE IF NOT EXISTS orders (
@@ -149,6 +150,14 @@ async function initializeDb(db: Client) {
     await db.execute(`ALTER TABLE machines ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0`);
     // 기존 설비는 id 순서를 초기 표시 순서로 사용
     await db.execute(`UPDATE machines SET sort_order = id WHERE sort_order = 0`);
+  } catch {
+    // column already exists
+  }
+
+  // Migrate machines: add schedule_start_time (기계별 일일 작업 시작 시각) column if missing.
+  // 영속화하여 배정해제·소요시간변경 등 start_time 없는 재계산에서도 시작시각이 유지된다.
+  try {
+    await db.execute(`ALTER TABLE machines ADD COLUMN schedule_start_time TEXT NOT NULL DEFAULT '08:00'`);
   } catch {
     // column already exists
   }

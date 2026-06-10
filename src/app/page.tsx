@@ -13,6 +13,8 @@ interface Machine {
   setup_time_minutes: number;
   capabilities: string;
   is_active: number;
+  work_start_hour: number;
+  schedule_start_time: string;
 }
 
 interface Order {
@@ -172,7 +174,7 @@ export default function ScheduleBoard() {
       const next = { ...prev };
       for (const m of activeMachines) {
         if (!(m.id in next)) {
-          next[m.id] = String(m.work_start_hour).padStart(2, "0") + ":00";
+          next[m.id] = m.schedule_start_time || "08:00";
         }
       }
       return next;

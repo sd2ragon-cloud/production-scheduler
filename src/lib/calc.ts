@@ -7,6 +7,7 @@ interface Machine {
   work_end_hour: number;
   works_saturday: number;
   works_sunday: number;
+  schedule_start_time?: string;
 }
 
 interface AssignedEntry {
@@ -95,10 +96,12 @@ export async function recalcMachine(machineId: number, baseDate?: string, startT
   const workEnd = Number(machine.work_end_hour) * 60;
 
   const currentDate = new Date(startDate);
+  // 시작시각 우선순위: 명시 인자 > 기계에 저장된 schedule_start_time > 기본 08:00.
+  // (배정해제·소요시간변경·순서변경 등 start_time 없이 호출돼도 저장된 시작시각을 유지)
+  const startStr = startTimeStr || machine.schedule_start_time || '08:00';
   let curMin = workStart;
-
-  if (startTimeStr) {
-    const [h, m] = startTimeStr.split(':').map(Number);
+  {
+    const [h, m] = String(startStr).split(':').map(Number);
     if (!isNaN(h)) curMin = h * 60 + (isNaN(m) ? 0 : m);
   }
 
