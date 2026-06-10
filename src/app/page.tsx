@@ -1024,11 +1024,11 @@ export default function ScheduleBoard() {
                               <input
                                 type="number"
                                 min="0"
-                                step="1"
+                                step="0.5"
                                 className="w-14 h-6 border border-gray-300 px-1 py-0 text-[11px] text-center font-mono focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
-                                value={entry.duration_minutes ? Math.round(entry.duration_minutes / 60) : ""}
+                                value={entry.duration_minutes ? Math.round(entry.duration_minutes / 60 * 10) / 10 : ""}
                                 placeholder="시간"
-                                title="실제 소요시간 (양면 설비는 절반 적용)"
+                                title="실제 소요시간 (양면 설비는 절반 적용). 0.5시간(30분) 단위"
                                 onMouseDown={(e) => e.stopPropagation()}
                                 onClick={(e) => e.stopPropagation()}
                                 onChange={(e) => handleDurationChange(entry.id, Number(e.target.value) || 0)}
