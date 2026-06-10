@@ -43,10 +43,10 @@ const BREAKS: [number, number][] = [
   [0 * 60, 1 * 60],
 ];
 
-// min(분) 이후로 가장 이른 '작업 가능' 시각을 반환. 근무시간 밖이거나 휴게시간이면 그 끝으로 밀어낸다.
-// 그날 더 이상 작업 가능한 시간이 없으면 null.
-function nextWorkingMinute(min: number, workStart: number, workEnd: number): number | null {
-  let m = Math.max(min, workStart);
+// min(분) 이후로 가장 이른 '작업 가능' 시각을 반환. 휴게시간이면 그 끝으로 밀어낸다.
+// 근무 종료(workEnd)를 넘으면 null. (하한은 호출부에서 curMin으로 정함 — 수동 시작시간을 그대로 존중)
+function nextWorkingMinute(min: number, workEnd: number): number | null {
+  let m = min;
   for (let i = 0; i <= BREAKS.length; i++) {
     if (m >= workEnd) return null;
     const hit = BREAKS.find(([bs, be]) => m >= bs && m < be);
@@ -103,14 +103,14 @@ export async function recalcMachine(machineId: number, baseDate?: string, startT
 
   // 근무일/근무시간/휴게시간을 건너뛰어 다음 '작업 가능한' 시각으로 정렬한다.
   const advanceToWorking = () => {
-    let pos = nextWorkingMinute(curMin, workStart, workEnd);
+    let pos = nextWorkingMinute(curMin, workEnd);
     while (pos === null) {
       currentDate.setDate(currentDate.getDate() + 1);
       while (!isWorkDay(currentDate, machine)) {
         currentDate.setDate(currentDate.getDate() + 1);
       }
       curMin = workStart;
-      pos = nextWorkingMinute(curMin, workStart, workEnd);
+      pos = nextWorkingMinute(curMin, workEnd);
     }
     curMin = pos;
   };
