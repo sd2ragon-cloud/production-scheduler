@@ -141,6 +141,7 @@ export default function ScheduleBoard() {
   const [dropBucket, setDropBucket] = useState<number | null>(null);
   const [manageBuckets, setManageBuckets] = useState(false);
   const [reorderTarget, setReorderTarget] = useState<number | null>(null);
+  const [reorderAfter, setReorderAfter] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingOrderId, setEditingOrderId] = useState<number | null>(null);
@@ -835,7 +836,7 @@ export default function ScheduleBoard() {
                           className={`border-t cursor-grab active:cursor-grabbing h-7 ${
                             over ? "bg-red-50" : "hover:bg-gray-50"
                           } ${dragEntryId === entry.id ? "opacity-40" : ""} ${
-                            isReorderHover ? "border-t-2 border-t-blue-500" : ""
+                            isReorderHover ? (reorderAfter ? "border-b-2 border-b-blue-500" : "border-t-2 border-t-blue-500") : ""
                           }`}
                           onDragOver={(e) => {
                             // 드래그 중인 자기 자신 / 같은 행 파트 재정렬은 무시 (칩 핸들러가 처리)
@@ -845,7 +846,11 @@ export default function ScheduleBoard() {
                             if (dragEntryId !== null || dragOrderId !== null || dragSplit !== null) {
                               e.preventDefault();
                               e.stopPropagation();
+                              // 커서가 행의 아래쪽 절반이면 이 행 '뒤(아래)'에 삽입
+                              const r = e.currentTarget.getBoundingClientRect();
+                              const after = e.clientY - r.top > r.height / 2;
                               if (reorderTarget !== entry.id) setReorderTarget(entry.id);
+                              if (reorderAfter !== after) setReorderAfter(after);
                               if (dropTarget !== null) setDropTarget(null);
                             }
                           }}
@@ -858,23 +863,29 @@ export default function ScheduleBoard() {
                             if (dragEntryId === null && dragOrderId === null && dragSplit === null) return;
                             e.preventDefault();
                             e.stopPropagation();
+                            const r = e.currentTarget.getBoundingClientRect();
+                            const after = e.clientY - r.top > r.height / 2;
                             setReorderTarget(null);
                             const fromEntry = dragEntryId !== null ? schedule.find((s) => s.id === dragEntryId) : null;
                             if (fromEntry && fromEntry.machine_id === machine.id) {
-                              // 같은 설비 내 순서 변경
+                              // 같은 설비 내 순서 변경 (위/아래 절반에 따라 앞/뒤 삽입)
                               const currentEntries = [...entries];
                               const fromIdx = currentEntries.findIndex((x) => x.id === dragEntryId);
-                              const toIdx = currentEntries.findIndex((x) => x.id === entry.id);
-                              if (fromIdx >= 0 && toIdx >= 0) {
-                                const [moved] = currentEntries.splice(fromIdx, 1);
-                                currentEntries.splice(toIdx, 0, moved);
-                                handleReorder(machine.id, currentEntries.map((x) => x.id));
-                              }
+                              const [moved] = fromIdx >= 0 ? currentEntries.splice(fromIdx, 1) : [fromEntry];
+                              let toIdx = currentEntries.findIndex((x) => x.id === entry.id);
+                              if (toIdx < 0) toIdx = currentEntries.length;
+                              else if (after) toIdx += 1;
+                              currentEntries.splice(toIdx, 0, moved);
+                              handleReorder(machine.id, currentEntries.map((x) => x.id));
                               setDragEntryId(null);
                               setDragOrderId(null);
                             } else {
-                              // 새 배정 또는 다른 설비에서 이동 → 이 행 앞 위치에 삽입
-                              onDropOnMachine(machine.id, entry.id);
+                              // 새 배정 또는 다른 설비에서 이동 → 위/아래 절반에 따라 앞/뒤 위치에 삽입.
+                              // 아래쪽이면 다음 행 앞에 삽입(= 이 행 뒤), 마지막 행이면 맨 아래에 추가(null).
+                              const idxInEntries = entries.findIndex((x) => x.id === entry.id);
+                              const nextEntry = entries[idxInEntries + 1];
+                              const beforeId = after ? (nextEntry ? nextEntry.id : null) : entry.id;
+                              onDropOnMachine(machine.id, beforeId);
                             }
                           }}
                         >
