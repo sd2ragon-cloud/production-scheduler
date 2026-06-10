@@ -35,6 +35,41 @@ function formatDate(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
+// 식사·휴게 시간(자정 기준 분 단위, [시작, 끝)). 이 시간대에는 작업하지 않으므로 예상완료시간에서 제외한다.
+// 점심 12:00~13:00, 저녁 17:30~18:30, 야식 00:00~01:00 (각 1시간)
+const BREAKS: [number, number][] = [
+  [12 * 60, 13 * 60],
+  [17 * 60 + 30, 18 * 60 + 30],
+  [0 * 60, 1 * 60],
+];
+
+// min(분) 이후로 가장 이른 '작업 가능' 시각을 반환. 근무시간 밖이거나 휴게시간이면 그 끝으로 밀어낸다.
+// 그날 더 이상 작업 가능한 시간이 없으면 null.
+function nextWorkingMinute(min: number, workStart: number, workEnd: number): number | null {
+  let m = Math.max(min, workStart);
+  for (let i = 0; i <= BREAKS.length; i++) {
+    if (m >= workEnd) return null;
+    const hit = BREAKS.find(([bs, be]) => m >= bs && m < be);
+    if (!hit) return m;
+    m = hit[1];
+  }
+  return m >= workEnd ? null : m;
+}
+
+// 작업 가능한 시각 m 이후 작업이 끊기는 다음 경계(근무 종료 또는 다음 휴게 시작).
+function nextBreakBoundary(m: number, workEnd: number): number {
+  let boundary = workEnd;
+  for (const [bs] of BREAKS) {
+    if (bs > m && bs < boundary) boundary = bs;
+  }
+  return boundary;
+}
+
+// 자정 기준 분 → "YYYY-MM-DD HH:MM"
+function formatDateTimeMin(date: Date, totalMin: number): string {
+  return formatDateTime(date, Math.floor(totalMin / 60), totalMin % 60);
+}
+
 export async function recalcMachine(machineId: number, baseDate?: string, startTimeStr?: string) {
   const db = await getDb();
 
@@ -51,49 +86,57 @@ export async function recalcMachine(machineId: number, baseDate?: string, startT
   const startDate = baseDate ? new Date(baseDate) : new Date();
   startDate.setHours(0, 0, 0, 0);
 
-  let currentDate = new Date(startDate);
-  let currentHour = Number(machine.work_start_hour);
-  let currentMinute = 0;
+  const workStart = Number(machine.work_start_hour) * 60;
+  const workEnd = Number(machine.work_end_hour) * 60;
+
+  const currentDate = new Date(startDate);
+  let curMin = workStart;
 
   if (startTimeStr) {
     const [h, m] = startTimeStr.split(':').map(Number);
-    if (!isNaN(h)) currentHour = h;
-    if (!isNaN(m)) currentMinute = m;
+    if (!isNaN(h)) curMin = h * 60 + (isNaN(m) ? 0 : m);
   }
 
   while (!isWorkDay(currentDate, machine)) {
     currentDate.setDate(currentDate.getDate() + 1);
   }
 
+  // 근무일/근무시간/휴게시간을 건너뛰어 다음 '작업 가능한' 시각으로 정렬한다.
+  const advanceToWorking = () => {
+    let pos = nextWorkingMinute(curMin, workStart, workEnd);
+    while (pos === null) {
+      currentDate.setDate(currentDate.getDate() + 1);
+      while (!isWorkDay(currentDate, machine)) {
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+      curMin = workStart;
+      pos = nextWorkingMinute(curMin, workStart, workEnd);
+    }
+    curMin = pos;
+  };
+
   const updates: { sql: string; args: (string | number)[] }[] = [];
 
   for (const entry of entries) {
-    const startTime = formatDateTime(currentDate, currentHour, currentMinute);
+    advanceToWorking();
+    const startTime = formatDateTimeMin(currentDate, curMin);
     const scheduledDate = formatDate(currentDate);
-    const totalMinutes = Number(entry.duration_minutes);
+    let remaining = Number(entry.duration_minutes);
 
-    if (totalMinutes > 0) {
-      let remaining = totalMinutes;
-      while (remaining > 0) {
-        const minutesLeftInDay = (Number(machine.work_end_hour) - currentHour) * 60 - currentMinute;
-        if (remaining <= minutesLeftInDay) {
-          currentMinute += remaining;
-          currentHour += Math.floor(currentMinute / 60);
-          currentMinute = currentMinute % 60;
-          remaining = 0;
-        } else {
-          remaining -= minutesLeftInDay;
-          currentDate.setDate(currentDate.getDate() + 1);
-          while (!isWorkDay(currentDate, machine)) {
-            currentDate.setDate(currentDate.getDate() + 1);
-          }
-          currentHour = Number(machine.work_start_hour);
-          currentMinute = 0;
-        }
+    while (remaining > 0) {
+      advanceToWorking();
+      const boundary = nextBreakBoundary(curMin, workEnd);
+      const available = boundary - curMin;
+      if (remaining <= available) {
+        curMin += remaining;
+        remaining = 0;
+      } else {
+        remaining -= available;
+        curMin = boundary;
       }
     }
 
-    const endTime = formatDateTime(currentDate, currentHour, currentMinute);
+    const endTime = formatDateTimeMin(currentDate, curMin);
     updates.push({
       sql: 'UPDATE schedule_entries SET start_time = ?, end_time = ?, scheduled_date = ? WHERE id = ?',
       args: [startTime, endTime, scheduledDate, Number(entry.id)],
