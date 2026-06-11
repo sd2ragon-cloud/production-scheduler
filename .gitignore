@@ -43,5 +43,8 @@ next-env.d.ts
 # database
 /data/
 
+# external-access (laptop-only runtime artifact: current Tailscale Funnel URL)
+/tunnel-url.txt
+
 # Claude Code personal settings
 .claude/settings.local.json

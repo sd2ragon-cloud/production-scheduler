@@ -15,6 +15,19 @@
   - 반드시 **루프형**이어야 한다(배포가 서버를 죽이면 루프만이 되살림). `deploy\start-server.bat`이 그 루프 런처이며, `auto-update.ps1`이 기동 시마다 시작프로그램의 사본을 이걸로 자가 동기화한다.
   - 수동 설치/복구: `copy /Y "C:\production-scheduler\deploy\start-server.bat" "%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\start-server.bat"`
 
+## 외부(인터넷) 접속
+사내망뿐 아니라 외부/휴대폰에서도 접속하려면 **Tailscale Funnel**을 쓴다(고정 `ts.net` 주소,
+노트북에만 설치, 보는 사람은 브라우저만). 노트북이 바깥으로 나가는 연결만 쓰므로 공유기
+포트포워딩이 필요 없다. 설치·보안·전환은 `외부접속-가이드.md` 참고. 핵심(노트북에서 1회):
+```cmd
+"C:\Program Files\Tailscale\tailscale.exe" funnel --bg 3000
+reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v ps-funnel /t REG_SZ /d "powershell -NoProfile -ExecutionPolicy Bypass -File C:\production-scheduler\deploy\funnel.ps1" /f
+powershell -NoProfile -ExecutionPolicy Bypass -File C:\production-scheduler\deploy\funnel.ps1
+```
+Tailscale 서비스가 Funnel을 재부팅 후에도 자동 유지한다. `funnel.ps1`은 현재 주소를
+`tunnel-url.txt`에 기록해 대시보드 우상단 `🌐 외부 접속 주소` 버튼/`GET /api/tunnel`로 보이게 한다.
+Funnel은 공개라 로그인 보호가 없으니, 비공개가 필요하면 `serve`로 전환(가이드 참고).
+
 ## 주의사항
 - **노트북에서 자동 실행되는 `.bat`는 반드시 ASCII 전용**(주석에도 한글 금지). `chcp 65001` + 한글이 섞이면 cmd 배치 파싱이 깨져 주석/문자열이 명령으로 실행되고 일부 줄이 누락된다.
 - 콘솔 창은 클릭하면 멈춘다(QuickEdit). 서버 창을 클릭하면 사이트가 멈추니 주의.
