@@ -1197,7 +1197,7 @@ export default function ScheduleBoard() {
                       )}
                     </div>
                   </div>
-                  <div className="p-1.5 space-y-1 min-h-[2.5rem]">
+                  <div className="p-1.5 space-y-1 min-h-[4.5rem]">
                     {bucketOrders.length === 0 ? (
                       <div className="text-center text-gray-300 text-[11px] py-2">여기로 끌어다 1차 배정</div>
                     ) : (
