@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isAdminRequest, setAdminCookie, clearAdminCookie } from '@/lib/auth-token';
-import { hasAdminPassword, setAdminPassword, verifyPassword } from '@/lib/auth';
+import { hasAdminPassword, setAdminPassword, verifyPassword, validatePasswordPolicy } from '@/lib/auth';
 
 // 현재 권한 상태. 클라이언트(AuthProvider)가 폴링.
 export async function GET(req: NextRequest) {
@@ -27,7 +27,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: '이미 비밀번호가 설정되어 있습니다.' }, { status: 400 });
     }
     const pw = String(body.password || '');
-    if (pw.length < 4) return NextResponse.json({ error: '비밀번호는 4자 이상이어야 합니다.' }, { status: 400 });
+    const err = validatePasswordPolicy(pw);
+    if (err) return NextResponse.json({ error: err }, { status: 400 });
     await setAdminPassword(pw);
     const res = NextResponse.json({ ok: true });
     setAdminCookie(res);
@@ -49,7 +50,9 @@ export async function POST(req: NextRequest) {
     const cur = String(body.password || '');
     const next = String(body.newPassword || '');
     if (!(await verifyPassword(cur))) return NextResponse.json({ error: '현재 비밀번호가 올바르지 않습니다.' }, { status: 401 });
-    if (next.length < 4) return NextResponse.json({ error: '새 비밀번호는 4자 이상이어야 합니다.' }, { status: 400 });
+    const err = validatePasswordPolicy(next);
+    if (err) return NextResponse.json({ error: err }, { status: 400 });
+    if (await verifyPassword(next)) return NextResponse.json({ error: '새 비밀번호가 현재 비밀번호와 같습니다.' }, { status: 400 });
     await setAdminPassword(next);
     return NextResponse.json({ ok: true });
   }

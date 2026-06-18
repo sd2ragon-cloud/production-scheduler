@@ -14,7 +14,7 @@ export default function NavBar() {
   // 관리자 로그인: 비밀번호가 아직 없으면 최초 설정(setup), 있으면 로그인(login).
   const adminLogin = async () => {
     if (!hasPassword) {
-      const pw = window.prompt("관리자 비밀번호를 새로 설정하세요 (4자 이상).\n이 비밀번호로 편집 권한을 켭니다. 보는 사람에게는 알려주지 마세요.");
+      const pw = window.prompt("관리자 비밀번호를 새로 설정하세요 (8자 이상, 연속·반복·흔한 비밀번호 불가).\n이 비밀번호로 편집 권한을 켭니다. 보는 사람에게는 알려주지 마세요.");
       if (!pw) return;
       const r = await fetch("/api/auth", {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -47,7 +47,7 @@ export default function NavBar() {
   const adminChange = async () => {
     const cur = window.prompt("현재 비밀번호를 입력하세요.");
     if (!cur) return;
-    const next = window.prompt("새 비밀번호를 입력하세요 (4자 이상).");
+    const next = window.prompt("새 비밀번호를 입력하세요 (8자 이상, 연속·반복·흔한 비밀번호 불가).");
     if (!next) return;
     const r = await fetch("/api/auth", {
       method: "POST", headers: { "Content-Type": "application/json" },
