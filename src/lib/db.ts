@@ -138,6 +138,15 @@ async function initializeDb(db: Client) {
     // column already exists
   }
 
+  // Migrate orders: add part_buckets (구성별 1차 배정 칸 매핑 JSON) column if missing.
+  // 예: {"표지": 3, "본문": 5}. 구성을 칸별로 나눠 배정할 때 사용한다. 값이 칸 id면 그 칸,
+  // null이면 명시적 미배정(대기). 맵에 없는 구성은 주문 전체 bucket_id를 따른다(하위호환).
+  try {
+    await db.execute(`ALTER TABLE orders ADD COLUMN part_buckets TEXT NOT NULL DEFAULT '{}'`);
+  } catch {
+    // column already exists
+  }
+
   // Migrate schedule_entries: add component_part column if missing
   try {
     await db.execute(`ALTER TABLE schedule_entries ADD COLUMN component_part TEXT NOT NULL DEFAULT ''`);

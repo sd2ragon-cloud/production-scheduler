@@ -35,6 +35,24 @@ export function parsePartProcesses(json: string | null | undefined): Record<stri
   }
 }
 
+// 파트별 1차 배정 칸 맵을 안전하게 파싱. 값은 칸 id(number) 또는 명시적 미배정(null).
+// 맵에 없는 구성은 호출부에서 주문 전체 bucket_id로 폴백한다(하위호환).
+export function parsePartBuckets(json: string | null | undefined): Record<string, number | null> {
+  if (!json) return {};
+  try {
+    const obj = JSON.parse(json);
+    if (!obj || typeof obj !== "object") return {};
+    const out: Record<string, number | null> = {};
+    for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
+      if (v === null) out[k] = null;
+      else if (typeof v === "number" && Number.isFinite(v)) out[k] = v;
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
 // 파트별 소요시간 합계(분)
 export function sumDurations(durations: Record<string, number>): number {
   return Object.values(durations).reduce((a, b) => a + (Number(b) || 0), 0);

@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useProcess } from "./components/ProcessContext";
 import { useAuth } from "./components/AuthContext";
-import { parseParts, parsePartDurations, parsePartProcesses, partTotals } from "@/lib/parts";
+import { parseParts, parsePartDurations, parsePartProcesses, partTotals, parsePartBuckets } from "@/lib/parts";
 import { isDoubleSided } from "@/lib/print";
 
 interface Machine {
@@ -34,6 +34,7 @@ interface Order {
   part_durations: string;
   part_processes: string;
   bucket_id: number | null;
+  part_buckets: string; // 구성별 1차 배정 칸 매핑 JSON {"표지": 3, ...}
 }
 
 interface Bucket {
@@ -154,6 +155,8 @@ export default function ScheduleBoard() {
   const [dragEntryId, setDragEntryId] = useState<number | null>(null);
   const [dragSplit, setDragSplit] = useState<{ entryId: number; part: string } | null>(null);
   const [dragAll, setDragAll] = useState(false);
+  // 1차 배정(칸) 드롭 시 어떤 구성을 옮길지. 빈 배열 = 구성 없는 주문(전체를 bucket_id로).
+  const [dragParts, setDragParts] = useState<string[]>([]);
   const [waitingDrop, setWaitingDrop] = useState(false);
   const [partReorderTarget, setPartReorderTarget] = useState<{ part: string; after: boolean } | null>(null);
   const [dropTarget, setDropTarget] = useState<number | null>(null);
@@ -294,13 +297,15 @@ export default function ScheduleBoard() {
     setLoading(false);
   };
 
-  // 주문의 남은 파트 전체를 한 설비에 배정 (각 파트의 남은 시간만큼)
-  const handleAssignAll = async (orderId: number, machineId: number, beforeEntryId: number | null = null) => {
+  // 주문의 남은 파트 전체를 한 설비에 배정 (각 파트의 남은 시간만큼).
+  // onlyParts가 있으면 그 구성들만 배정한다(칸 카드를 기계로 끌 때 그 칸의 구성만).
+  const handleAssignAll = async (orderId: number, machineId: number, beforeEntryId: number | null = null, onlyParts: string[] = []) => {
     const order = orders.find((o) => o.id === orderId);
     if (!order) return;
     setLoading(true);
     const startTime = machineStartTimes[machineId] || "08:00";
-    const parts = parseParts(order.component);
+    const allParts = parseParts(order.component);
+    const parts = onlyParts.length ? allParts.filter((p) => onlyParts.includes(p)) : allParts;
     const totals = partTotals(order.component, order.part_durations, order.duration_minutes);
     const present = new Set<string>();
     const alloc: Record<string, number> = {};
@@ -311,7 +316,7 @@ export default function ScheduleBoard() {
         alloc[p] = (alloc[p] || 0) + (Number(m) || 0);
       }
     }
-    if (parts.length === 0) {
+    if (allParts.length === 0) {
       // 구성 없는 주문: 통째 배정
       await fetch("/api/schedule/assign", {
         method: "POST",
@@ -408,44 +413,50 @@ export default function ScheduleBoard() {
     } else if (dragEntryId !== null) {
       await handleUnassign(dragEntryId);
     } else if (dragOrderId !== null) {
-      // 1차 배정 칸에서 끌어온 주문을 대기로: 1차 배정 해제
-      await handleStage1(dragOrderId, null);
+      // 1차 배정 칸에서 끌어온 구성을 대기로: 끌어온 구성만(없으면 주문 전체) 1차 배정 해제
+      await handleStage1(dragOrderId, null, dragParts);
     }
     setDragOrderId(null);
     setDragPart("");
+    setDragParts([]);
     setDragEntryId(null);
     setDragSplit(null);
     setDragAll(false);
     setDropTarget(null);
   };
 
-  // 1차 배정: 주문을 칸에 넣거나(bucketId) 해제(null)
-  const handleStage1 = async (orderId: number, bucketId: number | null) => {
+  // 1차 배정: 주문을 칸에 넣거나(bucketId) 해제(null). parts가 있으면 그 구성들만(구성별),
+  // 비어 있으면 주문 전체(제품별, bucket_id)로 처리한다.
+  const handleStage1 = async (orderId: number, bucketId: number | null, parts: string[] = []) => {
     setLoading(true);
     await fetch("/api/schedule/stage1", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ order_id: orderId, bucket_id: bucketId }),
+      body: JSON.stringify({ order_id: orderId, bucket_id: bucketId, parts: parts.length ? parts : undefined }),
     });
     await fetchAll();
     setLoading(false);
   };
 
   // 칸(버킷)에 드롭 = 1차 배정. 대기/다른 칸의 주문, 또는 기계에 배정된 작업을 끌어다 넣을 수 있다.
+  // 끌어온 구성(parts)만 해당 칸에 넣는다. 구성 없는 주문이면 parts=[]로 주문 전체(bucket_id) 처리.
   const onDropOnBucket = async (bucketId: number) => {
     let orderId: number | null = null;
+    let parts: string[] = [];
     if (dragSplit !== null) {
       const e = schedule.find((s) => s.id === dragSplit.entryId);
-      if (e) { orderId = e.order_id; await handleUnassignPart(dragSplit.entryId, dragSplit.part); }
+      if (e) { orderId = e.order_id; parts = [dragSplit.part]; await handleUnassignPart(dragSplit.entryId, dragSplit.part); }
     } else if (dragEntryId !== null) {
       const e = schedule.find((s) => s.id === dragEntryId);
-      if (e) { orderId = e.order_id; await handleUnassign(dragEntryId); }
+      if (e) { orderId = e.order_id; parts = parseParts(e.component_part); await handleUnassign(dragEntryId); }
     } else if (dragOrderId !== null) {
       orderId = dragOrderId;
+      parts = dragParts;
     }
-    if (orderId !== null) await handleStage1(orderId, bucketId);
+    if (orderId !== null) await handleStage1(orderId, bucketId, parts);
     setDragOrderId(null);
     setDragPart("");
+    setDragParts([]);
     setDragEntryId(null);
     setDragSplit(null);
     setDragAll(false);
@@ -635,16 +646,18 @@ export default function ScheduleBoard() {
     if (!isAdmin) return; // 보기 전용: 드래그 배정 불가
     setDragOrderId(orderId);
     setDragPart(part);
+    setDragParts(part ? [part] : []); // 1차 배정 시 이 구성만 옮긴다
     setDragEntryId(null);
     setDragSplit(null);
     setDragAll(false);
   };
 
-  // 제품 카드 본문을 드래그 = 남은 파트 전체를 한 설비로
-  const onDragStartAll = (orderId: number) => {
+  // 제품 카드 본문을 드래그 = (기계로) 남은 파트 전체를 한 설비로 / (칸으로) 이 카드에 보이는 구성 전체를 한 칸으로
+  const onDragStartAll = (orderId: number, parts: string[] = []) => {
     if (!isAdmin) return; // 보기 전용: 드래그 배정 불가
     setDragOrderId(orderId);
     setDragPart("");
+    setDragParts(parts); // 1차 배정 시 이 구성들을 한 칸으로
     setDragAll(true);
     setDragEntryId(null);
     setDragSplit(null);
@@ -688,8 +701,8 @@ export default function ScheduleBoard() {
       }
     } else if (dragOrderId !== null) {
       if (dragAll) {
-        // 제품 전체(남은 파트 모두)를 이 설비로 배정
-        await handleAssignAll(dragOrderId, machineId, beforeEntryId);
+        // 이 카드의 구성 전체(대기/칸에 보이는 것)를 이 설비로 배정
+        await handleAssignAll(dragOrderId, machineId, beforeEntryId, dragParts);
       } else if (dragPart) {
         // 파트 배정: 이 설비에 배정할 시간을 입력받아 분할 배정 (남은 시간 추적)
         const order = orders.find((o) => o.id === dragOrderId);
@@ -717,6 +730,7 @@ export default function ScheduleBoard() {
     }
     setDragOrderId(null);
     setDragPart("");
+    setDragParts([]);
     setDragEntryId(null);
     setDragSplit(null);
     setDragAll(false);
@@ -729,14 +743,10 @@ export default function ScheduleBoard() {
 
   const PROCESSES = ["일반", "항바니쉬", "UV", "IR코팅", "양면", "패키지"];
 
-  // bucket_id가 없는(=1차 배정 안 된) 대기 주문
-  const waitingOrders = orders.filter((o) => o.bucket_id == null);
-
-  // 주문 카드 (배정 대기 / 1차 배정 칸 공용). 남은 파트가 없으면 렌더하지 않음.
-  const renderOrderCard = (order: Order) => {
-    const days = daysUntilDeadline(order.deadline);
+  // 주문의 '남은 구성'(아직 기계에 다 배정되지 않은 구성) 목록
+  const remainingPartsOf = (order: Order): string[] => {
     const parts = parseParts(order.component);
-    const hasParts = parts.length >= 1;
+    if (parts.length === 0) return [];
     const totals = partTotals(order.component, order.part_durations, order.duration_minutes);
     const present = new Set<string>();
     const alloc: Record<string, number> = {};
@@ -747,19 +757,59 @@ export default function ScheduleBoard() {
         alloc[p] = (alloc[p] || 0) + (Number(m) || 0);
       }
     }
-    const remainingParts = hasParts
-      ? parts.filter((p) => {
-          const t = Number(totals[p]) || 0;
-          return t > 0 ? (alloc[p] || 0) < t : !present.has(p);
-        })
-      : [];
+    return parts.filter((p) => {
+      const t = Number(totals[p]) || 0;
+      return t > 0 ? (alloc[p] || 0) < t : !present.has(p);
+    });
+  };
+
+  // 구성별 1차 배정 칸. part_buckets에 있으면 그 값, 없으면 주문 전체 bucket_id로 폴백(하위호환).
+  const partBucketOf = (order: Order, part: string): number | null => {
+    const map = parsePartBuckets(order.part_buckets);
+    return part in map ? map[part] : order.bucket_id;
+  };
+
+  // 특정 위치(대기=undefined / 칸=bucketId)에 표시할 '남은 구성' 목록
+  const partsAtLocation = (order: Order, bucketId?: number): string[] =>
+    remainingPartsOf(order).filter((p) =>
+      bucketId === undefined ? partBucketOf(order, p) == null : partBucketOf(order, p) === bucketId,
+    );
+
+  // 주문이 해당 위치(대기/칸)에 카드로 표시되어야 하는지
+  const showsAt = (order: Order, bucketId?: number): boolean => {
+    if (parseParts(order.component).length === 0) {
+      return bucketId === undefined ? order.bucket_id == null : order.bucket_id === bucketId;
+    }
+    return partsAtLocation(order, bucketId).length > 0;
+  };
+
+  // 1차 배정 안 된(대기) 구성이 남아 있는 주문
+  const waitingOrders = orders.filter((o) => showsAt(o, undefined));
+
+  // 주문 카드 (배정 대기 / 1차 배정 칸 공용). bucketId=undefined면 대기, 숫자면 그 칸.
+  // 해당 위치에 표시할 남은 구성이 없으면 렌더하지 않음.
+  const renderOrderCard = (order: Order, bucketId?: number) => {
+    const days = daysUntilDeadline(order.deadline);
+    const parts = parseParts(order.component);
+    const hasParts = parts.length >= 1;
+    const totals = partTotals(order.component, order.part_durations, order.duration_minutes);
+    const alloc: Record<string, number> = {};
+    for (const s of schedule) {
+      if (s.order_id !== order.id) continue;
+      for (const [p, m] of Object.entries(parsePartDurations(s.part_durations))) {
+        alloc[p] = (alloc[p] || 0) + (Number(m) || 0);
+      }
+    }
+    // 이 위치(대기/칸)에 표시할 남은 구성만 추린다
+    const remainingParts = partsAtLocation(order, bucketId);
     if (hasParts && remainingParts.length === 0) return null;
+    if (!hasParts && !showsAt(order, bucketId)) return null;
     return (
       <div
         key={order.id}
         draggable={isAdmin}
-        onDragStart={() => (hasParts ? onDragStartAll(order.id) : onDragStartOrder(order.id))}
-        title={hasParts ? "제품 전체(남은 파트 모두)를 설비/칸으로 드래그" : undefined}
+        onDragStart={() => (hasParts ? onDragStartAll(order.id, remainingParts) : onDragStartOrder(order.id))}
+        title={hasParts ? "이 카드의 구성 전체를 설비/칸으로 드래그 (칸=한 칸에 모아 1차 배정)" : undefined}
         className={`p-2.5 border transition hover:shadow-sm cursor-grab active:cursor-grabbing ${
           dragOrderId === order.id && !dragPart ? "opacity-40" : ""
         } ${
@@ -809,7 +859,7 @@ export default function ScheduleBoard() {
                     key={p}
                     draggable={isAdmin}
                     onDragStart={(e) => { e.stopPropagation(); onDragStartOrder(order.id, p); }}
-                    onDragEnd={() => { setDragOrderId(null); setDragPart(""); }}
+                    onDragEnd={() => { setDragOrderId(null); setDragPart(""); setDragParts([]); }}
                     className={`px-2 py-0.5 border text-[11px] font-medium cursor-grab active:cursor-grabbing hover:opacity-80 ${
                       PROCESS_COLORS[proc] || "bg-gray-100 text-gray-600 border-gray-200"
                     } ${dragOrderId === order.id && dragPart === p ? "opacity-40" : ""}`}
@@ -1228,7 +1278,7 @@ export default function ScheduleBoard() {
             </div>
           ) : (
             buckets.map((b, idx) => {
-              const bucketOrders = orders.filter((o) => o.bucket_id === b.id);
+              const bucketOrders = orders.filter((o) => showsAt(o, b.id));
               const isTarget = dropBucket === b.id;
               return (
                 <div
@@ -1271,7 +1321,7 @@ export default function ScheduleBoard() {
                     {bucketOrders.length === 0 ? (
                       <div className="text-center text-gray-300 text-[11px] py-2">여기로 끌어다 1차 배정</div>
                     ) : (
-                      bucketOrders.map(renderOrderCard)
+                      bucketOrders.map((o) => renderOrderCard(o, b.id))
                     )}
                   </div>
                 </div>
@@ -1422,7 +1472,7 @@ export default function ScheduleBoard() {
               대기 중인 주문이 없습니다
             </div>
           ) : (
-            waitingOrders.map(renderOrderCard)
+            waitingOrders.map((o) => renderOrderCard(o, undefined))
           )}
         </div>
       </div>
