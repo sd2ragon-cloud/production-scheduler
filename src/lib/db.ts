@@ -89,6 +89,11 @@ async function initializeDb(db: Client) {
       end_min INTEGER NOT NULL,
       created_at TEXT DEFAULT (datetime('now', 'localtime'))
     )`,
+    // 앱 설정 키/값 저장소. 관리자 비밀번호 해시(admin_pw = salt:hash) 등을 보관한다.
+    `CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    )`,
   ], 'write');
 
   // Migrate existing tables: add factory/process_line columns if missing

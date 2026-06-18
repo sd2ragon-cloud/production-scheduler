@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useProcess } from "./components/ProcessContext";
+import { useAuth } from "./components/AuthContext";
 import { parseParts, parsePartDurations, parsePartProcesses, partTotals } from "@/lib/parts";
 import { isDoubleSided } from "@/lib/print";
 
@@ -141,6 +142,7 @@ function formatDeadlineInput(value: string): string {
 
 export default function ScheduleBoard() {
   const { processLine } = useProcess();
+  const { isAdmin } = useAuth(); // 관리자만 편집 가능. false면 보기 전용(편집 UI 숨김).
   const [machines, setMachines] = useState<Machine[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [schedule, setSchedule] = useState<ScheduleEntry[]>([]);
@@ -630,6 +632,7 @@ export default function ScheduleBoard() {
   };
 
   const onDragStartOrder = (orderId: number, part: string = "") => {
+    if (!isAdmin) return; // 보기 전용: 드래그 배정 불가
     setDragOrderId(orderId);
     setDragPart(part);
     setDragEntryId(null);
@@ -639,6 +642,7 @@ export default function ScheduleBoard() {
 
   // 제품 카드 본문을 드래그 = 남은 파트 전체를 한 설비로
   const onDragStartAll = (orderId: number) => {
+    if (!isAdmin) return; // 보기 전용: 드래그 배정 불가
     setDragOrderId(orderId);
     setDragPart("");
     setDragAll(true);
@@ -753,7 +757,7 @@ export default function ScheduleBoard() {
     return (
       <div
         key={order.id}
-        draggable
+        draggable={isAdmin}
         onDragStart={() => (hasParts ? onDragStartAll(order.id) : onDragStartOrder(order.id))}
         title={hasParts ? "제품 전체(남은 파트 모두)를 설비/칸으로 드래그" : undefined}
         className={`p-2.5 border transition hover:shadow-sm cursor-grab active:cursor-grabbing ${
@@ -772,6 +776,7 @@ export default function ScheduleBoard() {
               <p className={`text-xs ${days < 0 ? "text-red-600" : days <= 2 ? "text-orange-500" : "text-gray-400"}`}>
                 {days < 0 ? `${Math.abs(days)}일 초과` : days === 0 ? "오늘" : `D-${days}`}
               </p>
+              {isAdmin && (<>
               <button
                 onClick={(e) => { e.stopPropagation(); startEditOrder(order); }}
                 onMouseDown={(e) => e.stopPropagation()}
@@ -789,6 +794,7 @@ export default function ScheduleBoard() {
               >
                 🗑
               </button>
+              </>)}
             </div>
           </div>
           {hasParts ? (
@@ -801,7 +807,7 @@ export default function ScheduleBoard() {
                 return (
                   <span
                     key={p}
-                    draggable
+                    draggable={isAdmin}
                     onDragStart={(e) => { e.stopPropagation(); onDragStartOrder(order.id, p); }}
                     onDragEnd={() => { setDragOrderId(null); setDragPart(""); }}
                     className={`px-2 py-0.5 border text-[11px] font-medium cursor-grab active:cursor-grabbing hover:opacity-80 ${
@@ -847,13 +853,15 @@ export default function ScheduleBoard() {
             <h2 className="text-xl font-bold text-gray-900">기계별 작업 계획</h2>
             <p className="text-xs text-gray-500">{dateStr}</p>
           </div>
-          <button
-            onClick={() => setShowBreaks(true)}
-            className="text-sm border border-gray-300 bg-white px-3 py-1.5 hover:bg-gray-100 text-gray-700 whitespace-nowrap"
-            title="식사·휴게 시간을 추가/수정하면 예상완료시간이 자동으로 다시 계산됩니다"
-          >
-            🍽 식사시간 {breaks.length > 0 && <span className="text-gray-400">({breaks.length})</span>}
-          </button>
+          {isAdmin && (
+            <button
+              onClick={() => setShowBreaks(true)}
+              className="text-sm border border-gray-300 bg-white px-3 py-1.5 hover:bg-gray-100 text-gray-700 whitespace-nowrap"
+              title="식사·휴게 시간을 추가/수정하면 예상완료시간이 자동으로 다시 계산됩니다"
+            >
+              🍽 식사시간 {breaks.length > 0 && <span className="text-gray-400">({breaks.length})</span>}
+            </button>
+          )}
         </div>
 
         {machines.map((machine) => {
@@ -874,20 +882,22 @@ export default function ScheduleBoard() {
                 <span className="font-bold w-16 shrink-0 whitespace-nowrap">{machine.name}</span>
                 <input
                   type="text"
-                  className="flex-1 min-w-0 bg-gray-700 text-white text-xs px-2 py-0.5 border border-gray-500 focus:border-blue-400 outline-none"
-                  placeholder="메모"
+                  className="flex-1 min-w-0 bg-gray-700 text-white text-xs px-2 py-0.5 border border-gray-500 focus:border-blue-400 outline-none disabled:opacity-60"
+                  placeholder={isAdmin ? "메모" : ""}
                   value={machineMemos[machine.id] ?? ""}
                   onChange={(e) => handleMemoChange(machine.id, e.target.value)}
+                  disabled={!isAdmin}
                 />
                 <div className="flex items-center gap-3 shrink-0">
                   <div className="flex items-center gap-1.5">
                     <span className="text-xs text-gray-400">시작</span>
                     <input
                       type="time"
-                      className="bg-gray-700 text-white text-xs px-2 py-0.5 border border-gray-500 focus:border-blue-400 outline-none"
+                      className="bg-gray-700 text-white text-xs px-2 py-0.5 border border-gray-500 focus:border-blue-400 outline-none disabled:opacity-60"
                       style={{ width: "7rem", colorScheme: "dark" }}
                       value={machineStartTimes[machine.id] || "08:00"}
                       onChange={(e) => handleStartTimeChange(machine.id, e.target.value)}
+                      disabled={!isAdmin}
                     />
                   </div>
                   <span className="text-sm text-gray-300 w-12 text-right shrink-0">{entries.length}건</span>
@@ -918,7 +928,7 @@ export default function ScheduleBoard() {
                       return (
                         <tr
                           key={entry.id}
-                          draggable
+                          draggable={isAdmin}
                           onDragStart={() => {
                             setDragEntryId(entry.id);
                             setDragOrderId(null);
@@ -999,7 +1009,7 @@ export default function ScheduleBoard() {
                                     ) : null}
                                     {entry.component ? (
                                       <span
-                                        draggable
+                                        draggable={isAdmin}
                                         onDragStart={(e) => {
                                           e.stopPropagation();
                                           e.dataTransfer.effectAllowed = "move";
@@ -1083,7 +1093,7 @@ export default function ScheduleBoard() {
                                         </span>
                                         <span
                                           data-part={p}
-                                          draggable
+                                          draggable={isAdmin}
                                           onDragStart={(e) => {
                                             e.stopPropagation();
                                             e.dataTransfer.effectAllowed = "move";
@@ -1127,8 +1137,9 @@ export default function ScheduleBoard() {
                                 onMouseDown={(e) => e.stopPropagation()}
                                 onClick={(e) => e.stopPropagation()}
                                 onChange={(e) => handleDurationChange(entry.id, Number(e.target.value) || 0)}
+                                disabled={!isAdmin}
                               />
-                              {isDoubleSided(machine.name) ? (
+                              {isDoubleSided(machine.name) && isAdmin ? (
                                 <button
                                   onClick={() => handlePrintModeToggle(entry)}
                                   disabled={loading}
@@ -1142,7 +1153,7 @@ export default function ScheduleBoard() {
                                   {entry.print_mode === "single" ? "단면" : "양면"}
                                 </button>
                               ) : (
-                                <span className="text-[9px] text-gray-400">단면</span>
+                                <span className="text-[9px] text-gray-400">{entry.print_mode === "single" ? "단면" : "양면"}</span>
                               )}
                             </div>
                           </td>
@@ -1154,6 +1165,7 @@ export default function ScheduleBoard() {
                           </td>
                           <td className="px-1.5 py-0 text-center">
                             <div className="flex items-center justify-center gap-1.5">
+                              {isAdmin ? (<>
                               <button
                                 onClick={() => handleUnassign(entry.id)}
                                 disabled={loading}
@@ -1170,6 +1182,7 @@ export default function ScheduleBoard() {
                               >
                                 🗑
                               </button>
+                              </>) : <span className="text-gray-300">–</span>}
                             </div>
                           </td>
                         </tr>
@@ -1190,6 +1203,7 @@ export default function ScheduleBoard() {
             <h3 className="font-bold text-gray-900">1차 배정</h3>
             <p className="text-xs text-gray-500">{buckets.length}칸</p>
           </div>
+          {isAdmin && (
           <div className="flex items-center gap-1">
             <button
               onClick={addBucket}
@@ -1204,6 +1218,7 @@ export default function ScheduleBoard() {
               관리
             </button>
           </div>
+          )}
         </div>
 
         <div className="flex-1 overflow-y-auto p-2 space-y-2">
@@ -1287,12 +1302,14 @@ export default function ScheduleBoard() {
             <h3 className="font-bold text-gray-900">배정 대기</h3>
             <p className="text-xs text-gray-500">{waitingOrders.length}건</p>
           </div>
+          {isAdmin && (
           <button
             onClick={() => (showAddForm ? resetForm() : (setEditingOrderId(null), setShowAddForm(true)))}
             className="px-3 py-1.5 bg-blue-600 text-white text-xs font-medium hover:bg-blue-700"
           >
             {showAddForm ? "닫기" : "+ 주문 추가"}
           </button>
+          )}
         </div>
 
         {showAddForm && (

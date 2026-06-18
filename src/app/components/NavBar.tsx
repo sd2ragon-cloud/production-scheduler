@@ -3,11 +3,58 @@
 import { useEffect, useState } from "react";
 import { PROCESS_LINES } from "@/lib/factory-config";
 import { useProcess } from "./ProcessContext";
+import { useAuth } from "./AuthContext";
 
 export default function NavBar() {
   const { processLine, setProcessLine } = useProcess();
+  const { isAdmin, hasPassword, refresh } = useAuth();
   const [extUrl, setExtUrl] = useState("");
   const [copied, setCopied] = useState(false);
+
+  // 관리자 로그인: 비밀번호가 아직 없으면 최초 설정(setup), 있으면 로그인(login).
+  const adminLogin = async () => {
+    if (!hasPassword) {
+      const pw = window.prompt("관리자 비밀번호를 새로 설정하세요 (4자 이상).\n이 비밀번호로 편집 권한을 켭니다. 보는 사람에게는 알려주지 마세요.");
+      if (!pw) return;
+      const r = await fetch("/api/auth", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "setup", password: pw }),
+      });
+      if (!r.ok) { alert((await r.json().catch(() => ({}))).error || "설정 실패"); return; }
+      await refresh();
+      alert("관리자 비밀번호가 설정되고 관리자 모드가 켜졌습니다.");
+    } else {
+      const pw = window.prompt("관리자 비밀번호를 입력하세요.");
+      if (!pw) return;
+      const r = await fetch("/api/auth", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "login", password: pw }),
+      });
+      if (!r.ok) { alert((await r.json().catch(() => ({}))).error || "로그인 실패"); return; }
+      await refresh();
+    }
+  };
+
+  const adminLogout = async () => {
+    await fetch("/api/auth", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "logout" }),
+    });
+    await refresh();
+  };
+
+  // 관리자 비밀번호 변경
+  const adminChange = async () => {
+    const cur = window.prompt("현재 비밀번호를 입력하세요.");
+    if (!cur) return;
+    const next = window.prompt("새 비밀번호를 입력하세요 (4자 이상).");
+    if (!next) return;
+    const r = await fetch("/api/auth", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "change", password: cur, newPassword: next }),
+    });
+    alert(r.ok ? "비밀번호가 변경되었습니다." : ((await r.json().catch(() => ({}))).error || "변경 실패"));
+  };
 
   // 외부 접속 주소(Cloudflare 터널 URL)를 가져온다. 터널이 안 떠 있으면 빈 값 → 버튼 숨김.
   useEffect(() => {
@@ -42,6 +89,21 @@ export default function NavBar() {
           <a href="/schedule" className="px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100 transition">스케줄 보기</a>
         </div>
         <div className="flex items-center gap-3">
+          {isAdmin ? (
+            <div className="flex items-center gap-1">
+              <span className="px-2 py-1 text-xs font-bold border border-blue-300 bg-blue-50 text-blue-700 whitespace-nowrap">관리자 모드</span>
+              <button onClick={adminChange} title="관리자 비밀번호 변경" className="px-2 py-1 text-xs font-medium border border-gray-300 bg-white text-gray-600 hover:bg-gray-100 transition whitespace-nowrap">비번 변경</button>
+              <button onClick={adminLogout} className="px-2.5 py-1 text-xs font-medium border border-gray-300 bg-white text-gray-700 hover:bg-gray-100 transition whitespace-nowrap">로그아웃</button>
+            </div>
+          ) : (
+            <button
+              onClick={adminLogin}
+              title="관리자 비밀번호를 입력하면 편집 권한이 켜집니다. 입력 전에는 보기 전용입니다."
+              className="px-2.5 py-1 text-xs font-medium border border-gray-300 bg-white text-gray-700 hover:bg-gray-100 transition whitespace-nowrap"
+            >
+              🔒 관리자 로그인
+            </button>
+          )}
           {extUrl && (
             <button
               onClick={copyExt}

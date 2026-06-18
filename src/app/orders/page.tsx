@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useProcess } from "../components/ProcessContext";
+import { useAuth } from "../components/AuthContext";
 
 interface Order {
   id: number;
@@ -31,6 +32,7 @@ const emptyOrder = {
 
 export default function OrdersPage() {
   const { processLine } = useProcess();
+  const { isAdmin } = useAuth(); // 보기 전용 사용자에게는 편집 UI를 숨긴다.
   const [orders, setOrders] = useState<Order[]>([]);
   const [form, setForm] = useState(emptyOrder);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -142,7 +144,8 @@ export default function OrdersPage() {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">주문 관리</h2>
+        <h2 className="text-2xl font-bold text-gray-900">주문 관리{!isAdmin && <span className="ml-2 text-sm font-normal text-gray-400">(보기 전용)</span>}</h2>
+        {isAdmin && (
         <div className="flex gap-2">
           {selected.size > 0 && (
             <button
@@ -165,9 +168,10 @@ export default function OrdersPage() {
             + 주문 추가
           </button>
         </div>
+        )}
       </div>
 
-      {showForm && (
+      {isAdmin && showForm && (
         <div className="bg-white shadow-sm border p-6 mb-6">
           <h3 className="font-bold text-lg mb-4">{editingId ? "주문 수정" : "새 주문"}</h3>
           <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-4">
@@ -280,12 +284,14 @@ export default function OrdersPage() {
           <thead>
             <tr className="bg-gray-50 text-gray-600 text-left">
               <th className="px-3 py-2 w-10">
+                {isAdmin && (
                 <input
                   type="checkbox"
                   checked={isAllSelected}
                   onChange={toggleAll}
                   className="border-gray-300"
                 />
+                )}
               </th>
               <th className="px-3 py-2">ID</th>
               <th className="px-3 py-2">코드</th>
@@ -307,12 +313,14 @@ export default function OrdersPage() {
               return (
                 <tr key={order.id} className={`border-t hover:bg-gray-50 ${isChecked ? "bg-blue-50" : ""}`}>
                   <td className="px-3 py-2">
+                    {isAdmin && (
                     <input
                       type="checkbox"
                       checked={isChecked}
                       onChange={() => toggleSelect(order.id)}
                       className="border-gray-300"
                     />
+                    )}
                   </td>
                   <td className="px-3 py-2 text-gray-400">{order.id}</td>
                   <td className="px-3 py-2">{order.order_code}</td>
@@ -329,6 +337,7 @@ export default function OrdersPage() {
                   </td>
                   <td className="px-3 py-2 text-xs text-gray-500">{order.notes}</td>
                   <td className="px-3 py-2">
+                    {isAdmin && (
                     <div className="flex gap-1">
                       <button
                         onClick={() => handleEdit(order)}
@@ -343,6 +352,7 @@ export default function OrdersPage() {
                         삭제
                       </button>
                     </div>
+                    )}
                   </td>
                 </tr>
               );

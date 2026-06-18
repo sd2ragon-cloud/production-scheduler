@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useProcess } from "../components/ProcessContext";
+import { useAuth } from "../components/AuthContext";
 
 interface Machine {
   id: number;
@@ -11,6 +12,7 @@ interface Machine {
 
 export default function MachinesPage() {
   const { processLine } = useProcess();
+  const { isAdmin } = useAuth(); // 보기 전용 사용자에게는 편집 UI를 숨긴다.
   const [machines, setMachines] = useState<Machine[]>([]);
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
@@ -98,9 +100,10 @@ export default function MachinesPage() {
 
   return (
     <div className="max-w-xl">
-      <h2 className="text-2xl font-bold text-gray-900 mb-1">설비 관리</h2>
+      <h2 className="text-2xl font-bold text-gray-900 mb-1">설비 관리{!isAdmin && <span className="ml-2 text-sm font-normal text-gray-400">(보기 전용)</span>}</h2>
       <p className="text-sm text-gray-500 mb-6">{processLine} 라인</p>
 
+      {isAdmin && (
       <form onSubmit={handleAdd} className="flex gap-2 mb-4">
         <input
           type="text"
@@ -117,6 +120,7 @@ export default function MachinesPage() {
           추가
         </button>
       </form>
+      )}
 
       <div className="bg-white border shadow-sm divide-y">
         {machines.length === 0 ? (
@@ -125,9 +129,9 @@ export default function MachinesPage() {
           machines.map((m, index) => (
             <div
               key={m.id}
-              draggable={editingId === null}
+              draggable={isAdmin && editingId === null}
               onDragStart={(e) => {
-                if (editingId !== null) return;
+                if (!isAdmin || editingId !== null) return;
                 setDragIndex(index);
                 e.dataTransfer.effectAllowed = "move";
               }}
@@ -148,14 +152,14 @@ export default function MachinesPage() {
               }}
               onDragEnd={() => { setDragIndex(null); setOverSlot(null); }}
               className={`flex items-center justify-between px-4 py-2.5 gap-2 ${
-                editingId === null ? "cursor-grab active:cursor-grabbing" : ""
+                isAdmin && editingId === null ? "cursor-grab active:cursor-grabbing" : ""
               } ${dragIndex === index ? "opacity-40" : ""} ${
                 overSlot === index ? "border-t-2 border-t-blue-500" : ""
               } ${
                 index === machines.length - 1 && overSlot === machines.length ? "border-b-2 border-b-blue-500" : ""
               }`}
             >
-              <span className="text-gray-300 shrink-0 select-none" title="드래그하여 순서 변경">⠿</span>
+              {isAdmin && <span className="text-gray-300 shrink-0 select-none" title="드래그하여 순서 변경">⠿</span>}
               {editingId === m.id ? (
                 <input
                   type="text"
@@ -173,6 +177,7 @@ export default function MachinesPage() {
                   {m.name}
                 </span>
               )}
+              {isAdmin && (
               <div className="flex items-center gap-3 shrink-0">
                 {editingId === m.id ? (
                   <>
@@ -212,6 +217,7 @@ export default function MachinesPage() {
                   </>
                 )}
               </div>
+              )}
             </div>
           ))
         )}
