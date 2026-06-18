@@ -8,7 +8,7 @@ const DEFAULT_PART_MINUTES = 60;
 
 // 병합된 행에서 특정 파트 하나만 다른 설비로 분리/이동한다.
 export async function POST(req: NextRequest) {
-  const { entry_id, part, target_machine_id, source_start_time, target_start_time, move_minutes, before_entry_id } = await req.json();
+  const { entry_id, part, target_machine_id, source_start_time, target_start_time, move_minutes, before_entry_id, merge } = await req.json();
   const partStr = typeof part === 'string' ? part.trim() : '';
   const db = await getDb();
 
@@ -78,12 +78,15 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // 2) 대상 설비에 파트 추가 (같은 주문 행이 있으면 병합, 없으면 신규) — 파트의 소요시간도 함께 이동
-  const exResult = await db.execute({
-    sql: 'SELECT id, component_part, part_durations, print_mode FROM schedule_entries WHERE order_id = ? AND machine_id = ? LIMIT 1',
-    args: [orderId, targetMachine],
-  });
-  const ex = exResult.rows[0] as unknown as { id: number; component_part: string; part_durations: string; print_mode: string } | undefined;
+  // 2) 대상 설비에 파트 추가 — 파트의 소요시간도 함께 이동.
+  // merge=true일 때만 같은 주문의 기존 행에 병합(묶기), 아니면 항상 새 행(드롭 위치에 독립 배치).
+  const exResult = merge === true
+    ? await db.execute({
+        sql: 'SELECT id, component_part, part_durations, print_mode FROM schedule_entries WHERE order_id = ? AND machine_id = ? LIMIT 1',
+        args: [orderId, targetMachine],
+      })
+    : null;
+  const ex = exResult?.rows[0] as unknown as { id: number; component_part: string; part_durations: string; print_mode: string } | undefined;
   let newEntryId: number | null = null;
   if (ex) {
     const merged = parseParts(String(ex.component_part));

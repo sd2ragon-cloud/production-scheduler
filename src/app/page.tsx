@@ -291,7 +291,8 @@ export default function ScheduleBoard() {
     await fetch("/api/schedule/assign", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ order_id: orderId, machine_id: machineId, start_time: startTime, component_part: part, alloc_minutes: allocMinutes, before_entry_id: beforeEntryId }),
+      // merge:false → 같은 제품이어도 합치지 않고 드롭 위치에 독립 행으로(구성 칩 분리 배치)
+      body: JSON.stringify({ order_id: orderId, machine_id: machineId, start_time: startTime, component_part: part, alloc_minutes: allocMinutes, before_entry_id: beforeEntryId, merge: false }),
     });
     await fetchAll();
     setLoading(false);
@@ -321,7 +322,7 @@ export default function ScheduleBoard() {
       await fetch("/api/schedule/assign", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ order_id: orderId, machine_id: machineId, start_time: startTime, component_part: "", before_entry_id: beforeEntryId }),
+        body: JSON.stringify({ order_id: orderId, machine_id: machineId, start_time: startTime, component_part: "", before_entry_id: beforeEntryId, merge: true }),
       });
     } else {
       for (const p of parts) {
@@ -334,10 +335,11 @@ export default function ScheduleBoard() {
         } else if (present.has(p)) {
           continue;
         }
+        // merge:true → 카드 본문(전체) 배정은 같은 제품 구성을 한 행으로 묶는다
         await fetch("/api/schedule/assign", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ order_id: orderId, machine_id: machineId, start_time: startTime, component_part: p, alloc_minutes: allocMin, before_entry_id: beforeEntryId }),
+          body: JSON.stringify({ order_id: orderId, machine_id: machineId, start_time: startTime, component_part: p, alloc_minutes: allocMin, before_entry_id: beforeEntryId, merge: true }),
         });
       }
     }
@@ -369,6 +371,7 @@ export default function ScheduleBoard() {
         source_start_time: machineStartTimes[srcMachineId] || "08:00",
         target_start_time: machineStartTimes[targetMachineId] || "08:00",
         before_entry_id: beforeEntryId,
+        merge: false, // 구성 칩 이동: 같은 제품이어도 합치지 않고 드롭 위치에 독립 행으로
       }),
     });
     await fetchAll();
