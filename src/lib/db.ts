@@ -81,6 +81,14 @@ async function initializeDb(db: Client) {
       sort_order INTEGER NOT NULL DEFAULT 0,
       created_at TEXT DEFAULT (datetime('now', 'localtime'))
     )`,
+    // 식사·휴게 시간(자정 기준 분 단위). 이 시간대에는 작업하지 않으므로 예상완료시간 계산에서 제외된다.
+    `CREATE TABLE IF NOT EXISTS breaks (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL DEFAULT '',
+      start_min INTEGER NOT NULL,
+      end_min INTEGER NOT NULL,
+      created_at TEXT DEFAULT (datetime('now', 'localtime'))
+    )`,
   ], 'write');
 
   // Migrate existing tables: add factory/process_line columns if missing
@@ -190,6 +198,28 @@ async function initializeDb(db: Client) {
   if (Number(bucketResult.rows[0].count) === 0) {
     await seedBuckets(db);
   }
+
+  // 식사·휴게 시간 기본값 시드 (비어 있을 때만). 기존 calc.ts 고정값과 동일하게 점심/저녁/야식을 넣어
+  // 기존 동작을 그대로 유지한다. 이후엔 앱에서 추가/수정/삭제로 관리한다.
+  const breakResult = await db.execute('SELECT COUNT(*) as count FROM breaks');
+  if (Number(breakResult.rows[0].count) === 0) {
+    await seedBreaks(db);
+  }
+}
+
+async function seedBreaks(db: Client) {
+  const defaults: [string, number, number][] = [
+    ['점심', 12 * 60, 13 * 60],
+    ['저녁', 17 * 60 + 30, 18 * 60 + 30],
+    ['야식', 0 * 60, 1 * 60],
+  ];
+  await db.batch(
+    defaults.map(([name, start, end]) => ({
+      sql: `INSERT INTO breaks (name, start_min, end_min) VALUES (?, ?, ?)`,
+      args: [name, start, end] as (string | number)[],
+    })),
+    'write',
+  );
 }
 
 async function seedBuckets(db: Client) {

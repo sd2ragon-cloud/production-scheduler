@@ -42,6 +42,18 @@ interface Bucket {
   sort_order: number;
 }
 
+// 식사·휴게 시간 (자정 기준 분 단위). 예상완료시간 계산에서 제외된다.
+interface Break {
+  id: number;
+  name: string;
+  start_min: number;
+  end_min: number;
+}
+
+// 분(자정 기준) ↔ "HH:MM" 변환
+const minToHHMM = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+const hhmmToMin = (s: string) => { const [h, m] = s.split(":").map(Number); return (isNaN(h) ? 0 : h) * 60 + (isNaN(m) ? 0 : m); };
+
 interface ScheduleEntry {
   id: number;
   order_id: number;
@@ -133,6 +145,8 @@ export default function ScheduleBoard() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [schedule, setSchedule] = useState<ScheduleEntry[]>([]);
   const [buckets, setBuckets] = useState<Bucket[]>([]);
+  const [breaks, setBreaks] = useState<Break[]>([]);
+  const [showBreaks, setShowBreaks] = useState(false);
   const [dragOrderId, setDragOrderId] = useState<number | null>(null);
   const [dragPart, setDragPart] = useState<string>("");
   const [dragEntryId, setDragEntryId] = useState<number | null>(null);
@@ -160,13 +174,16 @@ export default function ScheduleBoard() {
 
   const fetchAll = useCallback(async () => {
     const qs = `?process_line=${encodeURIComponent(processLine)}`;
-    const [machRes, orderRes, schedRes, bucketRes] = await Promise.all([
-      fetch(`/api/machines${qs}`), fetch(`/api/orders${qs}`), fetch(`/api/schedule${qs}`), fetch(`/api/buckets${qs}`),
+    // 식사시간(breaks)은 전 공정 공통이라 process_line 필터 없이 받는다.
+    const [machRes, orderRes, schedRes, bucketRes, breakRes] = await Promise.all([
+      fetch(`/api/machines${qs}`), fetch(`/api/orders${qs}`), fetch(`/api/schedule${qs}`), fetch(`/api/buckets${qs}`), fetch(`/api/breaks`),
     ]);
     const machData = await machRes.json();
     const orderData = await orderRes.json();
     const schedData = await schedRes.json();
     const bucketData = await bucketRes.json();
+    const breakData = await breakRes.json();
+    setBreaks(Array.isArray(breakData) ? breakData : []);
     const activeMachines = machData.filter((m: Machine) => m.is_active);
     setMachines(activeMachines);
     setOrders(orderData.filter((o: Order) => o.status === "pending"));
@@ -230,6 +247,37 @@ export default function ScheduleBoard() {
         memoTimers.current.delete(machineId);
       }, 600)
     );
+  };
+
+  // 식사시간 추가/수정/삭제. 변경 시 서버가 전 설비 일정을 재계산하므로, 끝나면 fetchAll로 갱신한다.
+  const addBreak = async () => {
+    setLoading(true);
+    await fetch("/api/breaks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "식사", start_min: 12 * 60, end_min: 13 * 60 }),
+    });
+    await fetchAll();
+    setLoading(false);
+  };
+
+  const updateBreak = async (id: number, patch: Partial<Pick<Break, "name" | "start_min" | "end_min">>) => {
+    setLoading(true);
+    await fetch(`/api/breaks/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    });
+    await fetchAll();
+    setLoading(false);
+  };
+
+  const deleteBreak = async (id: number) => {
+    if (!window.confirm("이 식사시간을 삭제할까요? 예상완료시간이 다시 계산됩니다.")) return;
+    setLoading(true);
+    await fetch(`/api/breaks/${id}`, { method: "DELETE" });
+    await fetchAll();
+    setLoading(false);
   };
 
   const handleAssign = async (orderId: number, machineId: number, part: string = "", allocMinutes: number = 0, beforeEntryId: number | null = null) => {
@@ -799,6 +847,13 @@ export default function ScheduleBoard() {
             <h2 className="text-xl font-bold text-gray-900">기계별 작업 계획</h2>
             <p className="text-xs text-gray-500">{dateStr}</p>
           </div>
+          <button
+            onClick={() => setShowBreaks(true)}
+            className="text-sm border border-gray-300 bg-white px-3 py-1.5 hover:bg-gray-100 text-gray-700 whitespace-nowrap"
+            title="식사·휴게 시간을 추가/수정하면 예상완료시간이 자동으로 다시 계산됩니다"
+          >
+            🍽 식사시간 {breaks.length > 0 && <span className="text-gray-400">({breaks.length})</span>}
+          </button>
         </div>
 
         {machines.map((machine) => {
@@ -1355,6 +1410,58 @@ export default function ScheduleBoard() {
         </div>
       </div>
     </div>
+
+    {/* 식사·휴게 시간 관리 모달. 추가/수정/삭제 시 서버가 전 설비 일정을 재계산한다. */}
+    {showBreaks && (
+      <div
+        className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center"
+        onClick={() => setShowBreaks(false)}
+      >
+        <div className="bg-white shadow-xl w-[440px] max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+          <div className="px-4 py-3 border-b flex items-center justify-between bg-gray-50">
+            <h3 className="font-bold text-gray-900">🍽 식사·휴게 시간</h3>
+            <button onClick={() => setShowBreaks(false)} className="text-gray-400 hover:text-gray-700 text-lg leading-none">✕</button>
+          </div>
+          <div className="p-3 space-y-2 overflow-y-auto">
+            <p className="text-xs text-gray-500 leading-relaxed">
+              여기 등록한 시간대에는 작업이 멈추는 것으로 보고 <b className="text-gray-700">예상완료시간 계산에서 자동으로 제외</b>됩니다.
+              추가·수정·삭제하면 모든 기계의 완료시간이 다시 계산됩니다.
+            </p>
+            {breaks.length === 0 ? (
+              <div className="text-sm text-gray-400 text-center py-4">등록된 식사시간이 없습니다</div>
+            ) : (
+              breaks.map((b) => (
+                <div key={b.id} className="flex items-center gap-2 border p-2">
+                  <input
+                    defaultValue={b.name}
+                    onBlur={(e) => { if (e.target.value !== b.name) updateBreak(b.id, { name: e.target.value }); }}
+                    placeholder="이름"
+                    className="border px-1.5 py-1 text-sm w-20"
+                  />
+                  <input
+                    type="time"
+                    defaultValue={minToHHMM(b.start_min)}
+                    onBlur={(e) => { const v = hhmmToMin(e.target.value); if (v !== b.start_min) updateBreak(b.id, { start_min: v, end_min: b.end_min }); }}
+                    className="border px-1.5 py-1 text-sm"
+                  />
+                  <span className="text-gray-400">~</span>
+                  <input
+                    type="time"
+                    defaultValue={minToHHMM(b.end_min)}
+                    onBlur={(e) => { const v = hhmmToMin(e.target.value); if (v !== b.end_min) updateBreak(b.id, { start_min: b.start_min, end_min: v }); }}
+                    className="border px-1.5 py-1 text-sm"
+                  />
+                  <button onClick={() => deleteBreak(b.id)} className="ml-auto text-red-400 hover:text-red-600 text-sm" title="삭제">✕</button>
+                </div>
+              ))
+            )}
+            <button onClick={addBreak} className="w-full border border-dashed border-gray-300 py-2 text-sm text-gray-600 hover:bg-gray-50">
+              + 식사시간 추가
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
     </div>
   );
 }
