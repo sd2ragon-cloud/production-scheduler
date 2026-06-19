@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useProcess } from "../components/ProcessContext";
+import { PROCESS_LINES } from "@/lib/factory-config";
 import { useAuth } from "../components/AuthContext";
 
 interface Machine {
@@ -10,9 +10,8 @@ interface Machine {
   is_active: number;
 }
 
-export default function MachinesPage() {
-  const { processLine } = useProcess();
-  const { isAdmin } = useAuth(); // 보기 전용 사용자에게는 편집 UI를 숨긴다.
+// 공정 라인 하나의 설비 목록 열. 추가/수정/삭제/드래그 순서변경을 모두 이 라인 안에서 처리한다.
+function MachineColumn({ processLine, isAdmin }: { processLine: string; isAdmin: boolean }) {
   const [machines, setMachines] = useState<Machine[]>([]);
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
@@ -70,7 +69,7 @@ export default function MachinesPage() {
     setLoading(false);
   };
 
-  // 드래그한 설비(from)를 삽입 슬롯(slot: 0~n)으로 옮기고 순서를 저장
+  // 드래그한 설비(from)를 삽입 슬롯(slot: 0~n)으로 옮기고 순서를 저장 (이 라인 안에서만)
   const reorderTo = async (from: number, slot: number) => {
     if (from == null || slot == null) return;
     const reordered = [...machines];
@@ -99,27 +98,29 @@ export default function MachinesPage() {
   };
 
   return (
-    <div className="max-w-xl">
-      <h2 className="text-2xl font-bold text-gray-900 mb-1">설비 관리{!isAdmin && <span className="ml-2 text-sm font-normal text-gray-400">(보기 전용)</span>}</h2>
-      <p className="text-sm text-gray-500 mb-6">{processLine} 라인</p>
+    <div className="flex-1 min-w-[280px]">
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="font-bold text-gray-900">{processLine} 라인</h3>
+        <span className="text-xs text-gray-400">{machines.length}대</span>
+      </div>
 
       {isAdmin && (
-      <form onSubmit={handleAdd} className="flex gap-2 mb-4">
-        <input
-          type="text"
-          placeholder="설비명 입력 (예: MB10)"
-          className="flex-1 border px-3 py-2 text-sm"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
-        <button
-          type="submit"
-          disabled={loading || !name.trim()}
-          className="px-4 py-2 bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
-        >
-          추가
-        </button>
-      </form>
+        <form onSubmit={handleAdd} className="flex gap-2 mb-3">
+          <input
+            type="text"
+            placeholder={`${processLine} 설비명 입력`}
+            className="flex-1 min-w-0 border px-3 py-2 text-sm"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+          <button
+            type="submit"
+            disabled={loading || !name.trim()}
+            className="px-4 py-2 bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50 whitespace-nowrap"
+          >
+            추가
+          </button>
+        </form>
       )}
 
       <div className="bg-white border shadow-sm divide-y">
@@ -164,7 +165,7 @@ export default function MachinesPage() {
                 <input
                   type="text"
                   autoFocus
-                  className="flex-1 border px-2 py-1 text-sm"
+                  className="flex-1 min-w-0 border px-2 py-1 text-sm"
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
                   onKeyDown={(e) => {
@@ -173,7 +174,7 @@ export default function MachinesPage() {
                   }}
                 />
               ) : (
-                <span className={`flex-1 text-sm font-medium ${m.is_active ? "text-gray-900" : "text-gray-400"}`}>
+                <span className={`flex-1 min-w-0 text-sm font-medium ${m.is_active ? "text-gray-900" : "text-gray-400"}`}>
                   {m.name}
                 </span>
               )}
@@ -221,6 +222,26 @@ export default function MachinesPage() {
             </div>
           ))
         )}
+      </div>
+    </div>
+  );
+}
+
+export default function MachinesPage() {
+  const { isAdmin } = useAuth(); // 보기 전용 사용자에게는 편집 UI를 숨긴다.
+
+  return (
+    <div>
+      <h2 className="text-2xl font-bold text-gray-900 mb-1">
+        설비 관리{!isAdmin && <span className="ml-2 text-sm font-normal text-gray-400">(보기 전용)</span>}
+      </h2>
+      <p className="text-sm text-gray-500 mb-6">공정 라인별로 설비를 추가·관리합니다. 같은 라인 안에서 드래그하여 순서를 바꿀 수 있습니다.</p>
+
+      {/* 공정 라인(매엽·윤전·무선)을 나란히 열로 배치 — 각 라인에서 설비를 추가/관리한다. */}
+      <div className="flex gap-6 items-start overflow-x-auto pb-2">
+        {PROCESS_LINES.map((line) => (
+          <MachineColumn key={line} processLine={line} isAdmin={isAdmin} />
+        ))}
       </div>
     </div>
   );

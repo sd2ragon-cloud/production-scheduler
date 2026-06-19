@@ -1343,7 +1343,7 @@ export default function ScheduleBoard() {
               onClick={addBucket}
               className="px-2 py-1 bg-blue-600 text-white text-xs font-medium hover:bg-blue-700"
             >
-              + 칸
+              + 추가
             </button>
             <button
               onClick={() => setManageBuckets((v) => !v)}
