@@ -69,16 +69,16 @@ export default function SchedulePage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-2xl font-bold text-gray-900">스케줄 보기</h2>
-        <div className="flex gap-1 bg-gray-100 p-1">
+        <div className="flex gap-0.5 bg-black/[0.06] p-0.5 rounded-lg">
           <button
             onClick={() => setView("gantt")}
-            className={`px-4 py-1.5 text-sm font-medium transition ${view === "gantt" ? "bg-white shadow text-gray-900" : "text-gray-500"}`}
+            className={`px-4 py-1.5 text-sm font-medium rounded-md transition ${view === "gantt" ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-800"}`}
           >
             간트차트
           </button>
           <button
             onClick={() => setView("table")}
-            className={`px-4 py-1.5 text-sm font-medium transition ${view === "table" ? "bg-white shadow text-gray-900" : "text-gray-500"}`}
+            className={`px-4 py-1.5 text-sm font-medium rounded-md transition ${view === "table" ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-800"}`}
           >
             테이블
           </button>
@@ -86,12 +86,12 @@ export default function SchedulePage() {
       </div>
 
       {entries.length === 0 ? (
-        <div className="bg-white p-12 text-center shadow-sm border">
+        <div className="bg-white p-12 text-center shadow-sm border border-black/5 rounded-2xl">
           <p className="text-gray-500 text-lg">생성된 스케줄이 없습니다.</p>
           <p className="text-gray-400 text-sm mt-2">대시보드에서 스케줄을 생성해주세요.</p>
         </div>
       ) : view === "gantt" ? (
-        <div className="bg-white shadow-sm border p-6">
+        <div className="bg-white shadow-sm border border-black/5 rounded-2xl p-6">
           <div className="relative">
             <div className="relative h-8 mb-2 border-b">
               {getDayLabels().map((d, i) => (
@@ -153,10 +153,10 @@ export default function SchedulePage() {
           </div>
         </div>
       ) : (
-        <div className="bg-white shadow-sm border overflow-hidden">
+        <div className="bg-white shadow-sm border border-black/5 rounded-2xl overflow-hidden">
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-gray-50 text-gray-600 text-left">
+              <tr className="bg-black/[0.02] text-gray-500 text-left">
                 <th className="px-3 py-2">기계</th>
                 <th className="px-3 py-2">#</th>
                 <th className="px-3 py-2">작업명</th>

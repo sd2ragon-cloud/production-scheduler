@@ -1,32 +1,73 @@
 @import "tailwindcss";
 
+/* 애플 스타일 토큰: 연한 회색 배경, 진한 텍스트, 시스템(SF) 폰트, 시스템블루 액센트 */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f5f5f7;
+  --foreground: #1d1d1f;
+  --accent: #0071e3;
+  --accent-hover: #0077ed;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  /* SF Pro(애플) → Segoe(Windows) → 한글 폴백 순. font-sans 유틸도 이 스택을 따른다. */
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui,
+    "Apple SD Gothic Neo", "Pretendard", "Malgun Gothic", Roboto, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", "Menlo", "Consolas", monospace;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  letter-spacing: -0.01em; /* 애플 특유의 살짝 좁은 자간 */
+}
+
+@layer base {
+  /* 폼 컨트롤을 부드러운 둥근 모서리 + 정돈된 포커스로 (애플 느낌) */
+  input, select, textarea {
+    border-radius: 0.5rem;
+  }
+  input:focus-visible, select:focus-visible, textarea:focus-visible {
+    outline: none;
+  }
+  button:not(:disabled) {
+    cursor: pointer;
+  }
+  /* 인터랙션 요소에 부드러운 전환 */
+  button, a, input, select {
+    transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, color 0.15s ease, opacity 0.15s ease;
+  }
 }
 
 /* 숫자 입력의 위/아래 화살표(스피너)를 항상 표시 */
 input[type="number"]::-webkit-inner-spin-button,
 input[type="number"]::-webkit-outer-spin-button {
   opacity: 1;
+}
+
+/* 얇고 은은한 스크롤바 (애플 스타일) */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.22) transparent;
+}
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.22);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.38);
+  background-clip: content-box;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
 }
