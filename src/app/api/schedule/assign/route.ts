@@ -7,7 +7,7 @@ import { isDoubleSided, effectiveMinutes } from '@/lib/print';
 const DEFAULT_PART_MINUTES = 60;
 
 export async function POST(req: NextRequest) {
-  const { order_id, machine_id, start_time, component_part, alloc_minutes, before_entry_id, merge } = await req.json();
+  const { order_id, machine_id, start_time, component_part, alloc_minutes, before_entry_id, merge, merge_entry_id } = await req.json();
   const part = typeof component_part === 'string' ? component_part : '';
   const db = await getDb();
 
@@ -34,10 +34,17 @@ export async function POST(req: NextRequest) {
   // 드롭한 위치에 독립적으로 둔다(같은 제품 구성을 따로 배치 가능).
   let existingId: number | null = null;
   if (merge === true && incomingParts.length > 0) {
-    const exResult = await db.execute({
-      sql: 'SELECT id, component_part, part_durations, print_mode FROM schedule_entries WHERE order_id = ? AND machine_id = ? LIMIT 1',
-      args: [order_id, machine_id],
-    });
+    // merge_entry_id가 오면 그 특정 행에, 없으면 같은 주문의 기존 행 하나에 합친다.
+    const mergeInto = merge_entry_id != null ? Number(merge_entry_id) : null;
+    const exResult = mergeInto != null
+      ? await db.execute({
+          sql: 'SELECT id, component_part, part_durations, print_mode FROM schedule_entries WHERE id = ? AND order_id = ? AND machine_id = ?',
+          args: [mergeInto, order_id, machine_id],
+        })
+      : await db.execute({
+          sql: 'SELECT id, component_part, part_durations, print_mode FROM schedule_entries WHERE order_id = ? AND machine_id = ? LIMIT 1',
+          args: [order_id, machine_id],
+        });
     const exRow = exResult.rows[0] as unknown as { id: number; component_part: string; part_durations: string; print_mode: string } | undefined;
     if (exRow) {
       existingId = Number(exRow.id);

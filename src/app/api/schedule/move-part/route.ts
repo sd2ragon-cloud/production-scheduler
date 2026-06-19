@@ -8,7 +8,7 @@ const DEFAULT_PART_MINUTES = 60;
 
 // 병합된 행에서 특정 파트 하나만 다른 설비로 분리/이동한다.
 export async function POST(req: NextRequest) {
-  const { entry_id, part, target_machine_id, source_start_time, target_start_time, move_minutes, before_entry_id, merge } = await req.json();
+  const { entry_id, part, target_machine_id, source_start_time, target_start_time, move_minutes, before_entry_id, merge, merge_entry_id } = await req.json();
   const partStr = typeof part === 'string' ? part.trim() : '';
   const db = await getDb();
 
@@ -32,11 +32,8 @@ export async function POST(req: NextRequest) {
   const tgtMachineResult = await db.execute({ sql: 'SELECT name FROM machines WHERE id = ?', args: [targetMachine] });
   const tgtMachineName = (tgtMachineResult.rows[0] as unknown as { name: string } | undefined)?.name ?? '';
   const targetMode = isDoubleSided(tgtMachineName) ? 'double' : 'single';
-
-  // 같은 설비로 떨어뜨리면 변화 없음
-  if (srcMachine === targetMachine) {
-    return NextResponse.json({ success: true });
-  }
+  // 같은 설비 안에서 분리하면 원래 인쇄 모드를 유지, 다른 설비로 가면 대상 설비 기본 모드를 따른다.
+  const newRowMode = srcMachine === targetMachine ? srcMode : targetMode;
 
   const srcParts = parseParts(String(src.component_part));
   if (!srcParts.includes(partStr)) {
@@ -80,11 +77,18 @@ export async function POST(req: NextRequest) {
 
   // 2) 대상 설비에 파트 추가 — 파트의 소요시간도 함께 이동.
   // merge=true일 때만 같은 주문의 기존 행에 병합(묶기), 아니면 항상 새 행(드롭 위치에 독립 배치).
+  // merge_entry_id가 오면 그 특정 행에, 없으면 같은 주문의 다른 행 하나에 합친다. 항상 원본 행(src.id)은 제외.
+  const mergeInto = merge_entry_id != null ? Number(merge_entry_id) : null;
   const exResult = merge === true
-    ? await db.execute({
-        sql: 'SELECT id, component_part, part_durations, print_mode FROM schedule_entries WHERE order_id = ? AND machine_id = ? LIMIT 1',
-        args: [orderId, targetMachine],
-      })
+    ? (mergeInto != null
+        ? await db.execute({
+            sql: 'SELECT id, component_part, part_durations, print_mode FROM schedule_entries WHERE id = ? AND order_id = ? AND machine_id = ? AND id != ?',
+            args: [mergeInto, orderId, targetMachine, Number(src.id)],
+          })
+        : await db.execute({
+            sql: 'SELECT id, component_part, part_durations, print_mode FROM schedule_entries WHERE order_id = ? AND machine_id = ? AND id != ? LIMIT 1',
+            args: [orderId, targetMachine, Number(src.id)],
+          }))
     : null;
   const ex = exResult?.rows[0] as unknown as { id: number; component_part: string; part_durations: string; print_mode: string } | undefined;
   let newEntryId: number | null = null;
@@ -93,9 +97,10 @@ export async function POST(req: NextRequest) {
     const durs = parsePartDurations(ex.part_durations);
     if (!merged.includes(partStr)) merged.push(partStr);
     durs[partStr] = (Number(durs[partStr]) || 0) + moveMin;
+    const exBase = sumDurations(durs);
     await db.execute({
-      sql: 'UPDATE schedule_entries SET component_part = ?, part_durations = ?, duration_minutes = ? WHERE id = ?',
-      args: [merged.join(', '), JSON.stringify(durs), effectiveMinutes(sumDurations(durs), ex.print_mode), Number(ex.id)],
+      sql: 'UPDATE schedule_entries SET component_part = ?, part_durations = ?, base_minutes = ?, duration_minutes = ? WHERE id = ?',
+      args: [merged.join(', '), JSON.stringify(durs), exBase, effectiveMinutes(exBase, ex.print_mode), Number(ex.id)],
     });
   } else {
     const durs = { [partStr]: moveMin };
@@ -105,8 +110,8 @@ export async function POST(req: NextRequest) {
     });
     const maxSeq = Number((maxSeqResult.rows[0] as unknown as { max_seq: number }).max_seq);
     const insertResult = await db.execute({
-      sql: 'INSERT INTO schedule_entries (order_id, machine_id, sequence, duration_minutes, component_part, part_durations, print_mode, scheduled_date, start_time, end_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      args: [orderId, targetMachine, maxSeq + 1, effectiveMinutes(moveMin, targetMode), partStr, JSON.stringify(durs), targetMode, today, today + ' 08:00', today + ' 08:00'],
+      sql: 'INSERT INTO schedule_entries (order_id, machine_id, sequence, base_minutes, duration_minutes, component_part, part_durations, print_mode, scheduled_date, start_time, end_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      args: [orderId, targetMachine, maxSeq + 1, moveMin, effectiveMinutes(moveMin, newRowMode), partStr, JSON.stringify(durs), newRowMode, today, today + ' 08:00', today + ' 08:00'],
     });
     newEntryId = Number(insertResult.lastInsertRowid);
   }
