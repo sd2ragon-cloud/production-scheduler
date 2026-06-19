@@ -1339,7 +1339,7 @@ export default function ScheduleBoard() {
       <div className="w-[480px] bg-white shadow-sm flex flex-col overflow-hidden shrink-0">
         {/* 스크롤은 바깥에서 받고(스크롤바가 표 우측 테두리 바깥에 위치) 검정 테두리 표는 안쪽에 둔다 → 스크롤 생겨도 우측 라인 안 잘림 */}
         <div className="flex-1 overflow-y-auto">
-        <div className="border border-black min-h-full">
+        <div className="border border-black m-3">
         <div className="sticky top-0 z-10 px-3 py-3 border-b border-black bg-gray-50 flex items-center justify-between">
           <div>
             <h3 className="font-bold text-gray-900">1차 배정</h3>
