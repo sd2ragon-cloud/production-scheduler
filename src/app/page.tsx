@@ -1174,6 +1174,15 @@ export default function ScheduleBoard() {
                                 order.splice(t.after ? idx + 1 : idx, 0, dragSplit.part);
                                 handleReorderParts(entry.id, order);
                               };
+                              // 구분(공정)이 같은 파트가 연속이면 구분 칩을 한 번만 표기한다: [구분][파트][파트]...
+                              const partProc = (p: string) => parsePartProcesses(entry.part_processes)[p] || entry.special_process;
+                              const procGroups: { proc: string; parts: string[] }[] = [];
+                              for (const p of eparts) {
+                                const proc = partProc(p);
+                                const last = procGroups[procGroups.length - 1];
+                                if (last && last.proc === proc) last.parts.push(p);
+                                else procGroups.push({ proc, parts: [p] });
+                              }
                               return (
                                 <span
                                   className="inline-flex flex-nowrap items-center gap-1 align-middle"
@@ -1201,39 +1210,41 @@ export default function ScheduleBoard() {
                                     }
                                   }}
                                 >
-                                  {eparts.map((p) => {
-                                    const isTarget = isReorderZone && dragSplit!.part !== p && partReorderTarget?.part === p;
-                                    const proc = parsePartProcesses(entry.part_processes)[p] || entry.special_process;
-                                    return (
-                                      <span key={p} className="inline-flex items-center gap-0.5 shrink-0">
-                                        <span className={`px-1.5 py-0 text-[10px] font-medium border whitespace-nowrap ${PROCESS_COLORS[proc] || "bg-gray-100 text-gray-600 border-gray-200"}`}>
-                                          {proc}
-                                        </span>
-                                        <span
-                                          data-part={p}
-                                          draggable={isAdmin}
-                                          onDragStart={(e) => {
-                                            e.stopPropagation();
-                                            e.dataTransfer.effectAllowed = "move";
-                                            e.dataTransfer.setData("text/plain", p);
-                                            setDragSplit({ entryId: entry.id, part: p });
-                                            setDragEntryId(null);
-                                            setDragOrderId(null);
-                                            setDragPart("");
-                                          }}
-                                          onDragEnd={() => { setDragSplit(null); setPartReorderTarget(null); }}
-                                          className={`px-1.5 py-0 border text-[10px] cursor-grab active:cursor-grabbing ${
-                                            isTarget
-                                              ? `bg-blue-50 text-blue-700 border-blue-500 ${partReorderTarget?.after ? "border-r-4" : "border-l-4"}`
-                                              : "border-gray-300 bg-gray-100 text-gray-700 hover:bg-blue-100 hover:border-blue-300"
-                                          }`}
-                                          title="다른 설비로 드래그하면 분리, 같은 행에서 칩의 왼쪽/오른쪽으로 드롭하면 앞/뒤로 이동"
-                                        >
-                                          {p}
-                                        </span>
+                                  {procGroups.map((g, gi) => (
+                                    <span key={`${g.proc}-${gi}`} className="inline-flex items-center gap-0.5 shrink-0">
+                                      <span className={`px-1.5 py-0 text-[10px] font-medium border whitespace-nowrap ${PROCESS_COLORS[g.proc] || "bg-gray-100 text-gray-600 border-gray-200"}`}>
+                                        {g.proc}
                                       </span>
-                                    );
-                                  })}
+                                      {g.parts.map((p) => {
+                                        const isTarget = isReorderZone && dragSplit!.part !== p && partReorderTarget?.part === p;
+                                        return (
+                                          <span
+                                            key={p}
+                                            data-part={p}
+                                            draggable={isAdmin}
+                                            onDragStart={(e) => {
+                                              e.stopPropagation();
+                                              e.dataTransfer.effectAllowed = "move";
+                                              e.dataTransfer.setData("text/plain", p);
+                                              setDragSplit({ entryId: entry.id, part: p });
+                                              setDragEntryId(null);
+                                              setDragOrderId(null);
+                                              setDragPart("");
+                                            }}
+                                            onDragEnd={() => { setDragSplit(null); setPartReorderTarget(null); }}
+                                            className={`px-1.5 py-0 border text-[10px] cursor-grab active:cursor-grabbing ${
+                                              isTarget
+                                                ? `bg-blue-50 text-blue-700 border-blue-500 ${partReorderTarget?.after ? "border-r-4" : "border-l-4"}`
+                                                : "border-gray-300 bg-gray-100 text-gray-700 hover:bg-blue-100 hover:border-blue-300"
+                                            }`}
+                                            title="다른 설비로 드래그하면 분리, 같은 행에서 칩의 왼쪽/오른쪽으로 드롭하면 앞/뒤로 이동"
+                                          >
+                                            {p}
+                                          </span>
+                                        );
+                                      })}
+                                    </span>
+                                  ))}
                                 </span>
                               );
                             })()}
