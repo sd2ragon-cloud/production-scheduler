@@ -875,10 +875,10 @@ export default function ScheduleBoard() {
         draggable={isAdmin}
         onDragStart={() => (hasParts ? onDragStartAll(order.id, remainingParts) : onDragStartOrder(order.id))}
         title={hasParts ? "이 카드의 구성 전체를 설비/칸으로 드래그 (칸=한 칸에 모아 1차 배정)" : undefined}
-        className={`p-2.5 rounded-xl border transition hover:shadow-md cursor-grab active:cursor-grabbing ${
+        className={`p-2.5 rounded-none border transition hover:shadow-md cursor-grab active:cursor-grabbing ${
           dragOrderId === order.id && !dragPart ? "opacity-40" : ""
         } ${
-          days < 0 ? "border-red-200 bg-red-50" : days <= 2 ? "border-orange-200 bg-orange-50/50" : "border-black/[0.07] bg-white"
+          days < 0 ? "border-red-200 bg-red-50" : days <= 2 ? "border-orange-200 bg-orange-50/50" : "border-gray-300 bg-white"
         }`}
       >
         <div>
@@ -963,7 +963,7 @@ export default function ScheduleBoard() {
     <div className="flex gap-4 h-full min-w-[1776px]">
       {/* 좌측: 설비별 배정 현황 */}
       <div className="flex-1 overflow-y-auto space-y-3 pr-2">
-        <div className="flex items-center justify-between mb-2 sticky top-0 bg-[#f3f3f3] py-2 z-10">
+        <div className="flex items-center justify-between mb-2 sticky top-0 bg-[#f3f2f1] py-2 z-10">
           <div>
             <h2 className="text-xl font-bold text-gray-900">기계별 작업 계획</h2>
             <p className="text-xs text-gray-500">{dateStr}</p>
@@ -971,7 +971,7 @@ export default function ScheduleBoard() {
           {isAdmin && (
             <button
               onClick={() => setShowBreaks(true)}
-              className="text-sm rounded-md border border-black/10 bg-white px-3.5 py-1.5 hover:bg-black/[0.03] text-gray-700 whitespace-nowrap shadow-sm"
+              className="text-sm rounded-none border border-black/10 bg-white px-3.5 py-1.5 hover:bg-black/[0.03] text-gray-700 whitespace-nowrap shadow-sm"
               title="식사·휴게 시간을 추가/수정하면 예상완료시간이 자동으로 다시 계산됩니다"
             >
               🍽 식사시간 {breaks.length > 0 && <span className="text-gray-400">({breaks.length})</span>}
@@ -986,18 +986,18 @@ export default function ScheduleBoard() {
           return (
             <div
               key={machine.id}
-              className={`bg-white border border-black/5 shadow-sm rounded-lg overflow-hidden transition-all ${
-                isTarget ? "ring-2 ring-[#0078D4]/60 bg-blue-50/30" : ""
+              className={`bg-white border border-gray-300 shadow-sm transition-all ${
+                isTarget ? "ring-2 ring-[#0F6CBD] border-[#0F6CBD]" : ""
               }`}
               onDragOver={(e) => onDragOverMachine(e, machine.id)}
               onDragLeave={() => { if (dragOverMachine.current === machine.id) setDropTarget(null); }}
               onDrop={() => onDropOnMachine(machine.id)}
             >
-              <div className="bg-gray-800 text-white px-4 py-2 flex items-center gap-3">
-                <span className="font-bold w-16 shrink-0 whitespace-nowrap">{machine.name}</span>
+              <div className="bg-[#f3f2f1] text-gray-900 px-4 py-2 flex items-center gap-3 border-b border-gray-300">
+                <span className="font-bold w-16 shrink-0 whitespace-nowrap text-[#0F6CBD]">{machine.name}</span>
                 <input
                   type="text"
-                  className="flex-1 min-w-0 bg-gray-700 text-white text-xs px-2 py-0.5 border border-gray-500 focus:border-blue-400 outline-none disabled:opacity-60"
+                  className="flex-1 min-w-0 bg-white text-gray-900 text-xs px-2 py-1 border border-gray-300 focus:border-[#0F6CBD] outline-none disabled:opacity-60 disabled:bg-transparent disabled:border-transparent"
                   placeholder={isAdmin ? "메모" : ""}
                   value={machineMemos[machine.id] ?? ""}
                   onChange={(e) => handleMemoChange(machine.id, e.target.value)}
@@ -1005,17 +1005,17 @@ export default function ScheduleBoard() {
                 />
                 <div className="flex items-center gap-3 shrink-0">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-xs text-gray-400">시작</span>
+                    <span className="text-xs font-medium text-gray-600">시작</span>
                     <input
                       type="time"
-                      className="bg-gray-700 text-white text-xs px-2 py-0.5 border border-gray-500 focus:border-blue-400 outline-none disabled:opacity-60"
-                      style={{ width: "7rem", colorScheme: "dark" }}
+                      className="bg-white text-gray-900 text-xs px-2 py-1 border border-gray-300 focus:border-[#0F6CBD] outline-none disabled:opacity-60"
+                      style={{ width: "7rem" }}
                       value={machineStartTimes[machine.id] || "08:00"}
                       onChange={(e) => handleStartTimeChange(machine.id, e.target.value)}
                       disabled={!isAdmin}
                     />
                   </div>
-                  <span className="text-sm text-gray-300 w-12 text-right shrink-0">{entries.length}건</span>
+                  <span className="text-sm font-semibold text-gray-700 w-12 text-right shrink-0">{entries.length}건</span>
                 </div>
               </div>
 
@@ -1026,7 +1026,7 @@ export default function ScheduleBoard() {
               ) : (
                 <table className="w-full">
                   <thead>
-                    <tr className="text-gray-500 text-[10px] border-b h-7">
+                    <tr className="bg-[#faf9f8] text-gray-600 font-semibold text-[10px] border-b border-gray-300 h-7">
                       <th className="px-1.5 py-0 text-left w-6">#</th>
                       <th className="px-1.5 py-0 text-left">작업명</th>
                       <th className="px-1.5 py-0 text-center w-28">비고</th>
@@ -1334,7 +1334,7 @@ export default function ScheduleBoard() {
       </div>
 
       {/* 가운데: 1차 배정 (국/4×6/MB6/HDP 등 칸) */}
-      <div className="w-[480px] bg-white border border-black/5 shadow-sm rounded-lg flex flex-col overflow-hidden shrink-0">
+      <div className="w-[480px] bg-white border border-gray-300 shadow-sm rounded-none flex flex-col overflow-hidden shrink-0">
         <div className="px-3 py-3 border-b bg-gray-50 flex items-center justify-between">
           <div>
             <h3 className="font-bold text-gray-900">1차 배정</h3>
@@ -1344,13 +1344,13 @@ export default function ScheduleBoard() {
           <div className="flex items-center gap-1">
             <button
               onClick={addBucket}
-              className="px-3 py-1 rounded-md bg-[#0078D4] text-white text-xs font-medium hover:bg-[#106EBE]"
+              className="px-3 py-1 rounded-none bg-[#0F6CBD] text-white text-xs font-medium hover:bg-[#0C5A9E]"
             >
               + 추가
             </button>
             <button
               onClick={() => setManageBuckets((v) => !v)}
-              className={`px-3 py-1 text-xs rounded-md border ${manageBuckets ? "bg-gray-900 text-white border-gray-900" : "bg-white text-gray-600 border-black/10"}`}
+              className={`px-3 py-1 text-xs rounded-none border ${manageBuckets ? "bg-gray-900 text-white border-gray-900" : "bg-white text-gray-600 border-black/10"}`}
             >
               관리
             </button>
@@ -1420,7 +1420,7 @@ export default function ScheduleBoard() {
 
       {/* 우측: 배정 대기 주문 목록 */}
       <div
-        className={`w-[480px] bg-white border border-black/5 shadow-sm rounded-lg flex flex-col overflow-hidden shrink-0 ${
+        className={`w-[480px] bg-white border border-gray-300 shadow-sm rounded-none flex flex-col overflow-hidden shrink-0 ${
           waitingDrop ? "ring-2 ring-red-400 bg-red-50/30" : ""
         }`}
         onDragOver={(e) => {
@@ -1442,7 +1442,7 @@ export default function ScheduleBoard() {
           {isAdmin && (
           <button
             onClick={() => (showAddForm ? resetForm() : (setEditingOrderId(null), setShowAddForm(true)))}
-            className="px-3 py-1.5 rounded-md bg-[#0078D4] text-white text-xs font-medium hover:bg-[#106EBE]"
+            className="px-3 py-1.5 rounded-none bg-[#0F6CBD] text-white text-xs font-medium hover:bg-[#0C5A9E]"
           >
             {showAddForm ? "닫기" : "+ 주문 추가"}
           </button>
@@ -1546,7 +1546,7 @@ export default function ScheduleBoard() {
                   onChange={(e) => setNewOrder({ ...newOrder, notes: e.target.value })}
                 />
               </div>
-              <button type="submit" className="w-full py-2 rounded-lg bg-[#0078D4] text-white text-xs font-semibold hover:bg-[#106EBE]">
+              <button type="submit" className="w-full py-2 rounded-none bg-[#0F6CBD] text-white text-xs font-semibold hover:bg-[#0C5A9E]">
                 {editingOrderId !== null ? "수정 저장" : "등록"}
               </button>
             </form>
@@ -1571,7 +1571,7 @@ export default function ScheduleBoard() {
         className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center"
         onClick={() => setShowBreaks(false)}
       >
-        <div className="bg-white shadow-2xl rounded-lg w-[440px] max-h-[80vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        <div className="bg-white shadow-2xl rounded-none w-[440px] max-h-[80vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
           <div className="px-4 py-3 border-b flex items-center justify-between bg-gray-50">
             <h3 className="font-bold text-gray-900">🍽 식사·휴게 시간</h3>
             <button onClick={() => setShowBreaks(false)} className="text-gray-400 hover:text-gray-700 text-lg leading-none">✕</button>

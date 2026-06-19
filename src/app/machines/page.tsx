@@ -118,14 +118,14 @@ function MachineColumn({ processLine, isAdmin }: { processLine: string; isAdmin:
           <button
             type="submit"
             disabled={loading || !name.trim()}
-            className="px-4 py-2 rounded-md bg-[#0078D4] text-white text-sm font-medium hover:bg-[#106EBE] disabled:opacity-50 whitespace-nowrap"
+            className="px-4 py-2 rounded-none bg-[#0F6CBD] text-white text-sm font-medium hover:bg-[#0C5A9E] disabled:opacity-50 whitespace-nowrap"
           >
             추가
           </button>
         </form>
       )}
 
-      <div className="bg-white border border-black/5 shadow-sm rounded-lg overflow-hidden divide-y divide-black/5">
+      <div className="bg-white border border-gray-300 shadow-sm rounded-none overflow-hidden divide-y divide-gray-200">
         {machines.length === 0 ? (
           <div className="px-4 py-6 text-center text-gray-400 text-sm">등록된 설비가 없습니다.</div>
         ) : (

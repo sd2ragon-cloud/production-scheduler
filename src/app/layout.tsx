@@ -37,7 +37,7 @@ export default function RootLayout({
           href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@latest/dist/web/variable/pretendardvariable-dynamic-subset.min.css"
         />
       </head>
-      <body className="min-h-full flex flex-col bg-[#f3f3f3] text-[#1b1b1b]">
+      <body className="min-h-full flex flex-col bg-[#f3f2f1] text-[#1b1b1b]">
         <AuthProvider>
           <ProcessProvider>
             <NavBar />

@@ -1,11 +1,11 @@
 @import "tailwindcss";
 
-/* 윈도우(Fluent) 스타일 토큰: 연한 회색 배경(Mica 느낌), MS 블루 액센트, Pretendard 폰트 */
+/* 오피스(Office) 스타일 토큰: 밝은 회색 배경, 오피스 블루 액센트, Pretendard 폰트, 각진(사각) 모서리 */
 :root {
-  --background: #f3f3f3;
+  --background: #f3f2f1;
   --foreground: #1b1b1b;
-  --accent: #0078d4;
-  --accent-hover: #106ebe;
+  --accent: #0f6cbd;
+  --accent-hover: #0c5a9e;
 }
 
 @theme inline {
@@ -27,9 +27,9 @@ body {
 }
 
 @layer base {
-  /* 폼 컨트롤: 윈도우 느낌의 살짝 둥근(6px) 모서리 */
+  /* 폼 컨트롤: 오피스 느낌의 각진(사각) 모서리. (둥근 모서리가 숫자 스피너 화살표를 가리는 문제도 해결) */
   input, select, textarea {
-    border-radius: 0.375rem;
+    border-radius: 0;
   }
   input:focus-visible, select:focus-visible, textarea:focus-visible {
     outline: none;
@@ -42,9 +42,10 @@ body {
   }
 }
 
-/* 숫자 입력의 위/아래 화살표(스피너)를 항상 표시 */
+/* 숫자/시간 입력의 위/아래 화살표(스피너)를 항상 표시 */
 input[type="number"]::-webkit-inner-spin-button,
-input[type="number"]::-webkit-outer-spin-button {
+input[type="number"]::-webkit-outer-spin-button,
+input[type="time"]::-webkit-inner-spin-button {
   opacity: 1;
 }
 

@@ -100,9 +100,9 @@ export default function NavBar() {
               <a
                 key={l.href}
                 href={l.href}
-                className={`px-3 py-1.5 text-[13px] rounded-md transition ${
+                className={`px-3 py-1.5 text-[13px] rounded-none transition ${
                   active
-                    ? "bg-[#0078D4]/10 text-[#0078D4] font-semibold"
+                    ? "bg-[#0F6CBD]/10 text-[#0F6CBD] font-semibold"
                     : "font-medium text-gray-600 hover:text-gray-900 hover:bg-black/[0.05]"
                 }`}
               >
@@ -114,9 +114,9 @@ export default function NavBar() {
         <div className="flex items-center gap-3">
           {isAdmin ? (
             <div className="flex items-center gap-1.5">
-              <span className="px-2.5 py-1 text-[11px] font-semibold rounded-md bg-blue-50 text-[#0078D4] whitespace-nowrap">{role ? ROLE_LABELS[role] : "관리자"} 모드</span>
-              <button onClick={adminChange} title="현재 모드의 비밀번호 변경" className="px-2.5 py-1 text-xs font-medium rounded-md border border-black/10 bg-white text-gray-600 hover:bg-black/[0.03] transition whitespace-nowrap">비번 변경</button>
-              <button onClick={adminLogout} className="px-3 py-1 text-xs font-medium rounded-md border border-black/10 bg-white text-gray-700 hover:bg-black/[0.03] transition whitespace-nowrap">로그아웃</button>
+              <span className="px-2.5 py-1 text-[11px] font-semibold rounded-none bg-blue-50 text-[#0F6CBD] whitespace-nowrap">{role ? ROLE_LABELS[role] : "관리자"} 모드</span>
+              <button onClick={adminChange} title="현재 모드의 비밀번호 변경" className="px-2.5 py-1 text-xs font-medium rounded-none border border-black/10 bg-white text-gray-600 hover:bg-black/[0.03] transition whitespace-nowrap">비번 변경</button>
+              <button onClick={adminLogout} className="px-3 py-1 text-xs font-medium rounded-none border border-black/10 bg-white text-gray-700 hover:bg-black/[0.03] transition whitespace-nowrap">로그아웃</button>
             </div>
           ) : (
             <div className="flex items-center gap-1.5">
@@ -124,7 +124,7 @@ export default function NavBar() {
                 value={selRole}
                 onChange={(e) => setSelRole(e.target.value as AdminRole)}
                 title="로그인할 관리자 모드 선택"
-                className="px-2.5 py-1 text-xs font-medium rounded-md border border-black/10 bg-white text-gray-700 outline-none focus:border-[#0078D4]"
+                className="px-2.5 py-1 text-xs font-medium rounded-none border border-black/10 bg-white text-gray-700 outline-none focus:border-[#0F6CBD]"
               >
                 {ADMIN_ROLES.map((r) => (
                   <option key={r} value={r}>{ROLE_LABELS[r]}</option>
@@ -133,7 +133,7 @@ export default function NavBar() {
               <button
                 onClick={adminLogin}
                 title="선택한 모드의 비밀번호를 입력하면 편집 권한이 켜집니다. 입력 전에는 보기 전용입니다."
-                className="px-3 py-1 text-xs font-medium rounded-md border border-black/10 bg-white text-gray-700 hover:bg-black/[0.03] transition whitespace-nowrap"
+                className="px-3 py-1 text-xs font-medium rounded-none border border-black/10 bg-white text-gray-700 hover:bg-black/[0.03] transition whitespace-nowrap"
               >
                 🔒 {passwords[selRole] ? "로그인" : "비밀번호 설정"}
               </button>
@@ -143,17 +143,17 @@ export default function NavBar() {
             <button
               onClick={copyExt}
               title={`외부 접속 주소: ${extUrl}\n클릭하면 주소가 복사됩니다 (외부망·휴대폰에서 사용)`}
-              className="px-3 py-1 text-xs font-medium rounded-md border border-green-300/60 bg-green-50 text-green-700 hover:bg-green-100 transition whitespace-nowrap"
+              className="px-3 py-1 text-xs font-medium rounded-none border border-green-300/60 bg-green-50 text-green-700 hover:bg-green-100 transition whitespace-nowrap"
             >
               {copied ? "주소 복사됨!" : "🌐 외부 접속 주소"}
             </button>
           )}
-          <div className="flex gap-0.5 bg-black/[0.06] p-0.5 rounded-lg">
+          <div className="flex gap-0.5 bg-black/[0.06] p-0.5 rounded-none">
             {PROCESS_LINES.map((p) => (
               <button
                 key={p}
                 onClick={() => setProcessLine(p)}
-                className={`px-3 py-1 text-xs font-medium rounded-md transition ${
+                className={`px-3 py-1 text-xs font-medium rounded-none transition ${
                   processLine === p
                     ? "bg-white shadow-sm text-gray-900"
                     : "text-gray-500 hover:text-gray-800"
