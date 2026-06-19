@@ -1024,11 +1024,12 @@ export default function ScheduleBoard() {
                   우측에서 작업을 드래그하여 배정하세요
                 </div>
               ) : (
+                <div className="px-3 pb-2">
                 <table className="w-full">
                   <thead>
                     <tr className="text-gray-500 text-[10px] border-b h-7">
                       <th className="px-1.5 py-0 text-left w-6">#</th>
-                      <th className="px-1.5 py-0 text-left">작업명</th>
+                      <th className="px-1.5 py-0 text-center">작업명</th>
                       <th className="px-1.5 py-0 text-center w-28">비고</th>
                       <th className="px-1.5 py-0 text-center w-28">소요(시간)</th>
                       <th className="px-1.5 py-0 text-left w-20">예상완료</th>
@@ -1120,7 +1121,7 @@ export default function ScheduleBoard() {
                         >
                           <td className="px-1.5 py-0 text-gray-400 text-[10px]">{entry.sequence}</td>
                           <td className="px-1.5 py-0 whitespace-nowrap">
-                            <div className="flex items-center gap-1">
+                            <div className="flex items-center justify-center gap-1">
                             <span className="font-medium text-[11px] shrink-0">{entry.product_name}</span>
                             {(() => {
                               const eparts = parseParts(entry.component_part);
@@ -1327,6 +1328,7 @@ export default function ScheduleBoard() {
                     })}
                   </tbody>
                 </table>
+                </div>
               )}
             </div>
           );
