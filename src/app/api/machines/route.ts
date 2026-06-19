@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
+import { guardLine } from '@/lib/permits';
 
 export async function GET(req: NextRequest) {
   const db = await getDb();
@@ -20,6 +21,9 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
+  // 새 설비를 등록할 라인을 편집할 권한이 있는지 확인
+  const deny = guardLine(req, body.process_line || '매엽');
+  if (deny) return deny;
   const db = await getDb();
 
   // 새 설비는 맨 뒤에 표시되도록 sort_order를 최대값+1로

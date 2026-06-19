@@ -3,12 +3,18 @@ import { getDb } from '@/lib/db';
 import { recalcMachine } from '@/lib/calc';
 import { parseParts, parsePartDurations, sumDurations, partTotals } from '@/lib/parts';
 import { isDoubleSided, effectiveMinutes } from '@/lib/print';
+import { guardEntry, guardMachine } from '@/lib/permits';
 
 const DEFAULT_PART_MINUTES = 60;
 
 // 병합된 행에서 특정 파트 하나만 다른 설비로 분리/이동한다.
 export async function POST(req: NextRequest) {
   const { entry_id, part, target_machine_id, source_start_time, target_start_time, move_minutes, before_entry_id, merge, merge_entry_id } = await req.json();
+  // 원본 행과 대상 설비 모두 편집 권한이 있는 라인이어야 한다
+  const denyE = await guardEntry(req, entry_id);
+  if (denyE) return denyE;
+  const denyM = await guardMachine(req, target_machine_id);
+  if (denyM) return denyM;
   const partStr = typeof part === 'string' ? part.trim() : '';
   const db = await getDb();
 

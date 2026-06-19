@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { PROCESS_LINES } from "@/lib/factory-config";
+import { PROCESS_LINES, roleCanEditLine } from "@/lib/factory-config";
 import { useAuth } from "../components/AuthContext";
 
 interface Machine {
@@ -100,7 +100,9 @@ function MachineColumn({ processLine, isAdmin }: { processLine: string; isAdmin:
   return (
     <div className="flex-1 min-w-[280px]">
       <div className="flex items-center justify-between mb-2">
-        <h3 className="font-bold text-gray-900">{processLine} 라인</h3>
+        <h3 className="font-bold text-gray-900">
+          {processLine} 라인{!isAdmin && <span className="ml-1 text-xs font-normal text-gray-400">(보기 전용)</span>}
+        </h3>
         <span className="text-xs text-gray-400">{machines.length}대</span>
       </div>
 
@@ -228,19 +230,17 @@ function MachineColumn({ processLine, isAdmin }: { processLine: string; isAdmin:
 }
 
 export default function MachinesPage() {
-  const { isAdmin } = useAuth(); // 보기 전용 사용자에게는 편집 UI를 숨긴다.
+  const { role } = useAuth(); // 담당 라인만 편집 가능 (열별로 권한 적용).
 
   return (
     <div>
-      <h2 className="text-2xl font-bold text-gray-900 mb-1">
-        설비 관리{!isAdmin && <span className="ml-2 text-sm font-normal text-gray-400">(보기 전용)</span>}
-      </h2>
-      <p className="text-sm text-gray-500 mb-6">공정 라인별로 설비를 추가·관리합니다. 같은 라인 안에서 드래그하여 순서를 바꿀 수 있습니다.</p>
+      <h2 className="text-2xl font-bold text-gray-900 mb-1">설비 관리</h2>
+      <p className="text-sm text-gray-500 mb-6">공정 라인별로 설비를 추가·관리합니다. 담당 라인만 편집할 수 있고, 같은 라인 안에서 드래그하여 순서를 바꿀 수 있습니다.</p>
 
-      {/* 공정 라인(매엽·윤전·무선)을 나란히 열로 배치 — 각 라인에서 설비를 추가/관리한다. */}
+      {/* 공정 라인(매엽·윤전·무선)을 나란히 열로 배치 — 담당 라인만 편집, 그 외는 보기 전용. */}
       <div className="flex gap-6 items-start overflow-x-auto pb-2">
         {PROCESS_LINES.map((line) => (
-          <MachineColumn key={line} processLine={line} isAdmin={isAdmin} />
+          <MachineColumn key={line} processLine={line} isAdmin={roleCanEditLine(role, line)} />
         ))}
       </div>
     </div>

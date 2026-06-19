@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { parsePartBuckets } from '@/lib/parts';
+import { guardBucket } from '@/lib/permits';
 
 // 칸 이름 변경
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const deny = await guardBucket(req, id);
+  if (deny) return deny;
   const body = await req.json();
   const db = await getDb();
 
@@ -16,8 +19,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 }
 
 // 칸 삭제 — 그 칸에 들어있던 주문/구성은 다시 '배정 대기'로(bucket_id·part_buckets 해제)
-export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const deny = await guardBucket(req, id);
+  if (deny) return deny;
   const db = await getDb();
   const bid = Number(id);
   // 제품별(주문 전체) 배정 해제

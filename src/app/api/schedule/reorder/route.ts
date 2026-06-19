@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { recalcMachine } from '@/lib/calc';
+import { guardMachine } from '@/lib/permits';
 
 export async function POST(req: NextRequest) {
   const { machine_id, entry_ids } = await req.json() as { machine_id: number; entry_ids: number[] };
+  const deny = await guardMachine(req, machine_id);
+  if (deny) return deny;
   const db = await getDb();
 
   const stmts = entry_ids.map((id: number, index: number) => ({

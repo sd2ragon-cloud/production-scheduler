@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useProcess } from "../components/ProcessContext";
 import { useAuth } from "../components/AuthContext";
+import { roleCanEditLine } from "@/lib/factory-config";
 
 interface Order {
   id: number;
@@ -32,7 +33,9 @@ const emptyOrder = {
 
 export default function OrdersPage() {
   const { processLine } = useProcess();
-  const { isAdmin } = useAuth(); // 보기 전용 사용자에게는 편집 UI를 숨긴다.
+  const { role } = useAuth();
+  // 담당 라인만 편집 가능. 현재 공정 라인 편집 권한이 없으면 보기 전용.
+  const isAdmin = roleCanEditLine(role, processLine);
   const [orders, setOrders] = useState<Order[]>([]);
   const [form, setForm] = useState(emptyOrder);
   const [editingId, setEditingId] = useState<number | null>(null);

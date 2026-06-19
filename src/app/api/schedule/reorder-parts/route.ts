@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { parseParts } from '@/lib/parts';
+import { guardEntry } from '@/lib/permits';
 
 // 병합된 한 행(엔트리) 안에서 파트 순서를 재정렬한다.
 export async function POST(req: NextRequest) {
   const { entry_id, parts } = await req.json();
+  const deny = await guardEntry(req, entry_id);
+  if (deny) return deny;
   const db = await getDb();
 
   const result = await db.execute({ sql: 'SELECT component_part FROM schedule_entries WHERE id = ?', args: [entry_id] });

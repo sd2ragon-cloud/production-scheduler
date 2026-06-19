@@ -3,11 +3,17 @@ import { getDb } from '@/lib/db';
 import { recalcMachine } from '@/lib/calc';
 import { parseParts, parsePartDurations, sumDurations, partTotals } from '@/lib/parts';
 import { isDoubleSided, effectiveMinutes } from '@/lib/print';
+import { guardOrder, guardMachine } from '@/lib/permits';
 
 const DEFAULT_PART_MINUTES = 60;
 
 export async function POST(req: NextRequest) {
   const { order_id, machine_id, start_time, component_part, alloc_minutes, before_entry_id, merge, merge_entry_id } = await req.json();
+  // 주문과 대상 설비 모두 편집 권한이 있는 라인이어야 한다
+  const denyO = await guardOrder(req, order_id);
+  if (denyO) return denyO;
+  const denyM = await guardMachine(req, machine_id);
+  if (denyM) return denyM;
   const part = typeof component_part === 'string' ? component_part : '';
   const db = await getDb();
 

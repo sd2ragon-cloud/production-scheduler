@@ -5,6 +5,7 @@ import { useProcess } from "./components/ProcessContext";
 import { useAuth } from "./components/AuthContext";
 import { parseParts, parsePartDurations, parsePartProcesses, partTotals, parsePartBuckets } from "@/lib/parts";
 import { isDoubleSided } from "@/lib/print";
+import { roleCanEditLine } from "@/lib/factory-config";
 
 interface Machine {
   id: number;
@@ -143,7 +144,9 @@ function formatDeadlineInput(value: string): string {
 
 export default function ScheduleBoard() {
   const { processLine } = useProcess();
-  const { isAdmin } = useAuth(); // 관리자만 편집 가능. false면 보기 전용(편집 UI 숨김).
+  const { role } = useAuth();
+  // 담당 라인만 편집 가능. 현재 보고 있는 공정 라인을 편집할 권한이 없으면 보기 전용(편집 UI 숨김).
+  const isAdmin = roleCanEditLine(role, processLine);
   const [machines, setMachines] = useState<Machine[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [schedule, setSchedule] = useState<ScheduleEntry[]>([]);

@@ -24,3 +24,8 @@ export const ROLE_LINES: Record<AdminRole, string[]> = {
 export function isAdminRole(v: unknown): v is AdminRole {
   return typeof v === 'string' && (ADMIN_ROLES as readonly string[]).includes(v);
 }
+
+// 역할이 해당 공정 라인을 '편집'할 수 있는지. role이 null(보기 전용)이면 false.
+export function roleCanEditLine(role: AdminRole | null | undefined, line: string): boolean {
+  return !!role && ROLE_LINES[role].includes(line);
+}

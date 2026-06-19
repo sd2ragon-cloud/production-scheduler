@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
+import { guardMachineIds } from '@/lib/permits';
 
 // 설비 표시 순서 변경: 받은 id 배열 순서대로 sort_order를 다시 매긴다.
 export async function POST(req: NextRequest) {
@@ -7,6 +8,8 @@ export async function POST(req: NextRequest) {
   if (!Array.isArray(ids)) {
     return NextResponse.json({ error: 'ids array required' }, { status: 400 });
   }
+  const deny = await guardMachineIds(req, ids);
+  if (deny) return deny;
   const db = await getDb();
 
   await db.batch(

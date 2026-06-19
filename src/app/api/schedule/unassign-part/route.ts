@@ -3,10 +3,13 @@ import { getDb } from '@/lib/db';
 import { recalcMachine } from '@/lib/calc';
 import { parseParts, parsePartDurations, sumDurations, partTotals } from '@/lib/parts';
 import { effectiveMinutes } from '@/lib/print';
+import { guardEntry } from '@/lib/permits';
 
 // 설비에 배정된 특정 파트를 떼어 배정 대기로 되돌린다(그 엔트리에서의 배정 취소).
 export async function POST(req: NextRequest) {
   const { entry_id, part } = await req.json();
+  const deny = await guardEntry(req, entry_id);
+  if (deny) return deny;
   const partStr = typeof part === 'string' ? part.trim() : '';
   const db = await getDb();
 

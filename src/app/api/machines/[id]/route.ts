@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
+import { guardMachine } from '@/lib/permits';
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const deny = await guardMachine(req, id);
+  if (deny) return deny;
   const body = await req.json();
   const db = await getDb();
 
@@ -29,6 +32,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 // 설비명만 변경 (다른 설정은 유지)
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const deny = await guardMachine(req, id);
+  if (deny) return deny;
   const body = await req.json();
   const db = await getDb();
 
@@ -43,8 +48,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   return NextResponse.json({ success: true });
 }
 
-export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const deny = await guardMachine(req, id);
+  if (deny) return deny;
   const db = await getDb();
   await db.execute({ sql: 'DELETE FROM machines WHERE id = ?', args: [id] });
   return NextResponse.json({ success: true });

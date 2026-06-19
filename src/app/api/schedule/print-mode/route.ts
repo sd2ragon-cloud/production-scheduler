@@ -3,10 +3,13 @@ import { getDb } from '@/lib/db';
 import { recalcMachine } from '@/lib/calc';
 import { parsePartDurations, sumDurations } from '@/lib/parts';
 import { effectiveMinutes } from '@/lib/print';
+import { guardEntry } from '@/lib/permits';
 
 // 한 배정 행의 인쇄 모드(양면/단면)를 전환하고 소요시간을 재계산한다.
 export async function POST(req: NextRequest) {
   const { entry_id, mode } = await req.json();
+  const deny = await guardEntry(req, entry_id);
+  if (deny) return deny;
   const newMode = mode === 'single' ? 'single' : 'double';
   const db = await getDb();
 

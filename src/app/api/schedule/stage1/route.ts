@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { parsePartBuckets } from '@/lib/parts';
+import { guardOrder } from '@/lib/permits';
 
 // 1차 배정. 두 가지 방식을 지원한다:
 //  - 제품별: { order_id, bucket_id }            → orders.bucket_id 설정/해제(null). 구성 매핑은 초기화.
@@ -12,6 +13,8 @@ export async function POST(req: NextRequest) {
   if (order_id == null) {
     return NextResponse.json({ error: 'order_id required' }, { status: 400 });
   }
+  const deny = await guardOrder(req, order_id);
+  if (deny) return deny;
   const db = await getDb();
   const oid = Number(order_id);
   const bid = bucket_id == null ? null : Number(bucket_id);

@@ -3,9 +3,12 @@ import { getDb } from '@/lib/db';
 import { recalcMachine } from '@/lib/calc';
 import { parsePartDurations, sumDurations } from '@/lib/parts';
 import { effectiveMinutes } from '@/lib/print';
+import { guardEntry } from '@/lib/permits';
 
 export async function POST(req: NextRequest) {
   const { entry_id, duration_minutes } = await req.json();
+  const deny = await guardEntry(req, entry_id);
+  if (deny) return deny;
   const db = await getDb();
 
   const entryResult = await db.execute({ sql: 'SELECT id, machine_id, print_mode, part_durations FROM schedule_entries WHERE id = ?', args: [entry_id] });

@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { recalcMachine } from '@/lib/calc';
+import { guardEntry } from '@/lib/permits';
 
 export async function POST(req: NextRequest) {
   const { entry_id } = await req.json();
+  const deny = await guardEntry(req, entry_id);
+  if (deny) return deny;
   const db = await getDb();
 
   const entryResult = await db.execute({ sql: 'SELECT * FROM schedule_entries WHERE id = ?', args: [entry_id] });

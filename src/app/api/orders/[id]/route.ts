@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
+import { guardOrder } from '@/lib/permits';
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const deny = await guardOrder(req, id);
+  if (deny) return deny;
   const body = await req.json();
   const db = await getDb();
 
@@ -35,8 +38,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   return NextResponse.json({ success: true });
 }
 
-export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const deny = await guardOrder(req, id);
+  if (deny) return deny;
   const db = await getDb();
   await db.execute({ sql: 'DELETE FROM orders WHERE id = ?', args: [id] });
   return NextResponse.json({ success: true });
