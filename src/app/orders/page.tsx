@@ -153,20 +153,20 @@ export default function OrdersPage() {
           {selected.size > 0 && (
             <button
               onClick={handleDeleteSelected}
-              className="px-4 py-2 rounded-none bg-red-600 text-white text-sm font-medium hover:bg-red-700 transition"
+              className="px-4 py-2 bg-red-600 text-white text-sm font-medium hover:bg-red-700 transition"
             >
               선택 삭제 ({selected.size}건)
             </button>
           )}
           <button
             onClick={handleResetStatus}
-            className="px-4 py-2 rounded-none bg-black/[0.06] text-gray-700 text-sm font-medium hover:bg-black/[0.1] transition"
+            className="px-4 py-2 bg-gray-200 text-gray-700 text-sm font-medium hover:bg-gray-300 transition"
           >
             전체 대기 상태로
           </button>
           <button
             onClick={() => { setShowForm(true); setEditingId(null); setForm(emptyOrder); }}
-            className="px-4 py-2 rounded-none bg-[#0F6CBD] text-white text-sm font-medium hover:bg-[#0C5A9E] transition shadow-sm"
+            className="px-4 py-2 bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition"
           >
             + 주문 추가
           </button>
@@ -175,7 +175,7 @@ export default function OrdersPage() {
       </div>
 
       {isAdmin && showForm && (
-        <div className="bg-white shadow-sm border border-gray-300 rounded-none p-6 mb-6">
+        <div className="bg-white shadow-sm border p-6 mb-6">
           <h3 className="font-bold text-lg mb-4">{editingId ? "주문 수정" : "새 주문"}</h3>
           <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-4">
             <div>
@@ -267,13 +267,13 @@ export default function OrdersPage() {
               <button
                 type="button"
                 onClick={() => { setShowForm(false); setEditingId(null); setForm(emptyOrder); }}
-                className="px-4 py-2 rounded-none bg-black/[0.06] text-gray-700 text-sm hover:bg-black/[0.1]"
+                className="px-4 py-2 bg-gray-200 text-gray-700 text-sm"
               >
                 취소
               </button>
               <button
                 type="submit"
-                className="px-4 py-2 rounded-none bg-[#0F6CBD] text-white text-sm font-medium hover:bg-[#0C5A9E]"
+                className="px-4 py-2 bg-blue-600 text-white text-sm font-medium"
               >
                 {editingId ? "수정" : "등록"}
               </button>
@@ -282,10 +282,10 @@ export default function OrdersPage() {
         </div>
       )}
 
-      <div className="bg-white shadow-sm border border-gray-300 rounded-none overflow-hidden">
+      <div className="bg-white shadow-sm border overflow-hidden">
         <table className="w-full text-sm">
           <thead>
-            <tr className="bg-[#f3f2f1] text-gray-700 font-semibold text-left border-b border-gray-300">
+            <tr className="bg-gray-50 text-gray-600 text-left">
               <th className="px-3 py-2 w-10">
                 {isAdmin && (
                 <input

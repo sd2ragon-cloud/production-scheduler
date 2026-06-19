@@ -30,18 +30,11 @@ export default function RootLayout({
       lang="ko"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <head>
-        {/* 눈누 인기 폰트 Pretendard (동적 서브셋 웹폰트) */}
-        <link
-          rel="stylesheet"
-          href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@latest/dist/web/variable/pretendardvariable-dynamic-subset.min.css"
-        />
-      </head>
-      <body className="min-h-full flex flex-col bg-[#f3f2f1] text-[#1b1b1b]">
+      <body className="min-h-full flex flex-col bg-gray-50">
         <AuthProvider>
           <ProcessProvider>
             <NavBar />
-            <main className="w-full px-10 py-5 flex-1">
+            <main className="w-full px-10 py-3 flex-1">
               {children}
             </main>
           </ProcessProvider>

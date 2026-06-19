@@ -1,73 +1,32 @@
 @import "tailwindcss";
 
-/* 오피스(Office) 스타일 토큰: 밝은 회색 배경, 오피스 블루 액센트, Pretendard 폰트, 각진(사각) 모서리 */
 :root {
-  --background: #f3f2f1;
-  --foreground: #1b1b1b;
-  --accent: #0f6cbd;
-  --accent-hover: #0c5a9e;
+  --background: #ffffff;
+  --foreground: #171717;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  /* 눈누 인기 폰트 Pretendard(웹폰트) → Segoe(윈도우 기본) → 한글 폴백 순.
-     Pretendard는 layout.tsx의 <link>로 로드한다. */
-  --font-sans: "Pretendard Variable", Pretendard, "Segoe UI Variable", "Segoe UI",
-    system-ui, "Malgun Gothic", "Apple SD Gothic Neo", Roboto, sans-serif;
-  --font-mono: "Cascadia Code", "Cascadia Mono", ui-monospace, "Consolas", "SF Mono", monospace;
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-sans);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  font-family: Arial, Helvetica, sans-serif;
 }
 
-@layer base {
-  /* 폼 컨트롤: 오피스 느낌의 각진(사각) 모서리. (둥근 모서리가 숫자 스피너 화살표를 가리는 문제도 해결) */
-  input, select, textarea {
-    border-radius: 0;
-  }
-  input:focus-visible, select:focus-visible, textarea:focus-visible {
-    outline: none;
-  }
-  button:not(:disabled) {
-    cursor: pointer;
-  }
-  button, a, input, select {
-    transition: background-color 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease, color 0.12s ease, opacity 0.12s ease;
-  }
-}
-
-/* 숫자/시간 입력의 위/아래 화살표(스피너)를 항상 표시 */
+/* 숫자 입력의 위/아래 화살표(스피너)를 항상 표시 */
 input[type="number"]::-webkit-inner-spin-button,
-input[type="number"]::-webkit-outer-spin-button,
-input[type="time"]::-webkit-inner-spin-button {
+input[type="number"]::-webkit-outer-spin-button {
   opacity: 1;
-}
-
-/* 얇고 은은한 스크롤바 (윈도우 11 스타일) */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(0, 0, 0, 0.25) transparent;
-}
-::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.25);
-  border-radius: 9999px;
-  border: 3px solid transparent;
-  background-clip: content-box;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.4);
-  background-clip: content-box;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
 }
