@@ -201,6 +201,26 @@ async function initializeDb(db: Client) {
     // column already exists
   }
 
+  // 관리자 비밀번호 역할 분리 마이그레이션: 기존 단일 admin_pw가 있으면 매엽·윤전 관리자(admin_pw_sheet)로 이관.
+  // (전사 총괄 없이 매엽·윤전 / 무선 두 모드로 운영. 무선 비밀번호는 첫 사용 시 새로 설정한다.)
+  try {
+    const legacy = await db.execute({ sql: 'SELECT value FROM settings WHERE key = ?', args: ['admin_pw'] });
+    if (legacy.rows.length > 0) {
+      const val = String((legacy.rows[0] as unknown as { value: string }).value);
+      const sheet = await db.execute({ sql: 'SELECT value FROM settings WHERE key = ?', args: ['admin_pw_sheet'] });
+      if (val && sheet.rows.length === 0) {
+        await db.execute({
+          sql: `INSERT INTO settings (key, value) VALUES ('admin_pw_sheet', ?) ON CONFLICT(key) DO NOTHING`,
+          args: [val],
+        });
+      }
+      // 기존 단일 키는 더 이상 사용하지 않으므로 정리
+      await db.execute({ sql: 'DELETE FROM settings WHERE key = ?', args: ['admin_pw'] });
+    }
+  } catch {
+    // settings 미생성 등 예외는 무시 (위 배치에서 테이블은 항상 생성됨)
+  }
+
   const result = await db.execute('SELECT COUNT(*) as count FROM machines');
   const count = Number(result.rows[0].count);
   if (count === 0) {

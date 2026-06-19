@@ -1,8 +1,15 @@
 import { scryptSync, randomBytes, timingSafeEqual } from 'crypto';
 import { getDb } from './db';
+import { type AdminRole } from './factory-config';
 
-// 관리자 비밀번호 저장/검증. settings 테이블에 admin_pw = "salt:hash"(scrypt)로 보관.
+// 관리자 비밀번호 저장/검증. settings 테이블에 역할별로 admin_pw_<role> = "salt:hash"(scrypt)로 보관.
 // DB를 쓰므로 route handler(Node)에서만 사용한다. (proxy는 auth-token만 사용)
+
+// 역할 → settings 키. 기존 단일 admin_pw는 db.ts 마이그레이션에서 admin_pw_sheet로 이관된다.
+const PW_KEY: Record<AdminRole, string> = {
+  sheet: 'admin_pw_sheet',
+  wireless: 'admin_pw_wireless',
+};
 
 function hash(plain: string, salt: string): string {
   return scryptSync(plain, salt, 64).toString('hex');
@@ -46,25 +53,34 @@ export function validatePasswordPolicy(plain: string): string | null {
   return null;
 }
 
-export async function hasAdminPassword(): Promise<boolean> {
+// 해당 역할의 비밀번호가 설정돼 있는지
+export async function hasRolePassword(role: AdminRole): Promise<boolean> {
   const db = await getDb();
-  const r = await db.execute({ sql: 'SELECT value FROM settings WHERE key = ?', args: ['admin_pw'] });
+  const r = await db.execute({ sql: 'SELECT value FROM settings WHERE key = ?', args: [PW_KEY[role]] });
   return r.rows.length > 0 && !!String((r.rows[0] as unknown as { value: string }).value);
 }
 
-export async function setAdminPassword(plain: string): Promise<void> {
+// 모든 역할의 비밀번호 설정 여부 맵 (UI에서 로그인/설정 분기에 사용)
+export async function rolePasswordStatus(): Promise<Record<AdminRole, boolean>> {
+  return {
+    sheet: await hasRolePassword('sheet'),
+    wireless: await hasRolePassword('wireless'),
+  };
+}
+
+export async function setRolePassword(role: AdminRole, plain: string): Promise<void> {
   const salt = randomBytes(16).toString('hex');
   const db = await getDb();
   await db.execute({
-    sql: `INSERT INTO settings (key, value) VALUES ('admin_pw', ?)
+    sql: `INSERT INTO settings (key, value) VALUES (?, ?)
           ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
-    args: [`${salt}:${hash(plain, salt)}`],
+    args: [PW_KEY[role], `${salt}:${hash(plain, salt)}`],
   });
 }
 
-export async function verifyPassword(plain: string): Promise<boolean> {
+export async function verifyRolePassword(role: AdminRole, plain: string): Promise<boolean> {
   const db = await getDb();
-  const r = await db.execute({ sql: 'SELECT value FROM settings WHERE key = ?', args: ['admin_pw'] });
+  const r = await db.execute({ sql: 'SELECT value FROM settings WHERE key = ?', args: [PW_KEY[role]] });
   if (r.rows.length === 0) return false;
   const stored = String((r.rows[0] as unknown as { value: string }).value);
   const [salt, h] = stored.split(':');

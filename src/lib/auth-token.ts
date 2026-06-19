@@ -2,6 +2,7 @@ import type { NextRequest, NextResponse } from 'next/server';
 import { createHmac, randomBytes, timingSafeEqual } from 'crypto';
 import { readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
+import { ADMIN_ROLES, isAdminRole, type AdminRole } from './factory-config';
 
 // 관리자 쿠키 검증 전용 모듈. **DB를 import하지 않는다** — proxy.ts(Node 런타임)에서
 // libsql 같은 무거운 모듈 없이 파일+crypto만으로 쿠키를 검증할 수 있게 하기 위함.
@@ -27,9 +28,14 @@ function getSecret(): string {
   return s;
 }
 
-// 쿠키에 담는 관리자 토큰 = HMAC(secret, "admin-v1"). 비밀키를 아는 서버만 재현 가능.
-export function adminToken(): string {
-  return createHmac('sha256', getSecret()).update('admin-v1').digest('hex');
+// 역할별 토큰 = HMAC(secret, "role-v1:<role>"). 비밀키를 아는 서버만 재현 가능.
+function tokenFor(role: string): string {
+  return createHmac('sha256', getSecret()).update(`role-v1:${role}`).digest('hex');
+}
+
+// 쿠키에 담는 값 = "<role>.<token>". 역할이 평문으로 들어가지만 토큰 서명으로 위변조를 막는다.
+function cookieValueFor(role: AdminRole): string {
+  return `${role}.${tokenFor(role)}`;
 }
 
 function safeEqual(a: string, b: string): boolean {
@@ -39,15 +45,25 @@ function safeEqual(a: string, b: string): boolean {
   return timingSafeEqual(ab, bb);
 }
 
-// 요청의 쿠키만으로 관리자 여부 판정 (proxy/route 공용).
-export function isAdminRequest(req: NextRequest): boolean {
+// 요청 쿠키만으로 로그인된 관리자 역할을 판정 (proxy/route 공용). 없거나 서명이 안 맞으면 null.
+export function getAdminRole(req: NextRequest): AdminRole | null {
   const c = req.cookies.get(ADMIN_COOKIE)?.value;
-  if (!c) return false;
-  return safeEqual(c, adminToken());
+  if (!c) return null;
+  const dot = c.indexOf('.');
+  if (dot < 0) return null;
+  const role = c.slice(0, dot);
+  const sig = c.slice(dot + 1);
+  if (!isAdminRole(role)) return null;
+  return safeEqual(sig, tokenFor(role)) ? role : null;
 }
 
-export function setAdminCookie(res: NextResponse) {
-  res.cookies.set(ADMIN_COOKIE, adminToken(), {
+// 어느 역할이든 로그인되어 있으면 true (쓰기 허용 1차 게이트). 라인별 세부 권한은 각 라우트에서 처리.
+export function isAdminRequest(req: NextRequest): boolean {
+  return getAdminRole(req) !== null;
+}
+
+export function setAdminCookie(res: NextResponse, role: AdminRole) {
+  res.cookies.set(ADMIN_COOKIE, cookieValueFor(role), {
     httpOnly: true,
     sameSite: 'lax',
     path: '/',
@@ -58,3 +74,6 @@ export function setAdminCookie(res: NextResponse) {
 export function clearAdminCookie(res: NextResponse) {
   res.cookies.set(ADMIN_COOKIE, '', { httpOnly: true, sameSite: 'lax', path: '/', maxAge: 0 });
 }
+
+export { ADMIN_ROLES };
+export type { AdminRole };

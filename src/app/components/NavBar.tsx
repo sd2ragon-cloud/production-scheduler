@@ -1,34 +1,36 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { PROCESS_LINES } from "@/lib/factory-config";
+import { PROCESS_LINES, ADMIN_ROLES, ROLE_LABELS, type AdminRole } from "@/lib/factory-config";
 import { useProcess } from "./ProcessContext";
 import { useAuth } from "./AuthContext";
 
 export default function NavBar() {
   const { processLine, setProcessLine } = useProcess();
-  const { isAdmin, hasPassword, refresh } = useAuth();
+  const { role, isAdmin, passwords, refresh } = useAuth();
+  const [selRole, setSelRole] = useState<AdminRole>("sheet");
   const [extUrl, setExtUrl] = useState("");
   const [copied, setCopied] = useState(false);
 
-  // 관리자 로그인: 비밀번호가 아직 없으면 최초 설정(setup), 있으면 로그인(login).
+  // 선택한 역할(모드)로 로그인. 그 역할 비밀번호가 아직 없으면 최초 설정(setup), 있으면 로그인(login).
   const adminLogin = async () => {
-    if (!hasPassword) {
-      const pw = window.prompt("관리자 비밀번호를 새로 설정하세요 (8자 이상, 연속·반복·흔한 비밀번호 불가).\n이 비밀번호로 편집 권한을 켭니다. 보는 사람에게는 알려주지 마세요.");
+    const label = ROLE_LABELS[selRole];
+    if (!passwords[selRole]) {
+      const pw = window.prompt(`'${label}' 비밀번호를 새로 설정하세요 (8자 이상, 연속·반복·흔한 비밀번호 불가).\n이 비밀번호로 ${label} 편집 권한을 켭니다. 보는 사람에게는 알려주지 마세요.`);
       if (!pw) return;
       const r = await fetch("/api/auth", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "setup", password: pw }),
+        body: JSON.stringify({ action: "setup", role: selRole, password: pw }),
       });
       if (!r.ok) { alert((await r.json().catch(() => ({}))).error || "설정 실패"); return; }
       await refresh();
-      alert("관리자 비밀번호가 설정되고 관리자 모드가 켜졌습니다.");
+      alert(`'${label}' 비밀번호가 설정되고 모드가 켜졌습니다.`);
     } else {
-      const pw = window.prompt("관리자 비밀번호를 입력하세요.");
+      const pw = window.prompt(`'${label}' 비밀번호를 입력하세요.`);
       if (!pw) return;
       const r = await fetch("/api/auth", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "login", password: pw }),
+        body: JSON.stringify({ action: "login", role: selRole, password: pw }),
       });
       if (!r.ok) { alert((await r.json().catch(() => ({}))).error || "로그인 실패"); return; }
       await refresh();
@@ -91,18 +93,30 @@ export default function NavBar() {
         <div className="flex items-center gap-3">
           {isAdmin ? (
             <div className="flex items-center gap-1">
-              <span className="px-2 py-1 text-xs font-bold border border-blue-300 bg-blue-50 text-blue-700 whitespace-nowrap">관리자 모드</span>
-              <button onClick={adminChange} title="관리자 비밀번호 변경" className="px-2 py-1 text-xs font-medium border border-gray-300 bg-white text-gray-600 hover:bg-gray-100 transition whitespace-nowrap">비번 변경</button>
+              <span className="px-2 py-1 text-xs font-bold border border-blue-300 bg-blue-50 text-blue-700 whitespace-nowrap">{role ? ROLE_LABELS[role] : "관리자"} 모드</span>
+              <button onClick={adminChange} title="현재 모드의 비밀번호 변경" className="px-2 py-1 text-xs font-medium border border-gray-300 bg-white text-gray-600 hover:bg-gray-100 transition whitespace-nowrap">비번 변경</button>
               <button onClick={adminLogout} className="px-2.5 py-1 text-xs font-medium border border-gray-300 bg-white text-gray-700 hover:bg-gray-100 transition whitespace-nowrap">로그아웃</button>
             </div>
           ) : (
-            <button
-              onClick={adminLogin}
-              title="관리자 비밀번호를 입력하면 편집 권한이 켜집니다. 입력 전에는 보기 전용입니다."
-              className="px-2.5 py-1 text-xs font-medium border border-gray-300 bg-white text-gray-700 hover:bg-gray-100 transition whitespace-nowrap"
-            >
-              🔒 관리자 로그인
-            </button>
+            <div className="flex items-center gap-1">
+              <select
+                value={selRole}
+                onChange={(e) => setSelRole(e.target.value as AdminRole)}
+                title="로그인할 관리자 모드 선택"
+                className="px-2 py-1 text-xs font-medium border border-gray-300 bg-white text-gray-700 outline-none focus:border-blue-400"
+              >
+                {ADMIN_ROLES.map((r) => (
+                  <option key={r} value={r}>{ROLE_LABELS[r]}</option>
+                ))}
+              </select>
+              <button
+                onClick={adminLogin}
+                title="선택한 모드의 비밀번호를 입력하면 편집 권한이 켜집니다. 입력 전에는 보기 전용입니다."
+                className="px-2.5 py-1 text-xs font-medium border border-gray-300 bg-white text-gray-700 hover:bg-gray-100 transition whitespace-nowrap"
+              >
+                🔒 {passwords[selRole] ? "로그인" : "비밀번호 설정"}
+              </button>
+            </div>
           )}
           {extUrl && (
             <button
