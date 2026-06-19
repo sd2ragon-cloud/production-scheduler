@@ -1380,9 +1380,9 @@ export default function ScheduleBoard() {
                     if (!e.currentTarget.contains(e.relatedTarget as Node) && dropBucket === b.id) setDropBucket(null);
                   }}
                   onDrop={() => onDropOnBucket(b.id)}
-                  className={`border ${isTarget ? "ring-2 ring-blue-500 border-blue-300 bg-blue-50/40" : "border-gray-200"}`}
+                  className={`border ${isTarget ? "ring-2 ring-blue-500 border-blue-300 bg-blue-50/40" : "border-black"}`}
                 >
-                  <div className="bg-gray-100 px-2 py-1 flex items-center justify-between border-b">
+                  <div className="bg-gray-100 px-2 py-1 flex items-center justify-between border-b border-black">
                     {manageBuckets ? (
                       <input
                         defaultValue={b.name}
