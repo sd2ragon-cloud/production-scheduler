@@ -1121,7 +1121,7 @@ export default function ScheduleBoard() {
                         >
                           <td className="px-1.5 py-0 text-gray-400 text-[10px]">{entry.sequence}</td>
                           <td className="px-1.5 py-0 whitespace-nowrap">
-                            <div className="flex items-center justify-center gap-1">
+                            <div className="flex items-center gap-1">
                             <span className="font-medium text-[11px] shrink-0">{entry.product_name}</span>
                             {(() => {
                               const eparts = parseParts(entry.component_part);
@@ -1336,8 +1336,8 @@ export default function ScheduleBoard() {
       </div>
 
       {/* 가운데: 1차 배정 (국/4×6/MB6/HDP 등 칸) */}
-      <div className="w-[480px] bg-white border shadow-sm flex flex-col overflow-hidden shrink-0">
-        <div className="px-3 py-3 border-b bg-gray-50 flex items-center justify-between">
+      <div className="w-[480px] bg-white border border-black shadow-sm flex flex-col overflow-hidden shrink-0">
+        <div className="px-3 py-3 border-b border-black bg-gray-50 flex items-center justify-between">
           <div>
             <h3 className="font-bold text-gray-900">1차 배정</h3>
             <p className="text-xs text-gray-500">{buckets.length}칸</p>
@@ -1360,7 +1360,7 @@ export default function ScheduleBoard() {
           )}
         </div>
 
-        <div className="flex-1 overflow-y-auto p-2 space-y-2">
+        <div className="flex-1 overflow-y-auto divide-y divide-black">
           {buckets.length === 0 ? (
             <div className="text-center text-gray-400 text-sm py-8">
               위 + 칸 버튼으로 1차 배정 칸을 추가하세요
@@ -1382,7 +1382,7 @@ export default function ScheduleBoard() {
                     if (!e.currentTarget.contains(e.relatedTarget as Node) && dropBucket === b.id) setDropBucket(null);
                   }}
                   onDrop={() => onDropOnBucket(b.id)}
-                  className={`border ${isTarget ? "ring-2 ring-blue-500 border-blue-300 bg-blue-50/40" : "border-black"}`}
+                  className={isTarget ? "ring-2 ring-inset ring-blue-500 bg-blue-50/40" : ""}
                 >
                   <div className="bg-gray-100 px-2 py-1 flex items-center justify-between border-b border-black">
                     {manageBuckets ? (
