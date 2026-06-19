@@ -1,13 +1,22 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { PROCESS_LINES, ADMIN_ROLES, ROLE_LABELS, type AdminRole } from "@/lib/factory-config";
 import { useProcess } from "./ProcessContext";
 import { useAuth } from "./AuthContext";
 
+const NAV_LINKS = [
+  { href: "/", label: "대시보드" },
+  { href: "/orders", label: "주문 관리" },
+  { href: "/machines", label: "설비 관리" },
+  { href: "/schedule", label: "스케줄 보기" },
+];
+
 export default function NavBar() {
   const { processLine, setProcessLine } = useProcess();
   const { role, isAdmin, passwords, refresh } = useAuth();
+  const pathname = usePathname();
   const [selRole, setSelRole] = useState<AdminRole>("sheet");
   const [extUrl, setExtUrl] = useState("");
   const [copied, setCopied] = useState(false);
@@ -81,21 +90,33 @@ export default function NavBar() {
   };
 
   return (
-    <nav className="sticky top-0 z-50 bg-white/70 backdrop-blur-xl border-b border-black/5">
-      <div className="w-full px-10 py-2.5 flex items-center justify-between">
-        <div className="flex items-center gap-1">
-          <a href="/" className="text-[15px] font-semibold text-gray-900 mr-4 tracking-tight">생산 스케줄링</a>
-          <a href="/" className="px-3 py-1.5 text-[13px] font-medium text-gray-600 hover:text-gray-900 hover:bg-black/[0.04] rounded-full transition">대시보드</a>
-          <a href="/orders" className="px-3 py-1.5 text-[13px] font-medium text-gray-600 hover:text-gray-900 hover:bg-black/[0.04] rounded-full transition">주문 관리</a>
-          <a href="/machines" className="px-3 py-1.5 text-[13px] font-medium text-gray-600 hover:text-gray-900 hover:bg-black/[0.04] rounded-full transition">설비 관리</a>
-          <a href="/schedule" className="px-3 py-1.5 text-[13px] font-medium text-gray-600 hover:text-gray-900 hover:bg-black/[0.04] rounded-full transition">스케줄 보기</a>
+    <nav className="sticky top-0 z-50 bg-white border-b border-black/[0.08] shadow-sm">
+      <div className="w-full px-10 py-2 flex items-center justify-between">
+        <div className="flex items-center gap-0.5">
+          <a href="/" className="text-[15px] font-semibold text-gray-900 mr-4">생산 스케줄링</a>
+          {NAV_LINKS.map((l) => {
+            const active = pathname === l.href;
+            return (
+              <a
+                key={l.href}
+                href={l.href}
+                className={`px-3 py-1.5 text-[13px] rounded-md transition ${
+                  active
+                    ? "bg-[#0078D4]/10 text-[#0078D4] font-semibold"
+                    : "font-medium text-gray-600 hover:text-gray-900 hover:bg-black/[0.05]"
+                }`}
+              >
+                {l.label}
+              </a>
+            );
+          })}
         </div>
         <div className="flex items-center gap-3">
           {isAdmin ? (
             <div className="flex items-center gap-1.5">
-              <span className="px-2.5 py-1 text-[11px] font-semibold rounded-full bg-blue-50 text-[#0071e3] whitespace-nowrap">{role ? ROLE_LABELS[role] : "관리자"} 모드</span>
-              <button onClick={adminChange} title="현재 모드의 비밀번호 변경" className="px-2.5 py-1 text-xs font-medium rounded-full border border-black/10 bg-white text-gray-600 hover:bg-black/[0.03] transition whitespace-nowrap">비번 변경</button>
-              <button onClick={adminLogout} className="px-3 py-1 text-xs font-medium rounded-full border border-black/10 bg-white text-gray-700 hover:bg-black/[0.03] transition whitespace-nowrap">로그아웃</button>
+              <span className="px-2.5 py-1 text-[11px] font-semibold rounded-md bg-blue-50 text-[#0078D4] whitespace-nowrap">{role ? ROLE_LABELS[role] : "관리자"} 모드</span>
+              <button onClick={adminChange} title="현재 모드의 비밀번호 변경" className="px-2.5 py-1 text-xs font-medium rounded-md border border-black/10 bg-white text-gray-600 hover:bg-black/[0.03] transition whitespace-nowrap">비번 변경</button>
+              <button onClick={adminLogout} className="px-3 py-1 text-xs font-medium rounded-md border border-black/10 bg-white text-gray-700 hover:bg-black/[0.03] transition whitespace-nowrap">로그아웃</button>
             </div>
           ) : (
             <div className="flex items-center gap-1.5">
@@ -103,7 +124,7 @@ export default function NavBar() {
                 value={selRole}
                 onChange={(e) => setSelRole(e.target.value as AdminRole)}
                 title="로그인할 관리자 모드 선택"
-                className="px-2.5 py-1 text-xs font-medium rounded-full border border-black/10 bg-white text-gray-700 outline-none focus:border-[#0071e3]"
+                className="px-2.5 py-1 text-xs font-medium rounded-md border border-black/10 bg-white text-gray-700 outline-none focus:border-[#0078D4]"
               >
                 {ADMIN_ROLES.map((r) => (
                   <option key={r} value={r}>{ROLE_LABELS[r]}</option>
@@ -112,7 +133,7 @@ export default function NavBar() {
               <button
                 onClick={adminLogin}
                 title="선택한 모드의 비밀번호를 입력하면 편집 권한이 켜집니다. 입력 전에는 보기 전용입니다."
-                className="px-3 py-1 text-xs font-medium rounded-full border border-black/10 bg-white text-gray-700 hover:bg-black/[0.03] transition whitespace-nowrap"
+                className="px-3 py-1 text-xs font-medium rounded-md border border-black/10 bg-white text-gray-700 hover:bg-black/[0.03] transition whitespace-nowrap"
               >
                 🔒 {passwords[selRole] ? "로그인" : "비밀번호 설정"}
               </button>
@@ -122,7 +143,7 @@ export default function NavBar() {
             <button
               onClick={copyExt}
               title={`외부 접속 주소: ${extUrl}\n클릭하면 주소가 복사됩니다 (외부망·휴대폰에서 사용)`}
-              className="px-3 py-1 text-xs font-medium rounded-full border border-green-300/60 bg-green-50 text-green-700 hover:bg-green-100 transition whitespace-nowrap"
+              className="px-3 py-1 text-xs font-medium rounded-md border border-green-300/60 bg-green-50 text-green-700 hover:bg-green-100 transition whitespace-nowrap"
             >
               {copied ? "주소 복사됨!" : "🌐 외부 접속 주소"}
             </button>

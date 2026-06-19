@@ -86,12 +86,12 @@ export default function SchedulePage() {
       </div>
 
       {entries.length === 0 ? (
-        <div className="bg-white p-12 text-center shadow-sm border border-black/5 rounded-2xl">
+        <div className="bg-white p-12 text-center shadow-sm border border-black/5 rounded-lg">
           <p className="text-gray-500 text-lg">생성된 스케줄이 없습니다.</p>
           <p className="text-gray-400 text-sm mt-2">대시보드에서 스케줄을 생성해주세요.</p>
         </div>
       ) : view === "gantt" ? (
-        <div className="bg-white shadow-sm border border-black/5 rounded-2xl p-6">
+        <div className="bg-white shadow-sm border border-black/5 rounded-lg p-6">
           <div className="relative">
             <div className="relative h-8 mb-2 border-b">
               {getDayLabels().map((d, i) => (
@@ -153,7 +153,7 @@ export default function SchedulePage() {
           </div>
         </div>
       ) : (
-        <div className="bg-white shadow-sm border border-black/5 rounded-2xl overflow-hidden">
+        <div className="bg-white shadow-sm border border-black/5 rounded-lg overflow-hidden">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-black/[0.02] text-gray-500 text-left">

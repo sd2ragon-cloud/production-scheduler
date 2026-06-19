@@ -1,20 +1,21 @@
 @import "tailwindcss";
 
-/* 애플 스타일 토큰: 연한 회색 배경, 진한 텍스트, 시스템(SF) 폰트, 시스템블루 액센트 */
+/* 윈도우(Fluent) 스타일 토큰: 연한 회색 배경(Mica 느낌), MS 블루 액센트, Pretendard 폰트 */
 :root {
-  --background: #f5f5f7;
-  --foreground: #1d1d1f;
-  --accent: #0071e3;
-  --accent-hover: #0077ed;
+  --background: #f3f3f3;
+  --foreground: #1b1b1b;
+  --accent: #0078d4;
+  --accent-hover: #106ebe;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  /* SF Pro(애플) → Segoe(Windows) → 한글 폴백 순. font-sans 유틸도 이 스택을 따른다. */
-  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui,
-    "Apple SD Gothic Neo", "Pretendard", "Malgun Gothic", Roboto, sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", "Menlo", "Consolas", monospace;
+  /* 눈누 인기 폰트 Pretendard(웹폰트) → Segoe(윈도우 기본) → 한글 폴백 순.
+     Pretendard는 layout.tsx의 <link>로 로드한다. */
+  --font-sans: "Pretendard Variable", Pretendard, "Segoe UI Variable", "Segoe UI",
+    system-ui, "Malgun Gothic", "Apple SD Gothic Neo", Roboto, sans-serif;
+  --font-mono: "Cascadia Code", "Cascadia Mono", ui-monospace, "Consolas", "SF Mono", monospace;
 }
 
 body {
@@ -23,13 +24,12 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  letter-spacing: -0.01em; /* 애플 특유의 살짝 좁은 자간 */
 }
 
 @layer base {
-  /* 폼 컨트롤을 부드러운 둥근 모서리 + 정돈된 포커스로 (애플 느낌) */
+  /* 폼 컨트롤: 윈도우 느낌의 살짝 둥근(6px) 모서리 */
   input, select, textarea {
-    border-radius: 0.5rem;
+    border-radius: 0.375rem;
   }
   input:focus-visible, select:focus-visible, textarea:focus-visible {
     outline: none;
@@ -37,9 +37,8 @@ body {
   button:not(:disabled) {
     cursor: pointer;
   }
-  /* 인터랙션 요소에 부드러운 전환 */
   button, a, input, select {
-    transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, color 0.15s ease, opacity 0.15s ease;
+    transition: background-color 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease, color 0.12s ease, opacity 0.12s ease;
   }
 }
 
@@ -49,23 +48,23 @@ input[type="number"]::-webkit-outer-spin-button {
   opacity: 1;
 }
 
-/* 얇고 은은한 스크롤바 (애플 스타일) */
+/* 얇고 은은한 스크롤바 (윈도우 11 스타일) */
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(0, 0, 0, 0.22) transparent;
+  scrollbar-color: rgba(0, 0, 0, 0.25) transparent;
 }
 ::-webkit-scrollbar {
-  width: 9px;
-  height: 9px;
+  width: 10px;
+  height: 10px;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.22);
+  background: rgba(0, 0, 0, 0.25);
   border-radius: 9999px;
-  border: 2px solid transparent;
+  border: 3px solid transparent;
   background-clip: content-box;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.38);
+  background: rgba(0, 0, 0, 0.4);
   background-clip: content-box;
 }
 ::-webkit-scrollbar-track {
