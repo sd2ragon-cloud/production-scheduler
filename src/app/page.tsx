@@ -350,14 +350,18 @@ export default function ScheduleBoard() {
   };
 
   const handleReorderParts = async (entryId: number, parts: string[]) => {
-    setLoading(true);
-    await fetch("/api/schedule/reorder-parts", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ entry_id: entryId, parts }),
-    });
-    await fetchAll();
-    setLoading(false);
+    // 낙관적 갱신: 구성 순서만 바뀌고 시간 재계산은 없으므로 로컬에서 즉시 반영한다.
+    // (서버 왕복·전체 재조회를 기다리지 않아 칩이 부드럽게 움직인다.)
+    setSchedule((prev) => prev.map((e) => (e.id === entryId ? { ...e, component_part: parts.join(", ") } : e)));
+    try {
+      await fetch("/api/schedule/reorder-parts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ entry_id: entryId, parts }),
+      });
+    } catch {
+      await fetchAll(); // 실패하면 서버 상태로 되돌린다
+    }
   };
 
   const handleMovePart = async (entryId: number, part: string, targetMachineId: number, srcMachineId: number, moveMinutes: number = 0, beforeEntryId: number | null = null, merge: boolean = false, mergeEntryId: number | null = null) => {
@@ -519,14 +523,15 @@ export default function ScheduleBoard() {
   };
 
   const handleReorder = async (machineId: number, entryIds: number[]) => {
-    setLoading(true);
+    // 낙관적 갱신: 순서를 로컬에서 즉시 반영해 부드럽게 움직이고, 예상완료시간은 서버 재계산 후 동기화한다.
+    const seqMap = new Map(entryIds.map((id, i) => [id, i + 1] as const));
+    setSchedule((prev) => prev.map((e) => (seqMap.has(e.id) ? { ...e, sequence: seqMap.get(e.id)! } : e)));
     await fetch("/api/schedule/reorder", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ machine_id: machineId, entry_ids: entryIds }),
     });
     await fetchAll();
-    setLoading(false);
   };
 
   const durationTimers = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
