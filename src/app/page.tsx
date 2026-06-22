@@ -1358,7 +1358,7 @@ export default function ScheduleBoard() {
                           }}
                         >
                           <td className="px-1.5 py-0 text-gray-400 text-[10px]">{entry.sequence}</td>
-                          <td className="px-1.5 py-0.5 align-middle">
+                          <td className="px-1.5 py-0 align-middle">
                             <div className="flex flex-wrap items-center gap-x-1 gap-y-0.5 max-h-9 overflow-hidden">
                             <span className="font-medium text-[11px] break-all">{entry.product_name}</span>
                             {(() => {
