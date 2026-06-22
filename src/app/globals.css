@@ -128,12 +128,13 @@ input[type="number"]::-webkit-outer-spin-button {
     text-align: center;
     margin-bottom: 3mm;
   }
+  /* 기계 박스: 2열·고정 크기로 오·열을 맞춘다 */
   .pf-machines {
-    flex: 1 1 auto;
+    flex: 0 0 auto;
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 2mm;
-    align-content: start;
+    grid-template-columns: repeat(2, 1fr);
+    grid-auto-rows: 46mm;
+    gap: 2.5mm;
   }
   .pf-mbox {
     border: 1px solid #000;
@@ -155,11 +156,14 @@ input[type="number"]::-webkit-outer-spin-button {
     border-bottom: 1px solid #000;
   }
   .pf-mtime { font-weight: normal; font-size: 8pt; }
-  .pf-list { margin: 0; padding: 1mm 1mm 1mm 6mm; }
-  .pf-list li { font-size: 8pt; line-height: 1.25; word-break: break-all; }
+  .pf-list { margin: 0; padding: 1mm 1mm 1mm 6mm; overflow: hidden; }
+  .pf-list li { font-size: 8pt; line-height: 1.25; }
+  .pf-li { display: flex; justify-content: space-between; gap: 2mm; }
+  .pf-job { word-break: break-all; }
+  .pf-eta { white-space: nowrap; color: #444; font-variant-numeric: tabular-nums; }
   .pf-empty { font-size: 8pt; color: #888; padding: 1mm 1.5mm; }
   .pf-bottom {
-    flex: 0 0 auto;
+    flex: 1 1 auto;
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 2mm;

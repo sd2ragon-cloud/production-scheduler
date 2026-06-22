@@ -1126,7 +1126,14 @@ export default function ScheduleBoard() {
                   <div className="pf-empty">-</div>
                 ) : (
                   <ol className="pf-list">
-                    {entries.map((e) => <li key={e.id}>{jobLabel(e)}</li>)}
+                    {entries.map((e) => (
+                      <li key={e.id}>
+                        <div className="pf-li">
+                          <span className="pf-job">{jobLabel(e)}</span>
+                          <span className="pf-eta">{formatEndTime(e.end_time)}</span>
+                        </div>
+                      </li>
+                    ))}
                   </ol>
                 )}
               </div>
