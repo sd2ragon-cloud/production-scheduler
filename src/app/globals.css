@@ -49,10 +49,22 @@ input[type="number"]::-webkit-outer-spin-button {
   .print-area {
     display: block !important;
     color: #000;
-    padding: 6mm 0;
   }
 
-  /* 설비별 표를 2열로, 페이지 중앙에 모아 배치 (재단 편의) */
+  /* 페이지(4개 표) 단위로 용지 정중앙에 배치. 높이는 A4보다 살짝 작게 잡아
+     반올림 오차로 인한 빈 페이지를 방지한다. */
+  .print-page {
+    height: 296mm;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+  .print-page:not(:last-child) {
+    break-after: page;
+  }
+
+  /* 설비별 표를 2열로 묶어 배치 (재단 편의) */
   .print-grid {
     display: grid;
     grid-template-columns: 95mm 95mm;

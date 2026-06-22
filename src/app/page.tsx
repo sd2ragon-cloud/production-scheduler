@@ -989,36 +989,46 @@ export default function ScheduleBoard() {
 
   // 엑셀 '작업순서' 양식: 기계별 블록(제목 + 번호·작업명 목록)을 2열 그리드로. 인쇄 시에만 보인다.
   const PRINT_MIN_ROWS = 10;
-  const renderPrint = () => (
-    <div className="print-grid">
-      {machines.map((m) => {
-        const entries = getEntriesForMachine(m.id);
-        const rowCount = Math.max(entries.length, PRINT_MIN_ROWS);
-        return (
-          <table className="print-block" key={m.id}>
-            <colgroup>
-              <col className="print-col-num" />
-              <col className="print-col-name" />
-            </colgroup>
-            <tbody>
-              <tr>
-                <th className="print-title" colSpan={2}>{m.name} 작업순서</th>
-              </tr>
-              {Array.from({ length: rowCount }).map((_, i) => {
-                const e = entries[i];
-                return (
-                  <tr key={i}>
-                    <td className="print-num">{e ? i + 1 : ""}</td>
-                    <td className="print-name">{e ? jobLabel(e) : ""}</td>
+  const PRINT_PER_PAGE = 4; // 한 페이지 2열 × 2행
+  const renderPrint = () => {
+    const pages: Machine[][] = [];
+    for (let i = 0; i < machines.length; i += PRINT_PER_PAGE) {
+      pages.push(machines.slice(i, i + PRINT_PER_PAGE));
+    }
+    return pages.map((group, pi) => (
+      // 페이지 단위로 감싸 상하·좌우 중앙 정렬 (용지 센터 출력 + 재단 편의)
+      <div className="print-page" key={pi}>
+        <div className="print-grid">
+          {group.map((m) => {
+            const entries = getEntriesForMachine(m.id);
+            const rowCount = Math.max(entries.length, PRINT_MIN_ROWS);
+            return (
+              <table className="print-block" key={m.id}>
+                <colgroup>
+                  <col className="print-col-num" />
+                  <col className="print-col-name" />
+                </colgroup>
+                <tbody>
+                  <tr>
+                    <th className="print-title" colSpan={2}>{m.name} 작업순서</th>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        );
-      })}
-    </div>
-  );
+                  {Array.from({ length: rowCount }).map((_, i) => {
+                    const e = entries[i];
+                    return (
+                      <tr key={i}>
+                        <td className="print-num">{e ? i + 1 : ""}</td>
+                        <td className="print-name">{e ? jobLabel(e) : ""}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            );
+          })}
+        </div>
+      </div>
+    ));
+  };
 
   return (
     <>
