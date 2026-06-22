@@ -1143,11 +1143,17 @@ export default function ScheduleBoard() {
         <div className="pf-bottom">
           <div className="pf-sect">
             <div className="pf-secttl">1차 배정 <span className="pf-secsum">{fmtH(buckets.reduce((s, b) => s + locationMinutes(orders.filter((o) => showsAt(o, b.id)), b.id), 0))}</span></div>
-            <div className="pf-secbody">
+            <div className="pf-secbody pf-bk-grid">
               {buckets.map((b) => {
                 const bo = orders.filter((o) => showsAt(o, b.id));
-                if (bo.length === 0) return null;
-                return <div key={b.id} className="pf-row"><b>{b.name}</b> ({fmtH(locationMinutes(bo, b.id))}) : {bo.map(ov).join(", ")}</div>;
+                return (
+                  <div key={b.id} className="pf-bk">
+                    <div className="pf-bk-ttl">{b.name}<span className="pf-bk-sum">{fmtH(locationMinutes(bo, b.id))}</span></div>
+                    <div className="pf-bk-items">
+                      {bo.length ? bo.map((o) => <div key={o.id} className="pf-bk-item">{ov(o)}</div>) : <span className="pf-dim">-</span>}
+                    </div>
+                  </div>
+                );
               })}
             </div>
           </div>
