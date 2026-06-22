@@ -147,6 +147,8 @@ export default function ScheduleBoard() {
   const { role } = useAuth();
   // 담당 라인만 편집 가능. 현재 보고 있는 공정 라인을 편집할 권한이 없으면 보기 전용(편집 UI 숨김).
   const isAdmin = roleCanEditLine(role, processLine);
+  // 윤전 라인은 매엽과 별도로 운영: '구분(공정)' 대신 '수량(부)'을 입력·표기한다.
+  const isRoll = processLine === "윤전";
   const [machines, setMachines] = useState<Machine[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [schedule, setSchedule] = useState<ScheduleEntry[]>([]);
@@ -619,21 +621,24 @@ export default function ScheduleBoard() {
     const partProcesses: Record<string, string> = {};
     let durationMinutes = 0;
     if (parts.length >= 2) {
-      // 구성이 여러 개면 파트별 소요시간/구분을 저장, 전체 소요는 합계
+      // 구성이 여러 개면 파트별 소요시간/구분을 저장, 전체 소요는 합계 (윤전은 구분 없음)
       for (const p of parts) {
         partDurations[p] = Math.round((newOrder.partHours[p] || 0) * 60);
-        partProcesses[p] = newOrder.partProcesses[p] || newOrder.special_process || "일반";
+        partProcesses[p] = isRoll ? "" : (newOrder.partProcesses[p] || newOrder.special_process || "일반");
       }
       durationMinutes = Object.values(partDurations).reduce((a, b) => a + b, 0);
     } else {
       durationMinutes = Math.round((newOrder.duration_hours || 0) * 60);
     }
+    // 윤전은 구분을 사용하지 않으므로 special_process를 비워 저장(공정 칩 미표시)
+    const specialProcess = isRoll ? "" : newOrder.special_process;
     if (editingOrderId !== null) {
       await fetch(`/api/orders/${editingOrderId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...newOrder,
+          special_process: specialProcess,
           duration_minutes: durationMinutes,
           part_durations: partDurations,
           part_processes: partProcesses,
@@ -646,6 +651,7 @@ export default function ScheduleBoard() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...newOrder,
+          special_process: specialProcess,
           duration_minutes: durationMinutes,
           part_durations: partDurations,
           part_processes: partProcesses,
@@ -950,9 +956,9 @@ export default function ScheduleBoard() {
                     className={`px-2 py-0.5 border text-[11px] font-medium cursor-grab active:cursor-grabbing hover:opacity-80 ${
                       PROCESS_COLORS[proc] || "bg-gray-100 text-gray-600 border-gray-200"
                     } ${dragOrderId === order.id && dragPart === p ? "opacity-40" : ""}`}
-                    title={`${p} · ${proc} · 이 파트를 설비로 드래그하여 배정 (남은 시간 내에서 분할 가능)`}
+                    title={proc ? `${p} · ${proc} · 이 파트를 설비로 드래그하여 배정 (남은 시간 내에서 분할 가능)` : `${p} · 이 파트를 설비로 드래그하여 배정 (남은 시간 내에서 분할 가능)`}
                   >
-                    {label} <span className="opacity-70">· {proc}</span>
+                    {label}{proc ? <span className="opacity-70"> · {proc}</span> : null}
                   </span>
                 );
               })}
@@ -968,6 +974,9 @@ export default function ScheduleBoard() {
               ))}
             </div>
           )}
+          {isRoll && order.quantity_sheets ? (
+            <p className="text-[11px] font-medium text-gray-600 mt-1.5">수량 : {order.quantity_sheets.toLocaleString()}부</p>
+          ) : null}
           {order.notes && (
             <p className="text-xs text-gray-500 mt-1.5 break-all" title={order.notes}>비고 : {order.notes}</p>
           )}
@@ -1318,9 +1327,11 @@ export default function ScheduleBoard() {
                                 >
                                   {procGroups.map((g, gi) => (
                                     <span key={`${g.proc}-${gi}`} className="inline-flex items-center gap-0.5 shrink-0">
-                                      <span className={`px-1.5 py-0 text-[10px] font-medium border whitespace-nowrap ${PROCESS_COLORS[g.proc] || "bg-gray-100 text-gray-600 border-gray-200"}`}>
-                                        {g.proc}
-                                      </span>
+                                      {g.proc ? (
+                                        <span className={`px-1.5 py-0 text-[10px] font-medium border whitespace-nowrap ${PROCESS_COLORS[g.proc] || "bg-gray-100 text-gray-600 border-gray-200"}`}>
+                                          {g.proc}
+                                        </span>
+                                      ) : null}
                                       {g.parts.map((p) => {
                                         const isTarget = isReorderZone && dragSplit!.part !== p && partReorderTarget?.part === p;
                                         return (
@@ -1354,6 +1365,9 @@ export default function ScheduleBoard() {
                                 </span>
                               );
                             })()}
+                            {isRoll && entry.quantity_sheets ? (
+                              <span className="text-[10px] text-gray-500 shrink-0 whitespace-nowrap">{entry.quantity_sheets.toLocaleString()}부</span>
+                            ) : null}
                             </div>
                           </td>
                           <td className="px-1.5 py-0 text-center text-[10px] text-gray-500 truncate max-w-[10rem]" title={entry.order_notes}>
@@ -1572,19 +1586,31 @@ export default function ScheduleBoard() {
                   value={newOrder.component}
                   onChange={(e) => setNewOrder({ ...newOrder, component: e.target.value })}
                 />
-                {/* 구성이 여러 개면 파트별 구분으로 입력하므로 상단 구분란은 숨긴다 (2중 입력 방지) */}
-                {parseParts(newOrder.component).length < 2 && (
+                {/* 윤전: 구분 대신 수량(부) 입력. 매엽: 구분 입력(구성 2개 이상이면 파트별 입력으로 대체). */}
+                {isRoll ? (
                   <div className="col-span-2">
-                    <label className="text-[10px] text-gray-500">구분</label>
-                    <select
+                    <label className="text-[10px] text-gray-500">수량 (부)</label>
+                    <input
+                      type="number" min="0" step="1" placeholder="부"
                       className="border px-2 py-1.5 text-xs w-full"
-                      value={newOrder.special_process}
-                      onChange={(e) => setNewOrder({ ...newOrder, special_process: e.target.value })}
-                    >
-                      <option value="">(공란)</option>
-                      {PROCESSES.map((p) => <option key={p} value={p}>{p}</option>)}
-                    </select>
+                      value={newOrder.quantity_sheets || ""}
+                      onChange={(e) => setNewOrder({ ...newOrder, quantity_sheets: Number(e.target.value) })}
+                    />
                   </div>
+                ) : (
+                  parseParts(newOrder.component).length < 2 && (
+                    <div className="col-span-2">
+                      <label className="text-[10px] text-gray-500">구분</label>
+                      <select
+                        className="border px-2 py-1.5 text-xs w-full"
+                        value={newOrder.special_process}
+                        onChange={(e) => setNewOrder({ ...newOrder, special_process: e.target.value })}
+                      >
+                        <option value="">(공란)</option>
+                        {PROCESSES.map((p) => <option key={p} value={p}>{p}</option>)}
+                      </select>
+                    </div>
+                  )
                 )}
                 {(() => {
                   const newParts = parseParts(newOrder.component);
@@ -1603,14 +1629,14 @@ export default function ScheduleBoard() {
                       </div>
                       {multi ? (
                         <div className="col-span-2">
-                          <div className="grid grid-cols-3 gap-1 mb-1">
+                          <div className={`grid ${isRoll ? "grid-cols-2" : "grid-cols-3"} gap-1 mb-1`}>
                             <span className="text-[10px] text-gray-500">구성</span>
                             <span className="text-[10px] text-gray-500">소요(시간)</span>
-                            <span className="text-[10px] text-gray-500">구분</span>
+                            {!isRoll && <span className="text-[10px] text-gray-500">구분</span>}
                           </div>
                           <div className="space-y-1">
                             {newParts.map((p) => (
-                              <div key={p} className="grid grid-cols-3 gap-1 items-center">
+                              <div key={p} className={`grid ${isRoll ? "grid-cols-2" : "grid-cols-3"} gap-1 items-center`}>
                                 <span className="text-[11px] text-gray-700 truncate" title={p}>{p}</span>
                                 <input
                                   type="number" min="0" step="1" placeholder="시간"
@@ -1618,13 +1644,15 @@ export default function ScheduleBoard() {
                                   value={newOrder.partHours[p] || ""}
                                   onChange={(e) => setNewOrder({ ...newOrder, partHours: { ...newOrder.partHours, [p]: Number(e.target.value) } })}
                                 />
-                                <select
-                                  className="border px-1 py-1 text-xs w-full min-w-0"
-                                  value={newOrder.partProcesses[p] || newOrder.special_process}
-                                  onChange={(e) => setNewOrder({ ...newOrder, partProcesses: { ...newOrder.partProcesses, [p]: e.target.value } })}
-                                >
-                                  {PROCESSES.map((proc) => <option key={proc} value={proc}>{proc}</option>)}
-                                </select>
+                                {!isRoll && (
+                                  <select
+                                    className="border px-1 py-1 text-xs w-full min-w-0"
+                                    value={newOrder.partProcesses[p] || newOrder.special_process}
+                                    onChange={(e) => setNewOrder({ ...newOrder, partProcesses: { ...newOrder.partProcesses, [p]: e.target.value } })}
+                                  >
+                                    {PROCESSES.map((proc) => <option key={proc} value={proc}>{proc}</option>)}
+                                  </select>
+                                )}
                               </div>
                             ))}
                           </div>
