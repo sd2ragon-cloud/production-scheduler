@@ -979,7 +979,49 @@ export default function ScheduleBoard() {
   const now = new Date();
   const dateStr = `${now.getFullYear()}년 ${now.getMonth() + 1}월 ${now.getDate()}일`;
 
+  // 인쇄용 작업명: "제품명(구성)소요시간" — 엑셀 작업순서 양식과 동일한 표기
+  const jobLabel = (e: ScheduleEntry): string => {
+    const comp = e.component_part || e.component || "";
+    const base = comp ? `${e.product_name}(${comp})` : e.product_name;
+    const hours = e.duration_minutes ? Math.round((e.duration_minutes / 60) * 10) / 10 : "";
+    return hours !== "" ? `${base}${hours}` : base;
+  };
+
+  // 엑셀 '작업순서' 양식: 기계별 블록(제목 + 번호·작업명 목록)을 2열 그리드로. 인쇄 시에만 보인다.
+  const PRINT_MIN_ROWS = 9;
+  const renderPrint = () => (
+    <div className="print-grid">
+      {machines.map((m) => {
+        const entries = getEntriesForMachine(m.id);
+        const rowCount = Math.max(entries.length, PRINT_MIN_ROWS);
+        return (
+          <table className="print-block" key={m.id}>
+            <tbody>
+              <tr>
+                <th className="print-title" colSpan={2}>{m.name} 작업순서</th>
+              </tr>
+              {Array.from({ length: rowCount }).map((_, i) => {
+                const e = entries[i];
+                return (
+                  <tr key={i}>
+                    <td className="print-num">{e ? i + 1 : ""}</td>
+                    <td className="print-name">{e ? jobLabel(e) : ""}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        );
+      })}
+    </div>
+  );
+
   return (
+    <>
+    <div className="print-area">
+      <div className="print-date">{dateStr} 작업순서</div>
+      {renderPrint()}
+    </div>
     <div className="overflow-auto h-[calc(100vh-80px)]">
     {/* 고정 폭(반응형 축소 없음). 화면이 작으면 비율 축소 대신 가로/세로 스크롤로 본다. */}
     <div className="flex gap-4 h-full min-w-[1776px]">
@@ -990,15 +1032,24 @@ export default function ScheduleBoard() {
             <h2 className="text-xl font-bold text-gray-900">기계별 작업 계획</h2>
             <p className="text-xs text-gray-500">{dateStr}</p>
           </div>
-          {isAdmin && (
+          <div className="flex items-center gap-2">
             <button
-              onClick={() => setShowBreaks(true)}
+              onClick={() => window.print()}
               className="text-sm border border-gray-300 bg-white px-3 py-1.5 hover:bg-gray-100 text-gray-700 whitespace-nowrap"
-              title="식사·휴게 시간을 추가/수정하면 예상완료시간이 자동으로 다시 계산됩니다"
+              title="기계별 작업순서를 엑셀 양식으로 인쇄합니다"
             >
-              🍽 식사시간 {breaks.length > 0 && <span className="text-gray-400">({breaks.length})</span>}
+              🖨 인쇄
             </button>
-          )}
+            {isAdmin && (
+              <button
+                onClick={() => setShowBreaks(true)}
+                className="text-sm border border-gray-300 bg-white px-3 py-1.5 hover:bg-gray-100 text-gray-700 whitespace-nowrap"
+                title="식사·휴게 시간을 추가/수정하면 예상완료시간이 자동으로 다시 계산됩니다"
+              >
+                🍽 식사시간 {breaks.length > 0 && <span className="text-gray-400">({breaks.length})</span>}
+              </button>
+            )}
+          </div>
         </div>
 
         {machines.map((machine) => {
@@ -1646,5 +1697,6 @@ export default function ScheduleBoard() {
       </div>
     )}
     </div>
+    </>
   );
 }

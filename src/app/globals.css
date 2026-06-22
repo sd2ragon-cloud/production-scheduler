@@ -30,3 +30,71 @@ input[type="number"]::-webkit-inner-spin-button,
 input[type="number"]::-webkit-outer-spin-button {
   opacity: 1;
 }
+
+/* ===== 인쇄: 기계별 '작업순서' (첨부 엑셀 양식 재현) ===== */
+/* 화면에서는 숨기고 인쇄 시에만 표시. 치수는 엑셀 원본과 동일하게 맞춤
+   (A4 세로, 여백 좌우 6mm/상 12mm/하 5mm, 제목 20pt·번호 18pt·작업명 13pt, 행높이 35.25pt). */
+.print-area { display: none; }
+
+@media print {
+  @page { size: A4 portrait; margin: 12mm 6mm 5mm 6mm; }
+
+  /* 인쇄 영역만 남기고 화면 UI(네비게이션·작업판)는 레이아웃에서 제거.
+     display:none으로 빼야 빈 페이지가 생기지 않는다. */
+  body { background: #fff !important; }
+  body > *:not(main) { display: none !important; }
+  main { padding: 0 !important; }
+  main > :not(.print-area) { display: none !important; }
+  .print-area {
+    display: block !important;
+    width: 100%;
+    color: #000;
+  }
+
+  .print-date {
+    font-size: 9pt;
+    text-align: right;
+    margin-bottom: 2mm;
+  }
+
+  /* 기계 블록 2열 그리드 (엑셀: A/B · C(간격) · D/E) */
+  .print-grid {
+    display: grid;
+    grid-template-columns: 80mm 80mm;
+    column-gap: 8mm;
+    row-gap: 5mm;
+    justify-content: center;
+  }
+
+  .print-block {
+    width: 80mm;
+    border-collapse: collapse;
+    table-layout: fixed;
+    break-inside: avoid;
+  }
+  .print-block th,
+  .print-block td {
+    border: 1px solid #000;
+    vertical-align: middle;
+    text-align: center;
+  }
+
+  .print-title {
+    height: 39pt;
+    font-size: 20pt;
+    font-weight: bold;
+  }
+  .print-num {
+    width: 9.3mm;
+    height: 35.25pt;
+    font-size: 18pt;
+    font-weight: bold;
+  }
+  .print-name {
+    height: 35.25pt;
+    font-size: 13pt;
+    padding: 0 4pt;
+    line-height: 1.1;
+    word-break: break-all;
+  }
+}
