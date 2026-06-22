@@ -15,9 +15,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const partProcesses = body.part_processes && typeof body.part_processes === 'object'
     ? JSON.stringify(body.part_processes)
     : '{}';
+  const partQuantities = body.part_quantities && typeof body.part_quantities === 'object'
+    ? JSON.stringify(body.part_quantities)
+    : '{}';
 
   await db.execute({
-    sql: `UPDATE orders SET order_code = ?, product_name = ?, component = ?, quantity_sheets = ?, deadline = ?, special_process = ?, priority = ?, notes = ?, duration_minutes = ?, part_durations = ?, part_processes = ?, status = ? WHERE id = ?`,
+    sql: `UPDATE orders SET order_code = ?, product_name = ?, component = ?, quantity_sheets = ?, deadline = ?, special_process = ?, priority = ?, notes = ?, duration_minutes = ?, part_durations = ?, part_processes = ?, part_quantities = ?, status = ? WHERE id = ?`,
     args: [
       body.order_code || '',
       body.product_name,
@@ -30,6 +33,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       body.duration_minutes || 0,
       partDurations,
       partProcesses,
+      partQuantities,
       body.status || 'pending',
       id,
     ],

@@ -32,9 +32,12 @@ export async function POST(req: NextRequest) {
   const partProcesses = body.part_processes && typeof body.part_processes === 'object'
     ? JSON.stringify(body.part_processes)
     : '{}';
+  const partQuantities = body.part_quantities && typeof body.part_quantities === 'object'
+    ? JSON.stringify(body.part_quantities)
+    : '{}';
 
   const result = await db.execute({
-    sql: `INSERT INTO orders (order_code, product_name, component, quantity_sheets, deadline, special_process, priority, notes, duration_minutes, part_durations, part_processes, factory, process_line) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    sql: `INSERT INTO orders (order_code, product_name, component, quantity_sheets, deadline, special_process, priority, notes, duration_minutes, part_durations, part_processes, part_quantities, factory, process_line) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       body.order_code || '',
       body.product_name,
@@ -47,6 +50,7 @@ export async function POST(req: NextRequest) {
       body.duration_minutes || 0,
       partDurations,
       partProcesses,
+      partQuantities,
       body.factory || '본공장',
       body.process_line || '매엽',
     ],
