@@ -988,7 +988,7 @@ export default function ScheduleBoard() {
   };
 
   // 엑셀 '작업순서' 양식: 기계별 블록(제목 + 번호·작업명 목록)을 2열 그리드로. 인쇄 시에만 보인다.
-  const PRINT_MIN_ROWS = 9;
+  const PRINT_MIN_ROWS = 10;
   const renderPrint = () => (
     <div className="print-grid">
       {machines.map((m) => {
@@ -996,6 +996,10 @@ export default function ScheduleBoard() {
         const rowCount = Math.max(entries.length, PRINT_MIN_ROWS);
         return (
           <table className="print-block" key={m.id}>
+            <colgroup>
+              <col className="print-col-num" />
+              <col className="print-col-name" />
+            </colgroup>
             <tbody>
               <tr>
                 <th className="print-title" colSpan={2}>{m.name} 작업순서</th>
@@ -1019,7 +1023,6 @@ export default function ScheduleBoard() {
   return (
     <>
     <div className="print-area">
-      <div className="print-date">{dateStr} 작업순서</div>
       {renderPrint()}
     </div>
     <div className="overflow-auto h-[calc(100vh-80px)]">
