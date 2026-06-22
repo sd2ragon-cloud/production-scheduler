@@ -1473,7 +1473,7 @@ export default function ScheduleBoard() {
                   onDrop={() => onDropOnBucket(b.id)}
                   className={isTarget ? "ring-2 ring-inset ring-blue-500 bg-blue-50/40" : ""}
                 >
-                  <div className="bg-gray-100 px-2 py-2 flex items-center justify-between border-b border-black">
+                  <div className="bg-gray-100 pl-2 pr-3 py-2 flex items-center justify-between border-b border-black">
                     {manageBuckets ? (
                       <input
                         defaultValue={b.name}
@@ -1485,7 +1485,7 @@ export default function ScheduleBoard() {
                       <span className="text-sm font-bold text-gray-800">{b.name}</span>
                     )}
                     <div className="flex items-center gap-1.5">
-                      <span className="text-base font-bold text-gray-700">{fmtH(locationMinutes(bucketOrders, b.id))}</span>
+                      <span className="text-sm text-gray-500">{fmtH(locationMinutes(bucketOrders, b.id))}</span>
                       {manageBuckets && (
                         <>
                           <button onClick={() => moveBucket(idx, -1)} disabled={idx === 0} className="text-gray-400 hover:text-gray-700 text-[10px] disabled:opacity-30" title="위로">▲</button>
