@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useProcess } from "./components/ProcessContext";
 import { useAuth } from "./components/AuthContext";
 import { parseParts, parsePartDurations, parsePartProcesses, partTotals, parsePartBuckets } from "@/lib/parts";
@@ -979,9 +979,16 @@ export default function ScheduleBoard() {
   const now = new Date();
   const dateStr = `${now.getFullYear()}년 ${now.getMonth() + 1}월 ${now.getDate()}일`;
 
-  // 설비명 칸 너비를 현재 탭에서 가장 긴 설비명에 맞추고, 좌우 여백이 같도록 가운데 정렬한다.
-  const maxMachineNameLen = machines.reduce((mx, m) => Math.max(mx, m.name.length), 0);
-  const machineNameWidth = `${Math.max(maxMachineNameLen, 4) + 2}em`;
+  // 설비명 칸 너비 = 현재 탭에서 가장 긴 설비명의 실제 픽셀 폭(canvas 측정).
+  // 설비명은 좌측 정렬, 칸 오른쪽에 좌측 패딩(px-4=16px)과 동일한 여백을 둔 뒤 메모란이 시작된다.
+  const machineNameWidth = useMemo(() => {
+    if (typeof document === "undefined" || machines.length === 0) return undefined;
+    const ctx = document.createElement("canvas").getContext("2d");
+    if (!ctx) return undefined;
+    ctx.font = `700 16px ${getComputedStyle(document.body).fontFamily}`;
+    const max = machines.reduce((mx, m) => Math.max(mx, ctx.measureText(m.name).width), 0);
+    return `${Math.ceil(max)}px`;
+  }, [machines]);
 
   // 인쇄용 작업명: "제품명(구성)소요시간" — 엑셀 작업순서 양식과 동일한 표기
   const jobLabel = (e: ScheduleEntry): string => {
@@ -1083,8 +1090,8 @@ export default function ScheduleBoard() {
               onDragLeave={() => { if (dragOverMachine.current === machine.id) setDropTarget(null); }}
               onDrop={() => onDropOnMachine(machine.id)}
             >
-              <div className="bg-gray-800 text-white px-4 py-2 flex items-center gap-3">
-                <span className="font-bold shrink-0 whitespace-nowrap text-center" style={{ width: machineNameWidth }}>{machine.name}</span>
+              <div className="bg-gray-800 text-white px-4 py-2 flex items-center">
+                <span className="font-bold shrink-0 whitespace-nowrap mr-4" style={{ width: machineNameWidth }}>{machine.name}</span>
                 <input
                   type="text"
                   className="flex-1 min-w-0 bg-gray-700 text-white text-xs px-2 py-0.5 border border-gray-500 focus:border-blue-400 outline-none disabled:opacity-60"
@@ -1093,7 +1100,7 @@ export default function ScheduleBoard() {
                   onChange={(e) => handleMemoChange(machine.id, e.target.value)}
                   disabled={!isAdmin}
                 />
-                <div className="flex items-center gap-3 shrink-0">
+                <div className="flex items-center gap-3 shrink-0 ml-3">
                   <div className="flex items-center gap-1.5">
                     <span className="text-xs text-gray-400">시작</span>
                     <input
