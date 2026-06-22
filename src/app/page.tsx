@@ -979,6 +979,10 @@ export default function ScheduleBoard() {
   const now = new Date();
   const dateStr = `${now.getFullYear()}년 ${now.getMonth() + 1}월 ${now.getDate()}일`;
 
+  // 설비명 칸 너비를 현재 탭에서 가장 긴 설비명에 맞춘다(메모란이 설비명을 가리지 않도록).
+  const maxMachineNameLen = machines.reduce((mx, m) => Math.max(mx, m.name.length), 0);
+  const machineNameWidth = `${Math.max(maxMachineNameLen, 4) + 0.5}em`;
+
   // 인쇄용 작업명: "제품명(구성)소요시간" — 엑셀 작업순서 양식과 동일한 표기
   const jobLabel = (e: ScheduleEntry): string => {
     const comp = e.component_part || e.component || "";
@@ -1080,7 +1084,7 @@ export default function ScheduleBoard() {
               onDrop={() => onDropOnMachine(machine.id)}
             >
               <div className="bg-gray-800 text-white px-4 py-2 flex items-center gap-3">
-                <span className="font-bold w-16 shrink-0 whitespace-nowrap">{machine.name}</span>
+                <span className="font-bold shrink-0 whitespace-nowrap" style={{ width: machineNameWidth }}>{machine.name}</span>
                 <input
                   type="text"
                   className="flex-1 min-w-0 bg-gray-700 text-white text-xs px-2 py-0.5 border border-gray-500 focus:border-blue-400 outline-none disabled:opacity-60"
