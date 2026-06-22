@@ -1473,7 +1473,7 @@ export default function ScheduleBoard() {
                   onDrop={() => onDropOnBucket(b.id)}
                   className={isTarget ? "ring-2 ring-inset ring-blue-500 bg-blue-50/40" : ""}
                 >
-                  <div className="bg-gray-100 pl-2 pr-3 py-2 flex items-center justify-between border-b border-black">
+                  <div className="bg-gray-100 pl-4 pr-6 py-2 flex items-center justify-between border-b border-black">
                     {manageBuckets ? (
                       <input
                         defaultValue={b.name}
