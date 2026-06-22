@@ -970,11 +970,13 @@ export default function ScheduleBoard() {
             <p className="font-medium text-xs leading-tight min-w-0 flex-1 break-all">{order.product_name}</p>
             <div className="flex items-center gap-1.5 shrink-0 ml-2">
               <p className={`text-xs font-mono ${deadlineColor(order.deadline)}`}>
-                {order.deadline}
+                {order.deadline || "납기 미정"}
               </p>
-              <p className={`text-xs ${days < 0 ? "text-red-600" : days <= 2 ? "text-orange-500" : "text-gray-400"}`}>
-                {days < 0 ? `${Math.abs(days)}일 초과` : days === 0 ? "오늘" : `D-${days}`}
-              </p>
+              {order.deadline && (
+                <p className={`text-xs ${days < 0 ? "text-red-600" : days <= 2 ? "text-orange-500" : "text-gray-400"}`}>
+                  {days < 0 ? `${Math.abs(days)}일 초과` : days === 0 ? "오늘" : `D-${days}`}
+                </p>
+              )}
               {isAdmin && (<>
               <button
                 onClick={(e) => { e.stopPropagation(); startEditOrder(order); }}
@@ -1768,9 +1770,9 @@ export default function ScheduleBoard() {
                   return (
                     <>
                       <div className={multi ? "col-span-2" : ""}>
-                        <label className="text-[10px] text-gray-500">납기일</label>
+                        <label className="text-[10px] text-gray-500">납기일 (선택)</label>
                         <input
-                          type="text" inputMode="numeric" required placeholder="YYYYMMDD"
+                          type="text" inputMode="numeric" placeholder="YYYYMMDD (선택)"
                           maxLength={10}
                           className="border px-2 py-1.5 text-xs w-full"
                           value={newOrder.deadline}
