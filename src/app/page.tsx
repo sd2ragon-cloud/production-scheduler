@@ -394,7 +394,8 @@ export default function ScheduleBoard() {
   };
 
   // 통째(구성 미분할) 배정 행을 다른 설비로 이동/분할. moveMinutes가 행 전체보다 작으면 분할 생산.
-  const handleMoveEntry = async (entryId: number, targetMachineId: number, srcMachineId: number, moveMinutes: number = 0, beforeEntryId: number | null = null) => {
+  // merge=true면 같은 주문의 기존 행(mergeEntryId)에 합친다(분할된 제품을 하나로).
+  const handleMoveEntry = async (entryId: number, targetMachineId: number, srcMachineId: number, moveMinutes: number = 0, beforeEntryId: number | null = null, merge: boolean = false, mergeEntryId: number | null = null) => {
     setLoading(true);
     await fetch("/api/schedule/move-entry", {
       method: "POST",
@@ -406,6 +407,8 @@ export default function ScheduleBoard() {
         source_start_time: machineStartTimes[srcMachineId] || "08:00",
         target_start_time: machineStartTimes[targetMachineId] || "08:00",
         before_entry_id: beforeEntryId,
+        merge,
+        merge_entry_id: mergeEntryId,
       }),
     });
     await fetchAll();
@@ -760,6 +763,8 @@ export default function ScheduleBoard() {
     if (oid == null || oid !== entry.order_id) return false;
     if (dragSplit !== null) return dragSplit.entryId !== entry.id;
     if (dragOrderId !== null) return dragAll || dragPart !== "";
+    // 통째 행(분할 생산된 행)을 같은 제품의 다른 행에 드롭하면 하나로 합친다
+    if (dragEntryId !== null) return dragEntryId !== entry.id;
     return false;
   };
 
@@ -1245,7 +1250,12 @@ export default function ScheduleBoard() {
                             setReorderTarget(null);
                             setMergeHoverId(null);
                             const fromEntry = dragEntryId !== null ? schedule.find((s) => s.id === dragEntryId) : null;
-                            if (fromEntry && fromEntry.machine_id === machine.id) {
+                            if (fromEntry && fromEntry.order_id === entry.order_id && fromEntry.id !== entry.id) {
+                              // 같은 제품(분할된 행)을 이 행에 합치기 (같은 설비/다른 설비 모두)
+                              handleMoveEntry(fromEntry.id, machine.id, fromEntry.machine_id, 0, null, true, entry.id);
+                              setDragEntryId(null);
+                              setDragOrderId(null);
+                            } else if (fromEntry && fromEntry.machine_id === machine.id) {
                               // 같은 설비 내 순서 변경 (위/아래 절반에 따라 앞/뒤 삽입)
                               const currentEntries = [...entries];
                               const fromIdx = currentEntries.findIndex((x) => x.id === dragEntryId);

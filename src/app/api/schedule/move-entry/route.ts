@@ -9,7 +9,7 @@ import { guardEntry, guardMachine } from '@/lib/permits';
 // move_minutes(실제 소요시간 기준)가 행의 전체보다 작으면 그만큼만 분할 이동(원본은 나머지 유지),
 // 같거나 크면(또는 0) 전체 이동. 설비→설비 분할 생산을 지원한다. (매엽/윤전/무선 공통)
 export async function POST(req: NextRequest) {
-  const { entry_id, target_machine_id, move_minutes, before_entry_id, source_start_time, target_start_time } = await req.json();
+  const { entry_id, target_machine_id, move_minutes, before_entry_id, source_start_time, target_start_time, merge, merge_entry_id } = await req.json();
   const denyE = await guardEntry(req, entry_id);
   if (denyE) return denyE;
   const denyM = await guardMachine(req, target_machine_id);
@@ -47,7 +47,8 @@ export async function POST(req: NextRequest) {
   const partKeys = Object.keys(srcDurs);
   const hasParts = partKeys.length > 0;
   const reqMove = Number(move_minutes);
-  const partial = srcEff > 0 && Number.isFinite(reqMove) && reqMove > 0 && reqMove < srcEff;
+  // merge(분할된 제품 합치기)일 때는 항상 원본 전체를 대상 행에 합친다(부분 합치기 없음).
+  const partial = merge !== true && srcEff > 0 && Number.isFinite(reqMove) && reqMove > 0 && reqMove < srcEff;
 
   let movedBase: number;
   let remainingBase: number;
@@ -86,22 +87,48 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // 2) 대상 설비에 새 행 추가 (component_part 그대로, part_durations는 옮긴 만큼)
+  // 2) 대상 설비 처리. merge면 같은 주문의 기존 행에 합쳐(분할된 제품 합치기), 아니면 새 행 추가.
   const targetBase = fullMove ? srcBase : movedBase;
+  const movedDursFinal = fullMove ? srcDurs : movedDurs;
   const targetDursJson = fullMove ? (src.part_durations || '{}') : (hasParts ? JSON.stringify(movedDurs) : '{}');
-  const maxSeqResult = await db.execute({
-    sql: 'SELECT COALESCE(MAX(sequence), 0) as max_seq FROM schedule_entries WHERE machine_id = ?',
-    args: [targetMachine],
-  });
-  const maxSeq = Number((maxSeqResult.rows[0] as unknown as { max_seq: number }).max_seq);
-  const insertResult = await db.execute({
-    sql: 'INSERT INTO schedule_entries (order_id, machine_id, sequence, base_minutes, duration_minutes, component_part, part_durations, print_mode, scheduled_date, start_time, end_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-    args: [orderId, targetMachine, maxSeq + 1, targetBase, effectiveMinutes(targetBase, newRowMode), src.component_part || '', targetDursJson, newRowMode, today, today + ' 08:00', today + ' 08:00'],
-  });
-  const newEntryId = Number(insertResult.lastInsertRowid);
 
-  // 드롭 위치(before_entry_id) 앞으로 끼워넣기
-  if (before_entry_id != null && Number(before_entry_id) !== newEntryId) {
+  const mergeInto = merge === true && merge_entry_id != null ? Number(merge_entry_id) : null;
+  const exResult = mergeInto != null
+    ? await db.execute({
+        sql: 'SELECT id, component_part, part_durations, base_minutes, print_mode FROM schedule_entries WHERE id = ? AND order_id = ? AND machine_id = ? AND id != ?',
+        args: [mergeInto, orderId, targetMachine, Number(src.id)],
+      })
+    : null;
+  const ex = exResult?.rows[0] as unknown as { id: number; component_part: string; part_durations: string; base_minutes: number; print_mode: string } | undefined;
+
+  let newEntryId: number | null = null;
+  if (ex) {
+    // 같은 주문 행에 합치기: 구성·시간 합산
+    const exParts = parseParts(String(ex.component_part));
+    for (const p of parseParts(String(src.component_part))) if (!exParts.includes(p)) exParts.push(p);
+    const durs = parsePartDurations(ex.part_durations);
+    for (const [p, m] of Object.entries(movedDursFinal)) durs[p] = (Number(durs[p]) || 0) + (Number(m) || 0);
+    const mergedHasParts = Object.keys(durs).length > 0;
+    const exBase = mergedHasParts ? sumDurations(durs) : (Number(ex.base_minutes) || 0) + targetBase;
+    await db.execute({
+      sql: 'UPDATE schedule_entries SET component_part = ?, part_durations = ?, base_minutes = ?, duration_minutes = ? WHERE id = ?',
+      args: [exParts.join(', '), JSON.stringify(durs), exBase, effectiveMinutes(exBase, ex.print_mode), Number(ex.id)],
+    });
+  } else {
+    const maxSeqResult = await db.execute({
+      sql: 'SELECT COALESCE(MAX(sequence), 0) as max_seq FROM schedule_entries WHERE machine_id = ?',
+      args: [targetMachine],
+    });
+    const maxSeq = Number((maxSeqResult.rows[0] as unknown as { max_seq: number }).max_seq);
+    const insertResult = await db.execute({
+      sql: 'INSERT INTO schedule_entries (order_id, machine_id, sequence, base_minutes, duration_minutes, component_part, part_durations, print_mode, scheduled_date, start_time, end_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      args: [orderId, targetMachine, maxSeq + 1, targetBase, effectiveMinutes(targetBase, newRowMode), src.component_part || '', targetDursJson, newRowMode, today, today + ' 08:00', today + ' 08:00'],
+    });
+    newEntryId = Number(insertResult.lastInsertRowid);
+  }
+
+  // 드롭 위치(before_entry_id) 앞으로 끼워넣기 (새 행을 만든 경우만)
+  if (newEntryId !== null && before_entry_id != null && Number(before_entry_id) !== newEntryId) {
     const ents = await db.execute({
       sql: 'SELECT id FROM schedule_entries WHERE machine_id = ? ORDER BY sequence ASC',
       args: [targetMachine],
