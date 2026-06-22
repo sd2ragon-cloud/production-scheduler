@@ -1063,15 +1063,12 @@ export default function ScheduleBoard() {
     return hours !== "" ? `${base}${hours}` : base;
   };
 
-  // 작업순서 출력물 한 줄: "작업명 (공백) 소요시간 (공백) 비고"
+  // 작업순서 출력물 첫 줄: "작업명 (공백) 소요시간" (비고는 다음 줄에 별도 렌더)
   const orderSheetLabel = (e: ScheduleEntry): string => {
     const comp = e.component_part || e.component || "";
     const name = comp ? `${e.product_name}(${comp})` : e.product_name;
     const hours = e.duration_minutes ? Math.round((e.duration_minutes / 60) * 10) / 10 : "";
-    const parts = [name];
-    if (hours !== "") parts.push(String(hours));
-    if (e.order_notes && e.order_notes.trim()) parts.push(e.order_notes.trim());
-    return parts.join(" ");
+    return hours !== "" ? `${name} ${hours}` : name;
   };
 
   // 엑셀 '작업순서' 양식: 기계별 블록(제목 + 번호·작업명 목록)을 2열 그리드로. 인쇄 시에만 보인다.
@@ -1104,7 +1101,16 @@ export default function ScheduleBoard() {
                     return (
                       <tr key={i}>
                         <td className="print-num">{e ? i + 1 : ""}</td>
-                        <td className="print-name">{e ? orderSheetLabel(e) : ""}</td>
+                        <td className="print-name">
+                          {e ? (
+                            <>
+                              {orderSheetLabel(e)}
+                              {e.order_notes && e.order_notes.trim() ? (
+                                <span className="print-note">{e.order_notes.trim()}</span>
+                              ) : null}
+                            </>
+                          ) : ""}
+                        </td>
                       </tr>
                     );
                   })}

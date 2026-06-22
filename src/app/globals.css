@@ -118,6 +118,13 @@ input[type="number"]::-webkit-outer-spin-button {
     line-height: 1.15;
     word-break: break-all;
   }
+  /* 비고: 작업명·소요시간 다음 줄에 작게 표기 */
+  .print-note {
+    display: block;
+    font-size: 9pt;
+    line-height: 1.1;
+    color: #333;
+  }
 
   /* ── 스케줄 전체 개요 인쇄: 상단 기계별 작업계획 + 하단 1차 배정·배정 대기. A4 한 장에 꽉 차게. ── */
   .pf-page {
