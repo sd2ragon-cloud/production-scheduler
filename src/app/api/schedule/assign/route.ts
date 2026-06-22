@@ -22,12 +22,12 @@ export async function POST(req: NextRequest) {
   const totals = partTotals(order?.component ?? '', order?.part_durations, Number(order?.duration_minutes) || 0);
 
   const machineResult = await db.execute({
-    sql: 'SELECT name, speed_sheets_per_hour, setup_time_minutes FROM machines WHERE id = ?',
+    sql: 'SELECT name, speed_sheets_per_hour, setup_time_minutes, process_line FROM machines WHERE id = ?',
     args: [machine_id],
   });
-  const machine = machineResult.rows[0] as unknown as { name: string; speed_sheets_per_hour: number; setup_time_minutes: number } | undefined;
-  // 양면설비면 기본 양면(소요시간 절반), 단면설비면 단면
-  const machineMode = machine && isDoubleSided(machine.name) ? 'double' : 'single';
+  const machine = machineResult.rows[0] as unknown as { name: string; speed_sheets_per_hour: number; setup_time_minutes: number; process_line: string } | undefined;
+  // 양면설비면 기본 양면(소요시간 절반), 단면설비면 단면. 윤전은 양면 개념이 없어 항상 단면(입력 소요시간 그대로).
+  const machineMode = machine && machine.process_line !== '윤전' && isDoubleSided(machine.name) ? 'double' : 'single';
 
   const incomingParts = parseParts(part);
   const today = new Date().toISOString().split('T')[0];
