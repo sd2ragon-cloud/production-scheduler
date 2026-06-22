@@ -851,6 +851,28 @@ export default function ScheduleBoard() {
   // 1차 배정 안 된(대기) 구성이 남아 있는 주문
   const waitingOrders = orders.filter((o) => showsAt(o, undefined));
 
+  // 분 → "N.Nh" (소요시간 합계 표기)
+  const fmtH = (min: number) => `${Math.round(min / 6) / 10}h`;
+
+  // 특정 위치(대기=undefined / 칸=bucketId)에 표시되는 주문들의 '남은 구성' 소요시간 합계(분)
+  const locationMinutes = (orderList: Order[], bucketId?: number) =>
+    orderList.reduce((sum, o) => {
+      const parts = parseParts(o.component);
+      if (parts.length === 0) return sum + (o.duration_minutes || 0);
+      const totals = partTotals(o.component, o.part_durations, o.duration_minutes);
+      const alloc: Record<string, number> = {};
+      for (const s of schedule) {
+        if (s.order_id !== o.id) continue;
+        for (const [p, m] of Object.entries(parsePartDurations(s.part_durations))) {
+          alloc[p] = (alloc[p] || 0) + (Number(m) || 0);
+        }
+      }
+      return sum + partsAtLocation(o, bucketId).reduce((s2, p) => {
+        const t = Number(totals[p]) || 0;
+        return s2 + (t > 0 ? t - (alloc[p] || 0) : 0);
+      }, 0);
+    }, 0);
+
   // 주문 카드 (배정 대기 / 1차 배정 칸 공용). bucketId=undefined면 대기, 숫자면 그 칸.
   // 해당 위치에 표시할 남은 구성이 없으면 렌더하지 않음.
   const renderOrderCard = (order: Order, bucketId?: number) => {
@@ -1015,7 +1037,7 @@ export default function ScheduleBoard() {
                       disabled={!isAdmin}
                     />
                   </div>
-                  <span className="text-sm text-gray-300 w-12 text-right shrink-0">{entries.length}건</span>
+                  <span className="text-sm text-gray-300 w-16 text-right shrink-0">{fmtH(entries.reduce((s, e) => s + (e.duration_minutes || 0), 0))}</span>
                 </div>
               </div>
 
@@ -1399,7 +1421,7 @@ export default function ScheduleBoard() {
                       <span className="text-xs font-bold text-gray-800">{b.name}</span>
                     )}
                     <div className="flex items-center gap-1">
-                      <span className="text-[10px] text-gray-400">{bucketOrders.length}건</span>
+                      <span className="text-[10px] text-gray-400">{fmtH(locationMinutes(bucketOrders, b.id))}</span>
                       {manageBuckets && (
                         <>
                           <button onClick={() => moveBucket(idx, -1)} disabled={idx === 0} className="text-gray-400 hover:text-gray-700 text-[10px] disabled:opacity-30" title="위로">▲</button>
@@ -1444,7 +1466,7 @@ export default function ScheduleBoard() {
         <div className="px-4 py-3 border-b bg-gray-50 flex items-center justify-between">
           <div>
             <h3 className="font-bold text-gray-900">배정 대기</h3>
-            <p className="text-xs text-gray-500">{waitingOrders.length}건</p>
+            <p className="text-xs text-gray-500">{fmtH(locationMinutes(waitingOrders, undefined))}</p>
           </div>
           {isAdmin && (
           <button
