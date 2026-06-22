@@ -185,6 +185,9 @@ export default function ScheduleBoard() {
   const dragOverMachine = useRef<number | null>(null);
   const [machineStartTimes, setMachineStartTimes] = useState<Record<number, string>>({});
   const [machineMemos, setMachineMemos] = useState<Record<number, string>>({});
+  // 인쇄 출력 종류: 'order'=기계별 작업순서표, 'full'=스케줄 전체 개요(기계계획+1차배정+대기)
+  const [printView, setPrintView] = useState<"order" | "full">("order");
+  const wantPrint = useRef(false);
 
   const fetchAll = useCallback(async () => {
     const qs = `?process_line=${encodeURIComponent(processLine)}`;
@@ -222,6 +225,15 @@ export default function ScheduleBoard() {
   }, [processLine]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  // 인쇄 뷰가 바뀐 뒤(원하는 출력이 렌더된 후) 실제 인쇄 대화상자를 띄운다.
+  useEffect(() => {
+    if (wantPrint.current) { wantPrint.current = false; window.print(); }
+  }, [printView]);
+  const triggerPrint = (view: "order" | "full") => {
+    if (view === printView) { window.print(); }
+    else { wantPrint.current = true; setPrintView(view); }
+  };
 
   const startTimeTimers = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
 
@@ -1094,10 +1106,59 @@ export default function ScheduleBoard() {
     ));
   };
 
+  // 스케줄 전체 개요 인쇄: 상단 기계별 작업계획 + 하단 1차 배정·배정 대기. A4 한 장에 꽉 차게.
+  const renderFullPrint = () => {
+    const ov = (o: Order) => {
+      const q = isRoll && o.quantity_sheets ? ` ${o.quantity_sheets.toLocaleString()}부` : "";
+      return `${o.product_name}${o.component ? `(${o.component})` : ""}${q}`;
+    };
+    return (
+      <div className="pf-page">
+        <div className="pf-head">{processLine} 생산 스케줄 — {dateStr}</div>
+        <div className="pf-machines">
+          {machines.map((m) => {
+            const entries = getEntriesForMachine(m.id);
+            const total = entries.reduce((s, e) => s + (e.duration_minutes || 0), 0);
+            return (
+              <div className="pf-mbox" key={m.id}>
+                <div className="pf-mname"><span>{m.name}</span><span className="pf-mtime">{fmtH(total)}</span></div>
+                {entries.length === 0 ? (
+                  <div className="pf-empty">-</div>
+                ) : (
+                  <ol className="pf-list">
+                    {entries.map((e) => <li key={e.id}>{jobLabel(e)}</li>)}
+                  </ol>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        <div className="pf-bottom">
+          <div className="pf-sect">
+            <div className="pf-secttl">1차 배정 <span className="pf-secsum">{fmtH(buckets.reduce((s, b) => s + locationMinutes(orders.filter((o) => showsAt(o, b.id)), b.id), 0))}</span></div>
+            <div className="pf-secbody">
+              {buckets.map((b) => {
+                const bo = orders.filter((o) => showsAt(o, b.id));
+                if (bo.length === 0) return null;
+                return <div key={b.id} className="pf-row"><b>{b.name}</b> ({fmtH(locationMinutes(bo, b.id))}) : {bo.map(ov).join(", ")}</div>;
+              })}
+            </div>
+          </div>
+          <div className="pf-sect">
+            <div className="pf-secttl">배정 대기 <span className="pf-secsum">{fmtH(locationMinutes(waitingOrders, undefined))}</span></div>
+            <div className="pf-secbody">
+              {waitingOrders.map((o) => <div key={o.id} className="pf-row">{ov(o)}</div>)}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <>
-    <div className="print-area">
-      {renderPrint()}
+    <div className="print-root print-area">
+      {printView === "full" ? renderFullPrint() : renderPrint()}
     </div>
     <div className="overflow-auto h-[calc(100vh-80px)]">
     {/* 고정 폭(반응형 축소 없음). 화면이 작으면 비율 축소 대신 가로/세로 스크롤로 본다. */}
@@ -1111,12 +1172,21 @@ export default function ScheduleBoard() {
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => window.print()}
+              onClick={() => triggerPrint("order")}
               className="text-sm border border-gray-300 bg-white px-3 py-1.5 hover:bg-gray-100 text-gray-700 whitespace-nowrap"
               title="기계별 작업순서를 엑셀 양식으로 인쇄합니다"
             >
-              🖨 인쇄
+              🖨 작업순서
             </button>
+            {(processLine === "매엽" || processLine === "윤전") && (
+              <button
+                onClick={() => triggerPrint("full")}
+                className="text-sm border border-gray-300 bg-white px-3 py-1.5 hover:bg-gray-100 text-gray-700 whitespace-nowrap"
+                title="기계별 작업계획 + 1차 배정·배정 대기를 A4 한 장에 인쇄합니다"
+              >
+                🖨 스케줄
+              </button>
+            )}
             {isAdmin && (
               <button
                 onClick={() => setShowBreaks(true)}

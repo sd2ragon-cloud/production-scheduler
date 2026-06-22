@@ -112,4 +112,72 @@ input[type="number"]::-webkit-outer-spin-button {
     line-height: 1.15;
     word-break: break-all;
   }
+
+  /* ── 스케줄 전체 개요 인쇄: 상단 기계별 작업계획 + 하단 1차 배정·배정 대기. A4 한 장에 꽉 차게. ── */
+  .pf-page {
+    box-sizing: border-box;
+    min-height: 297mm;
+    padding: 6mm;
+    display: flex;
+    flex-direction: column;
+  }
+  .pf-head {
+    flex: 0 0 auto;
+    font-size: 13pt;
+    font-weight: bold;
+    text-align: center;
+    margin-bottom: 3mm;
+  }
+  .pf-machines {
+    flex: 1 1 auto;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2mm;
+    align-content: start;
+  }
+  .pf-mbox {
+    border: 1px solid #000;
+    display: flex;
+    flex-direction: column;
+    break-inside: avoid;
+    overflow: hidden;
+  }
+  .pf-mname {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #e5e7eb;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    font-weight: bold;
+    font-size: 9pt;
+    padding: 0.8mm 1.5mm;
+    border-bottom: 1px solid #000;
+  }
+  .pf-mtime { font-weight: normal; font-size: 8pt; }
+  .pf-list { margin: 0; padding: 1mm 1mm 1mm 6mm; }
+  .pf-list li { font-size: 8pt; line-height: 1.25; word-break: break-all; }
+  .pf-empty { font-size: 8pt; color: #888; padding: 1mm 1.5mm; }
+  .pf-bottom {
+    flex: 0 0 auto;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2mm;
+    margin-top: 3mm;
+  }
+  .pf-sect { border: 1px solid #000; display: flex; flex-direction: column; }
+  .pf-secttl {
+    display: flex;
+    justify-content: space-between;
+    background: #e5e7eb;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    font-weight: bold;
+    font-size: 9pt;
+    padding: 0.8mm 1.5mm;
+    border-bottom: 1px solid #000;
+  }
+  .pf-secsum { font-weight: normal; font-size: 8pt; }
+  .pf-secbody { padding: 1mm 1.5mm; }
+  .pf-row { font-size: 8pt; line-height: 1.3; word-break: break-all; margin-bottom: 0.5mm; }
 }
