@@ -80,6 +80,7 @@ async function initializeDb(db: Client) {
       name TEXT NOT NULL,
       process_line TEXT NOT NULL DEFAULT '매엽',
       sort_order INTEGER NOT NULL DEFAULT 0,
+      group_id INTEGER,
       created_at TEXT DEFAULT (datetime('now', 'localtime'))
     )`,
     // 식사·휴게 시간(자정 기준 분 단위). 이 시간대에는 작업하지 않으므로 예상완료시간 계산에서 제외된다.
@@ -135,6 +136,14 @@ async function initializeDb(db: Client) {
   // Migrate orders: add part_quantities (파트별 수량/부, 윤전) column if missing
   try {
     await db.execute(`ALTER TABLE orders ADD COLUMN part_quantities TEXT NOT NULL DEFAULT '{}'`);
+  } catch {
+    // column already exists
+  }
+
+  // Migrate buckets: add group_id (좌우 분할 칸 묶음 식별자) column if missing.
+  // 같은 group_id를 가진 칸들은 한 칸을 좌우로 나눈 열로 나란히 표시된다. NULL=단독 칸.
+  try {
+    await db.execute(`ALTER TABLE buckets ADD COLUMN group_id INTEGER`);
   } catch {
     // column already exists
   }
