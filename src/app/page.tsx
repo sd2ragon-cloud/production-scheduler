@@ -1258,15 +1258,15 @@ export default function ScheduleBoard() {
                 </div>
               ) : (
                 <div className="px-3 pb-2">
-                <table className="w-full table-fixed">
+                <table className="w-full">
                   <thead>
                     <tr className="text-gray-500 text-[10px] border-b h-7">
                       <th className="px-1.5 py-0 text-left w-6">#</th>
                       <th className="px-1.5 py-0 text-center">작업명</th>
-                      <th className="px-1.5 py-0 text-center w-24">비고</th>
-                      <th className="px-1.5 py-0 text-center w-24">소요(시간)</th>
-                      <th className="px-1.5 py-0 text-left w-16">예상완료</th>
-                      <th className="px-1.5 py-0 text-left w-16">납기</th>
+                      <th className="px-1.5 py-0 text-center w-28">비고</th>
+                      <th className="px-1.5 py-0 text-center w-28">소요(시간)</th>
+                      <th className="px-1.5 py-0 text-left w-20">예상완료</th>
+                      <th className="px-1.5 py-0 text-left w-20">납기</th>
                       <th className="px-1.5 py-0 text-center w-6"></th>
                     </tr>
                   </thead>
@@ -1358,9 +1358,9 @@ export default function ScheduleBoard() {
                           }}
                         >
                           <td className="px-1.5 py-0 text-gray-400 text-[10px]">{entry.sequence}</td>
-                          <td className="px-1.5 py-0 align-middle">
-                            <div className="flex flex-wrap items-center gap-x-1 gap-y-0.5 max-h-9 overflow-hidden">
-                            <span className="font-medium text-[11px] break-all">{entry.product_name}</span>
+                          <td className="px-1.5 py-0 whitespace-nowrap">
+                            <div className="flex items-center gap-1">
+                            <span className="font-medium text-[11px] shrink-0">{entry.product_name}</span>
                             {(() => {
                               const eparts = parseParts(entry.component_part);
                               if (eparts.length === 0) {
@@ -1432,7 +1432,7 @@ export default function ScheduleBoard() {
                               }
                               return (
                                 <span
-                                  className="inline-flex flex-wrap items-center gap-1 align-middle"
+                                  className="inline-flex flex-nowrap items-center gap-1 align-middle"
                                   onDragOver={(e) => {
                                     if (isReorderZone) {
                                       e.preventDefault();
