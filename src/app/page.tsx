@@ -44,7 +44,6 @@ interface Bucket {
   name: string;
   process_line: string;
   sort_order: number;
-  group_id: number | null; // 같은 값끼리 좌우 2열로 묶여 한 칸처럼 표시. null=단독 칸.
 }
 
 // 식사·휴게 시간 (자정 기준 분 단위). 예상완료시간 계산에서 제외된다.
@@ -546,34 +545,6 @@ export default function ScheduleBoard() {
     if (!window.confirm(`'${b.name}' 칸을 삭제할까요?\n이 칸에 있던 주문은 '배정 대기'로 돌아갑니다.`)) return;
     setLoading(true);
     await fetch(`/api/buckets/${b.id}`, { method: "DELETE" });
-    // 분할 칸의 한 열을 지워 같은 그룹에 1개만 남으면 단독 칸으로 되돌린다.
-    if (b.group_id != null) {
-      const rest = buckets.filter((x) => x.group_id === b.group_id && x.id !== b.id);
-      if (rest.length === 1) {
-        await fetch(`/api/buckets/${rest[0].id}`, {
-          method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ group_id: null }),
-        });
-      }
-    }
-    await fetchAll();
-    setLoading(false);
-  };
-
-  // 칸을 좌우 2열로 나눈다(국 | 46처럼). 원본을 그룹 기준으로 삼고, 같은 그룹의 새 열을 추가한다.
-  const splitBucket = async (b: Bucket) => {
-    const name = window.prompt("오른쪽 칸 이름 (예: 46)", "46");
-    if (name === null) return;
-    setLoading(true);
-    const gid = b.group_id != null ? b.group_id : b.id;
-    if (b.group_id == null) {
-      await fetch(`/api/buckets/${b.id}`, {
-        method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ group_id: gid }),
-      });
-    }
-    await fetch("/api/buckets", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: name.trim() || "46", process_line: processLine, group_id: gid }),
-    });
     await fetchAll();
     setLoading(false);
   };
@@ -1191,59 +1162,6 @@ export default function ScheduleBoard() {
     );
   };
 
-  // 1차 배정 칸 하나를 렌더. isColumn=true면 좌우 분할의 한 열(좁은 폭).
-  const renderBucketBox = (b: Bucket, idx: number, isColumn: boolean) => {
-    const bucketOrders = orders.filter((o) => showsAt(o, b.id));
-    const isTarget = dropBucket === b.id;
-    return (
-      <div
-        key={b.id}
-        onDragOver={(e) => {
-          if (dragOrderId !== null || dragEntryId !== null || dragSplit !== null) {
-            e.preventDefault();
-            if (dropBucket !== b.id) setDropBucket(b.id);
-          }
-        }}
-        onDragLeave={(e) => {
-          if (!e.currentTarget.contains(e.relatedTarget as Node) && dropBucket === b.id) setDropBucket(null);
-        }}
-        onDrop={() => onDropOnBucket(b.id)}
-        className={`${isColumn ? "flex-1 min-w-0" : ""} ${isTarget ? "ring-2 ring-inset ring-blue-500 bg-blue-50/40" : ""}`}
-      >
-        <div className={`bg-gray-100 ${isColumn ? "px-2" : "pl-4 pr-6"} py-2 flex items-center justify-between border-b border-black`}>
-          {manageBuckets ? (
-            <input
-              defaultValue={b.name}
-              onBlur={(e) => renameBucket(b.id, e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-              className={`text-sm font-bold border px-1 py-0.5 ${isColumn ? "w-14 min-w-0" : "w-24"}`}
-            />
-          ) : (
-            <span className="text-sm font-bold text-gray-800 truncate">{b.name}</span>
-          )}
-          <div className="flex items-center gap-1.5 shrink-0">
-            <span className="text-sm text-gray-500">{fmtH(locationMinutes(bucketOrders, b.id))}</span>
-            {manageBuckets && (
-              <>
-                {!isColumn && <button onClick={() => moveBucket(idx, -1)} disabled={idx === 0} className="text-gray-400 hover:text-gray-700 text-[10px] disabled:opacity-30" title="위로">▲</button>}
-                {!isColumn && <button onClick={() => moveBucket(idx, 1)} disabled={idx === buckets.length - 1} className="text-gray-400 hover:text-gray-700 text-[10px] disabled:opacity-30" title="아래로">▼</button>}
-                {!isColumn && <button onClick={() => splitBucket(b)} className="text-gray-400 hover:text-blue-600 text-[10px]" title="좌우 2칸으로 나누기">분할</button>}
-                <button onClick={() => deleteBucket(b)} className="text-red-400 hover:text-red-600 text-xs" title={isColumn ? "이 열 삭제" : "칸 삭제"}>✕</button>
-              </>
-            )}
-          </div>
-        </div>
-        <div className="p-1.5 space-y-1 min-h-[12rem]">
-          {bucketOrders.length === 0 ? (
-            <div className="text-center text-gray-300 text-[11px] py-2">여기로 끌어다 1차 배정</div>
-          ) : (
-            bucketOrders.map((o) => renderOrderCard(o, b.id))
-          )}
-        </div>
-      </div>
-    );
-  };
-
   return (
     <>
     <div className="print-root print-area">
@@ -1689,27 +1607,56 @@ export default function ScheduleBoard() {
               위 + 칸 버튼으로 1차 배정 칸을 추가하세요
             </div>
           ) : (
-            (() => {
-              // 같은 group_id 칸들을 한 묶음으로(좌우 2열). null이면 단독 칸. 순서는 첫 등장 순.
-              const groupsMap = new Map<string, Bucket[]>();
-              const order: string[] = [];
-              for (const b of buckets) {
-                const key = b.group_id != null ? `g${b.group_id}` : `s${b.id}`;
-                if (!groupsMap.has(key)) { groupsMap.set(key, []); order.push(key); }
-                groupsMap.get(key)!.push(b);
-              }
-              return order.map((k) => {
-                const group = groupsMap.get(k)!;
-                if (group.length >= 2) {
-                  return (
-                    <div key={k} className="flex divide-x divide-black">
-                      {group.map((b) => renderBucketBox(b, buckets.indexOf(b), true))}
+            buckets.map((b, idx) => {
+              const bucketOrders = orders.filter((o) => showsAt(o, b.id));
+              const isTarget = dropBucket === b.id;
+              return (
+                <div
+                  key={b.id}
+                  onDragOver={(e) => {
+                    if (dragOrderId !== null || dragEntryId !== null || dragSplit !== null) {
+                      e.preventDefault();
+                      if (dropBucket !== b.id) setDropBucket(b.id);
+                    }
+                  }}
+                  onDragLeave={(e) => {
+                    if (!e.currentTarget.contains(e.relatedTarget as Node) && dropBucket === b.id) setDropBucket(null);
+                  }}
+                  onDrop={() => onDropOnBucket(b.id)}
+                  className={isTarget ? "ring-2 ring-inset ring-blue-500 bg-blue-50/40" : ""}
+                >
+                  <div className="bg-gray-100 pl-4 pr-6 py-2 flex items-center justify-between border-b border-black">
+                    {manageBuckets ? (
+                      <input
+                        defaultValue={b.name}
+                        onBlur={(e) => renameBucket(b.id, e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                        className="text-sm font-bold border px-1 py-0.5 w-24"
+                      />
+                    ) : (
+                      <span className="text-sm font-bold text-gray-800">{b.name}</span>
+                    )}
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-sm text-gray-500">{fmtH(locationMinutes(bucketOrders, b.id))}</span>
+                      {manageBuckets && (
+                        <>
+                          <button onClick={() => moveBucket(idx, -1)} disabled={idx === 0} className="text-gray-400 hover:text-gray-700 text-[10px] disabled:opacity-30" title="위로">▲</button>
+                          <button onClick={() => moveBucket(idx, 1)} disabled={idx === buckets.length - 1} className="text-gray-400 hover:text-gray-700 text-[10px] disabled:opacity-30" title="아래로">▼</button>
+                          <button onClick={() => deleteBucket(b)} className="text-red-400 hover:text-red-600 text-xs" title="칸 삭제">✕</button>
+                        </>
+                      )}
                     </div>
-                  );
-                }
-                return renderBucketBox(group[0], buckets.indexOf(group[0]), false);
-              });
-            })()
+                  </div>
+                  <div className="p-1.5 space-y-1 min-h-[12rem]">
+                    {bucketOrders.length === 0 ? (
+                      <div className="text-center text-gray-300 text-[11px] py-2">여기로 끌어다 1차 배정</div>
+                    ) : (
+                      bucketOrders.map((o) => renderOrderCard(o, b.id))
+                    )}
+                  </div>
+                </div>
+              );
+            })
           )}
         </div>
         </div>

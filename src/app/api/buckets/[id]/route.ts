@@ -14,10 +14,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (typeof body.name === 'string' && body.name.trim()) {
     await db.execute({ sql: 'UPDATE buckets SET name = ? WHERE id = ?', args: [body.name.trim(), id] });
   }
-  // group_id 변경(분할 묶기/해제). null이면 단독 칸으로.
-  if ('group_id' in body) {
-    await db.execute({ sql: 'UPDATE buckets SET group_id = ? WHERE id = ?', args: [body.group_id != null ? Number(body.group_id) : null, id] });
-  }
 
   return NextResponse.json({ success: true });
 }

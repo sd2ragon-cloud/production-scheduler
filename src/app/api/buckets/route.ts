@@ -33,11 +33,10 @@ export async function POST(req: NextRequest) {
 
   const maxResult = await db.execute('SELECT COALESCE(MAX(sort_order), 0) as max_order FROM buckets');
   const nextOrder = Number((maxResult.rows[0] as unknown as { max_order: number }).max_order) + 1;
-  const groupId = body.group_id != null ? Number(body.group_id) : null;
 
   const result = await db.execute({
-    sql: `INSERT INTO buckets (name, process_line, sort_order, group_id) VALUES (?, ?, ?, ?)`,
-    args: [String(body.name).trim(), body.process_line || '매엽', nextOrder, groupId],
+    sql: `INSERT INTO buckets (name, process_line, sort_order) VALUES (?, ?, ?)`,
+    args: [String(body.name).trim(), body.process_line || '매엽', nextOrder],
   });
 
   return NextResponse.json({ id: Number(result.lastInsertRowid) }, { status: 201 });
