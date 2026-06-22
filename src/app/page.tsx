@@ -152,6 +152,8 @@ export default function ScheduleBoard() {
   const isRoll = processLine === "윤전";
   const [machines, setMachines] = useState<Machine[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
+  // 전체 주문(대기·배정 완료 포함). 설비에 배정된 작업의 사양 편집에 사용.
+  const [allOrders, setAllOrders] = useState<Order[]>([]);
   const [schedule, setSchedule] = useState<ScheduleEntry[]>([]);
   const [buckets, setBuckets] = useState<Bucket[]>([]);
   const [breaks, setBreaks] = useState<Break[]>([]);
@@ -204,6 +206,7 @@ export default function ScheduleBoard() {
     const activeMachines = machData.filter((m: Machine) => m.is_active);
     setMachines(activeMachines);
     setOrders(orderData.filter((o: Order) => o.status === "pending"));
+    setAllOrders(Array.isArray(orderData) ? orderData : []);
     setSchedule(schedData);
     setBuckets(Array.isArray(bucketData) ? bucketData : []);
     setMachineStartTimes((prev) => {
@@ -674,6 +677,8 @@ export default function ScheduleBoard() {
     // 윤전은 구분을 사용하지 않으므로 special_process를 비워 저장(공정 칩 미표시)
     const specialProcess = isRoll ? "" : newOrder.special_process;
     if (editingOrderId !== null) {
+      // 배정 완료된 작업을 설비 화면에서 수정해도 상태가 대기로 바뀌지 않도록 기존 상태 유지
+      const existingStatus = allOrders.find((o) => o.id === editingOrderId)?.status || "pending";
       await fetch(`/api/orders/${editingOrderId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -684,7 +689,7 @@ export default function ScheduleBoard() {
           part_durations: partDurations,
           part_processes: partProcesses,
           part_quantities: {},
-          status: "pending",
+          status: existingStatus,
         }),
       });
     } else {
@@ -1286,7 +1291,7 @@ export default function ScheduleBoard() {
                       <th className="px-1.5 py-0 text-center w-28">소요(시간)</th>
                       <th className="px-1.5 py-0 text-left w-20">예상완료</th>
                       <th className="px-1.5 py-0 text-left w-20">납기</th>
-                      <th className="px-1.5 py-0 text-center w-6"></th>
+                      <th className="px-1.5 py-0 text-center w-14"></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1565,8 +1570,16 @@ export default function ScheduleBoard() {
                             {entry.deadline}
                           </td>
                           <td className="px-1.5 py-0 text-center">
-                            <div className="flex items-center justify-center gap-1.5">
+                            <div className="flex items-center justify-center gap-1">
                               {isAdmin ? (<>
+                              <button
+                                onClick={() => { const o = allOrders.find((x) => x.id === entry.order_id); if (o) startEditOrder(o); }}
+                                disabled={loading}
+                                className="text-gray-400 hover:text-blue-600 text-sm leading-none px-0.5"
+                                title="작업 사양 수정 (제품명·구성·비고·납기 등)"
+                              >
+                                ✎
+                              </button>
                               <button
                                 onClick={() => handleUnassign(entry.id)}
                                 disabled={loading}
