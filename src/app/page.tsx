@@ -391,6 +391,25 @@ export default function ScheduleBoard() {
     setLoading(false);
   };
 
+  // 통째(구성 미분할) 배정 행을 다른 설비로 이동/분할. moveMinutes가 행 전체보다 작으면 분할 생산.
+  const handleMoveEntry = async (entryId: number, targetMachineId: number, srcMachineId: number, moveMinutes: number = 0, beforeEntryId: number | null = null) => {
+    setLoading(true);
+    await fetch("/api/schedule/move-entry", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        entry_id: entryId,
+        target_machine_id: targetMachineId,
+        move_minutes: moveMinutes,
+        source_start_time: machineStartTimes[srcMachineId] || "08:00",
+        target_start_time: machineStartTimes[targetMachineId] || "08:00",
+        before_entry_id: beforeEntryId,
+      }),
+    });
+    await fetchAll();
+    setLoading(false);
+  };
+
   const handleUnassign = async (entryId: number) => {
     setLoading(true);
     await fetch("/api/schedule/unassign", {
@@ -801,8 +820,19 @@ export default function ScheduleBoard() {
     } else if (dragEntryId !== null) {
       const entry = schedule.find((s) => s.id === dragEntryId);
       if (entry && entry.machine_id !== machineId) {
-        await handleUnassign(dragEntryId);
-        await handleAssign(entry.order_id, machineId, entry.component_part || "", 0, beforeEntryId);
+        // 설비→설비 이동: 옮길 시간을 입력받아 일부만 분할 이동 가능 (기본=전체)
+        const totalMin = entry.duration_minutes || 0;
+        if (totalMin > 0) {
+          const defH = Math.round((totalMin / 60) * 10) / 10;
+          const input = window.prompt(`이 작업을 이 설비로 옮길 시간(시간)\n전체 ${defH}시간 (그대로 두면 전체 이동, 적게 쓰면 분할 생산)`, String(defH));
+          if (input === null) { clearDragState(); return; }
+          const hours = Number(input);
+          if (!Number.isFinite(hours) || hours <= 0) { clearDragState(); return; }
+          const mins = Math.round(hours * 60);
+          await handleMoveEntry(entry.id, machineId, entry.machine_id, mins >= totalMin ? 0 : mins, beforeEntryId);
+        } else {
+          await handleMoveEntry(entry.id, machineId, entry.machine_id, 0, beforeEntryId);
+        }
       }
     }
     clearDragState();
