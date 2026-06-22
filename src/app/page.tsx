@@ -1473,19 +1473,19 @@ export default function ScheduleBoard() {
                   onDrop={() => onDropOnBucket(b.id)}
                   className={isTarget ? "ring-2 ring-inset ring-blue-500 bg-blue-50/40" : ""}
                 >
-                  <div className="bg-gray-100 px-2 py-1 flex items-center justify-between border-b border-black">
+                  <div className="bg-gray-100 px-2 py-2 flex items-center justify-between border-b border-black">
                     {manageBuckets ? (
                       <input
                         defaultValue={b.name}
                         onBlur={(e) => renameBucket(b.id, e.target.value)}
                         onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-                        className="text-xs font-bold border px-1 py-0.5 w-24"
+                        className="text-sm font-bold border px-1 py-0.5 w-24"
                       />
                     ) : (
-                      <span className="text-xs font-bold text-gray-800">{b.name}</span>
+                      <span className="text-sm font-bold text-gray-800">{b.name}</span>
                     )}
-                    <div className="flex items-center gap-1">
-                      <span className="text-[10px] text-gray-400">{fmtH(locationMinutes(bucketOrders, b.id))}</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-base font-bold text-gray-700">{fmtH(locationMinutes(bucketOrders, b.id))}</span>
                       {manageBuckets && (
                         <>
                           <button onClick={() => moveBucket(idx, -1)} disabled={idx === 0} className="text-gray-400 hover:text-gray-700 text-[10px] disabled:opacity-30" title="위로">▲</button>
@@ -1495,7 +1495,7 @@ export default function ScheduleBoard() {
                       )}
                     </div>
                   </div>
-                  <div className="p-1.5 space-y-1 min-h-[9rem]">
+                  <div className="p-1.5 space-y-1 min-h-[12rem]">
                     {bucketOrders.length === 0 ? (
                       <div className="text-center text-gray-300 text-[11px] py-2">여기로 끌어다 1차 배정</div>
                     ) : (
