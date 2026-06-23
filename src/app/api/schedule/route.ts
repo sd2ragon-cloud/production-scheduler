@@ -16,6 +16,7 @@ export async function GET(req: NextRequest) {
       o.part_processes,
       o.priority,
       o.notes as order_notes,
+      o.extra_notes as order_extra,
       m.name as machine_name
     FROM schedule_entries se
     JOIN orders o ON se.order_id = o.id

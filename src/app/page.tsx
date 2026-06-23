@@ -30,6 +30,7 @@ interface Order {
   special_process: string;
   priority: number;
   notes: string;
+  extra_notes: string; // 기타사항 (제책 등)
   status: string;
   duration_minutes: number;
   part_durations: string;
@@ -75,6 +76,7 @@ interface ScheduleEntry {
   special_process: string;
   priority: number;
   order_notes: string;
+  order_extra: string; // 기타사항 (제책 등)
   sequence: number;
   duration_minutes: number;
   start_time: string;
@@ -187,7 +189,7 @@ export default function ScheduleBoard() {
   const [editingOrderId, setEditingOrderId] = useState<number | null>(null);
   const [newOrder, setNewOrder] = useState({
     order_code: "", product_name: "", component: "", quantity_sheets: 0,
-    deadline: "", special_process: "일반", priority: 5, notes: "", duration_hours: 0,
+    deadline: "", special_process: "일반", priority: 5, notes: "", extra_notes: "", duration_hours: 0,
     productivity: 0, // 제책: 부/시간. 부수 ÷ 생산성 = 소요시간(시간)
     partHours: {} as Record<string, number>,
     partProcesses: {} as Record<string, string>,
@@ -640,7 +642,7 @@ export default function ScheduleBoard() {
   const resetForm = () => {
     setNewOrder({
       order_code: "", product_name: "", component: "", quantity_sheets: 0,
-      deadline: "", special_process: "일반", priority: 5, notes: "", duration_hours: 0,
+      deadline: "", special_process: "일반", priority: 5, notes: "", extra_notes: "", duration_hours: 0,
       productivity: 0,
       partHours: {},
       partProcesses: {},
@@ -673,6 +675,7 @@ export default function ScheduleBoard() {
       special_process: order.special_process ?? "일반",
       priority: order.priority || 5,
       notes: order.notes || "",
+      extra_notes: order.extra_notes || "",
       duration_hours: parts.length >= 2 ? 0 : Math.round((order.duration_minutes || 0) / 60),
       // 생산성은 부수 ÷ 소요시간으로 역산(저장 없이 복원)
       productivity: (() => {
@@ -1316,7 +1319,8 @@ export default function ScheduleBoard() {
                     <tr className="text-gray-500 text-[10px] border-b h-7">
                       <th className="px-1.5 py-0 text-left w-6">#</th>
                       <th className="px-1.5 py-0 text-center">작업명</th>
-                      <th className="px-1.5 py-0 text-center w-28">비고</th>
+                      <th className={`px-1.5 py-0 text-center ${isJechae ? "" : "w-28"}`}>비고</th>
+                      {isJechae && <th className="px-1.5 py-0 text-center">기타사항</th>}
                       <th className="px-1.5 py-0 text-center w-28">소요(시간)</th>
                       <th className="px-1.5 py-0 text-left w-20">예상완료</th>
                       <th className="px-1.5 py-0 text-left w-20">납기</th>
@@ -1555,9 +1559,14 @@ export default function ScheduleBoard() {
                             ) : null}
                             </div>
                           </td>
-                          <td className="px-1.5 py-0 text-center text-[10px] text-gray-500 truncate max-w-[10rem]" title={entry.order_notes}>
+                          <td className="px-1.5 py-0 text-center text-[10px] text-gray-500 truncate" title={entry.order_notes}>
                             {entry.order_notes}
                           </td>
+                          {isJechae && (
+                            <td className="px-1.5 py-0 text-center text-[10px] text-gray-500 truncate" title={entry.order_extra}>
+                              {entry.order_extra}
+                            </td>
+                          )}
                           <td className="px-1.5 py-0 text-center">
                             <div className="flex items-center justify-center gap-1">
                               <input
@@ -1915,6 +1924,14 @@ export default function ScheduleBoard() {
                   value={newOrder.notes}
                   onChange={(e) => setNewOrder({ ...newOrder, notes: e.target.value })}
                 />
+                {isJechae && (
+                  <input
+                    type="text" placeholder="기타사항"
+                    className="border px-2 py-1.5 text-xs w-full col-span-2"
+                    value={newOrder.extra_notes}
+                    onChange={(e) => setNewOrder({ ...newOrder, extra_notes: e.target.value })}
+                  />
+                )}
               </div>
               <button type="submit" className="w-full py-1.5 bg-blue-600 text-white text-xs font-medium">
                 {editingOrderId !== null ? "수정 저장" : "등록"}

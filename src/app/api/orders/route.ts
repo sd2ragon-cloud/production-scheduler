@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
     : '{}';
 
   const result = await db.execute({
-    sql: `INSERT INTO orders (order_code, product_name, component, quantity_sheets, deadline, special_process, priority, notes, duration_minutes, part_durations, part_processes, part_quantities, factory, process_line) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    sql: `INSERT INTO orders (order_code, product_name, component, quantity_sheets, deadline, special_process, priority, notes, duration_minutes, part_durations, part_processes, part_quantities, extra_notes, factory, process_line) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       body.order_code || '',
       body.product_name,
@@ -51,6 +51,7 @@ export async function POST(req: NextRequest) {
       partDurations,
       partProcesses,
       partQuantities,
+      body.extra_notes || '',
       body.factory || '본공장',
       body.process_line || '매엽',
     ],

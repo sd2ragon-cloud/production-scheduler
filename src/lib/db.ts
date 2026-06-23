@@ -50,6 +50,7 @@ async function initializeDb(db: Client) {
       duration_minutes INTEGER NOT NULL DEFAULT 0,
       part_durations TEXT NOT NULL DEFAULT '{}',
       part_quantities TEXT NOT NULL DEFAULT '{}',
+      extra_notes TEXT NOT NULL DEFAULT '',
       status TEXT NOT NULL DEFAULT 'pending',
       factory TEXT NOT NULL DEFAULT '본공장',
       process_line TEXT NOT NULL DEFAULT '매엽',
@@ -135,6 +136,13 @@ async function initializeDb(db: Client) {
   // Migrate orders: add part_quantities (파트별 수량/부, 윤전) column if missing
   try {
     await db.execute(`ALTER TABLE orders ADD COLUMN part_quantities TEXT NOT NULL DEFAULT '{}'`);
+  } catch {
+    // column already exists
+  }
+
+  // Migrate orders: add extra_notes (기타사항, 제책 등) column if missing
+  try {
+    await db.execute(`ALTER TABLE orders ADD COLUMN extra_notes TEXT NOT NULL DEFAULT ''`);
   } catch {
     // column already exists
   }
