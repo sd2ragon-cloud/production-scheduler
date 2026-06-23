@@ -184,6 +184,8 @@ export default function ScheduleBoard() {
     partProcesses: {} as Record<string, string>,
     partQuantities: {} as Record<string, number>,
   });
+  // 구성 칩을 🗑로 끌어다 놓는 중인 행(완료·삭제 강조)
+  const [trashOverEntry, setTrashOverEntry] = useState<number | null>(null);
   const dragOverMachine = useRef<number | null>(null);
   const [machineStartTimes, setMachineStartTimes] = useState<Record<number, string>>({});
   const [machineMemos, setMachineMemos] = useState<Record<number, string>>({});
@@ -444,6 +446,18 @@ export default function ScheduleBoard() {
   const handleUnassignPart = async (entryId: number, part: string) => {
     setLoading(true);
     await fetch("/api/schedule/unassign-part", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ entry_id: entryId, part }),
+    });
+    await fetchAll();
+    setLoading(false);
+  };
+
+  // 완료된 구성(칩) 영구 삭제: 엔트리에서 제거 + 주문 사양에서도 제거(대기로 복귀하지 않음)
+  const handleCompletePart = async (entryId: number, part: string) => {
+    setLoading(true);
+    await fetch("/api/schedule/complete-part", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ entry_id: entryId, part }),
@@ -1291,7 +1305,7 @@ export default function ScheduleBoard() {
                       <th className="px-1.5 py-0 text-center w-28">소요(시간)</th>
                       <th className="px-1.5 py-0 text-left w-20">예상완료</th>
                       <th className="px-1.5 py-0 text-left w-20">납기</th>
-                      <th className="px-1.5 py-0 text-center w-14"></th>
+                      <th className="px-1.5 py-0 text-center w-12"></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1581,18 +1595,28 @@ export default function ScheduleBoard() {
                                 ✎
                               </button>
                               <button
-                                onClick={() => handleUnassign(entry.id)}
-                                disabled={loading}
-                                className="text-red-400 hover:text-red-600 text-sm px-0.5"
-                                title="배정 해제 (대기로 복귀)"
-                              >
-                                ✕
-                              </button>
-                              <button
                                 onClick={() => handleDeleteOrder(entry.order_id, entry.product_name)}
+                                onDragOver={(e) => {
+                                  // 구성 칩을 끌어다 놓으면 그 구성만 완료·삭제
+                                  if (dragSplit !== null) {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    if (trashOverEntry !== entry.id) setTrashOverEntry(entry.id);
+                                  }
+                                }}
+                                onDragLeave={() => { if (trashOverEntry === entry.id) setTrashOverEntry(null); }}
+                                onDrop={(e) => {
+                                  if (dragSplit !== null) {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleCompletePart(dragSplit.entryId, dragSplit.part);
+                                    setTrashOverEntry(null);
+                                    clearDragState();
+                                  }
+                                }}
                                 disabled={loading}
-                                className="text-gray-400 hover:text-red-600 text-sm leading-none px-0.5"
-                                title="주문 영구 삭제"
+                                className={`text-sm leading-none px-0.5 transition-transform ${trashOverEntry === entry.id ? "text-red-600 scale-150" : "text-gray-400 hover:text-red-600"}`}
+                                title="클릭: 주문 전체 삭제 / 구성 칩을 끌어다 놓으면 그 구성만 완료·삭제"
                               >
                                 🗑
                               </button>
