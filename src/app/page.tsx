@@ -155,6 +155,9 @@ export default function ScheduleBoard() {
   // 윤전·제책은 '구분(공정)' 대신 수량을 입력·표기한다. 윤전=수량(부), 제책=부수.
   const usesQuantity = isRoll || isJechae;
   const qtyLabel = isJechae ? "부수" : "수량";
+  // 제책: 부수 ÷ 생산성(부/시간) = 소요시간(시간). 둘 다 양수일 때만 계산.
+  const calcDurationHours = (qty: number, prod: number): number | null =>
+    prod > 0 && qty > 0 ? Math.round((qty / prod) * 10) / 10 : null;
   const [machines, setMachines] = useState<Machine[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   // 전체 주문(대기·배정 완료 포함). 설비에 배정된 작업의 사양 편집에 사용.
@@ -185,6 +188,7 @@ export default function ScheduleBoard() {
   const [newOrder, setNewOrder] = useState({
     order_code: "", product_name: "", component: "", quantity_sheets: 0,
     deadline: "", special_process: "일반", priority: 5, notes: "", duration_hours: 0,
+    productivity: 0, // 제책: 부/시간. 부수 ÷ 생산성 = 소요시간(시간)
     partHours: {} as Record<string, number>,
     partProcesses: {} as Record<string, string>,
     partQuantities: {} as Record<string, number>,
@@ -637,6 +641,7 @@ export default function ScheduleBoard() {
     setNewOrder({
       order_code: "", product_name: "", component: "", quantity_sheets: 0,
       deadline: "", special_process: "일반", priority: 5, notes: "", duration_hours: 0,
+      productivity: 0,
       partHours: {},
       partProcesses: {},
       partQuantities: {},
@@ -669,6 +674,11 @@ export default function ScheduleBoard() {
       priority: order.priority || 5,
       notes: order.notes || "",
       duration_hours: parts.length >= 2 ? 0 : Math.round((order.duration_minutes || 0) / 60),
+      // 생산성은 부수 ÷ 소요시간으로 역산(저장 없이 복원)
+      productivity: (() => {
+        const durH = (order.duration_minutes || 0) / 60;
+        return order.quantity_sheets && durH > 0 ? Math.round(order.quantity_sheets / durH) : 0;
+      })(),
       partHours,
       partProcesses,
       partQuantities,
@@ -1782,15 +1792,48 @@ export default function ScheduleBoard() {
                 />
                 {/* 윤전·제책: 구분 대신 수량(윤전=수량(부), 제책=부수) 수기 입력. 매엽: 구분 입력. */}
                 {usesQuantity ? (
-                  <div className="col-span-2">
-                    <label className="text-[10px] text-gray-500">{isJechae ? "부수" : "수량 (부)"}</label>
-                    <input
-                      type="number" min="0" step="1" placeholder="부"
-                      className="border px-2 py-1.5 text-xs w-full"
-                      value={newOrder.quantity_sheets || ""}
-                      onChange={(e) => setNewOrder({ ...newOrder, quantity_sheets: Number(e.target.value) })}
-                    />
-                  </div>
+                  isJechae ? (
+                    <>
+                      <div>
+                        <label className="text-[10px] text-gray-500">부수</label>
+                        <input
+                          type="number" min="0" step="1" placeholder="부"
+                          className="border px-2 py-1.5 text-xs w-full"
+                          value={newOrder.quantity_sheets || ""}
+                          onChange={(e) => {
+                            const q = Number(e.target.value);
+                            // 부수 변경 시 생산성이 있으면 소요시간 자동 계산
+                            const d = calcDurationHours(q, newOrder.productivity);
+                            setNewOrder({ ...newOrder, quantity_sheets: q, ...(d != null ? { duration_hours: d } : {}) });
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-gray-500">생산성 (부/시간)</label>
+                        <input
+                          type="number" min="0" step="1" placeholder="부/시간"
+                          className="border px-2 py-1.5 text-xs w-full"
+                          value={newOrder.productivity || ""}
+                          onChange={(e) => {
+                            const p = Number(e.target.value);
+                            // 생산성 입력 시 부수 ÷ 생산성 = 소요시간 자동 입력
+                            const d = calcDurationHours(newOrder.quantity_sheets, p);
+                            setNewOrder({ ...newOrder, productivity: p, ...(d != null ? { duration_hours: d } : {}) });
+                          }}
+                        />
+                      </div>
+                    </>
+                  ) : (
+                    <div className="col-span-2">
+                      <label className="text-[10px] text-gray-500">수량 (부)</label>
+                      <input
+                        type="number" min="0" step="1" placeholder="부"
+                        className="border px-2 py-1.5 text-xs w-full"
+                        value={newOrder.quantity_sheets || ""}
+                        onChange={(e) => setNewOrder({ ...newOrder, quantity_sheets: Number(e.target.value) })}
+                      />
+                    </div>
+                  )
                 ) : (
                   parseParts(newOrder.component).length < 2 && (
                     <div className="col-span-2">
