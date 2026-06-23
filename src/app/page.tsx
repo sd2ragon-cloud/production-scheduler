@@ -1417,7 +1417,7 @@ export default function ScheduleBoard() {
                           <td className="px-1.5 py-0 text-gray-400 text-[10px]">{entry.sequence}</td>
                           <td className="px-1.5 py-0">
                             <div className="flex items-center gap-1 overflow-x-auto jobscroll">
-                            <span className={`font-medium text-[11px] shrink-0 ${isJechae ? "text-black" : ""}`}>{entry.product_name}</span>
+                            <span className={`font-medium shrink-0 ${isJechae ? "text-[13px] text-black" : "text-[11px]"}`}>{entry.product_name}</span>
                             {(() => {
                               const eparts = parseParts(entry.component_part);
                               if (eparts.length === 0) {
@@ -1559,11 +1559,11 @@ export default function ScheduleBoard() {
                             ) : null}
                             </div>
                           </td>
-                          <td className={`px-1.5 py-0 text-center truncate ${isJechae ? "text-[11px] text-black" : "text-[10px] text-gray-500"}`} title={entry.order_notes}>
+                          <td className={`px-1.5 py-0 text-center truncate ${isJechae ? "text-[13px] text-black" : "text-[10px] text-gray-500"}`} title={entry.order_notes}>
                             {entry.order_notes}
                           </td>
                           {isJechae && (
-                            <td className="px-1.5 py-0 text-center truncate text-[11px] text-black" title={entry.order_extra}>
+                            <td className="px-1.5 py-0 text-center truncate text-[13px] text-black" title={entry.order_extra}>
                               {entry.order_extra}
                             </td>
                           )}
