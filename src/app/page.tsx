@@ -1316,7 +1316,7 @@ export default function ScheduleBoard() {
                 <div className="px-3 pb-2">
                 <table className="w-full table-fixed">
                   <thead>
-                    <tr className="text-gray-500 text-[10px] border-b h-7">
+                    <tr className={`text-gray-500 border-b h-7 ${isJechae ? "text-[13px]" : "text-[10px]"}`}>
                       <th className="px-1.5 py-0 text-left w-6">#</th>
                       <th className="px-1.5 py-0 text-center">작업명</th>
                       <th className={`px-1.5 py-0 text-center ${isJechae ? "" : "w-28"}`}>비고</th>
