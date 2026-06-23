@@ -1601,10 +1601,10 @@ export default function ScheduleBoard() {
                               )}
                             </div>
                           </td>
-                          <td className={`px-1.5 py-0 font-mono text-[11px] ${over ? "text-red-600 font-bold" : "text-gray-700"}`}>
+                          <td className={`px-1.5 py-0 font-mono ${isJechae ? "text-[13px]" : "text-[11px]"} ${over ? "text-red-600 font-bold" : "text-gray-700"}`}>
                             {formatEndTime(entry.end_time)}
                           </td>
-                          <td className={`px-1.5 py-0 text-[11px] ${deadlineColor(entry.deadline)}`}>
+                          <td className={`px-1.5 py-0 ${isJechae ? "text-[13px]" : "text-[11px]"} ${deadlineColor(entry.deadline)}`}>
                             {entry.deadline}
                           </td>
                           <td className="px-1.5 py-0 text-center">
