@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { guardMachine } from '@/lib/permits';
+import { recalcMachine } from '@/lib/calc';
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -43,6 +44,20 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   if (typeof body.memo === 'string') {
     await db.execute({ sql: 'UPDATE machines SET memo = ? WHERE id = ?', args: [body.memo, id] });
+  }
+
+  // 근무 시작/종료 시각 변경 → 예상완료시간이 달라지므로 이 설비 일정을 재계산한다.
+  let recalcNeeded = false;
+  if (body.work_start_hour != null && Number.isFinite(Number(body.work_start_hour))) {
+    await db.execute({ sql: 'UPDATE machines SET work_start_hour = ? WHERE id = ?', args: [Number(body.work_start_hour), id] });
+    recalcNeeded = true;
+  }
+  if (body.work_end_hour != null && Number.isFinite(Number(body.work_end_hour))) {
+    await db.execute({ sql: 'UPDATE machines SET work_end_hour = ? WHERE id = ?', args: [Number(body.work_end_hour), id] });
+    recalcNeeded = true;
+  }
+  if (recalcNeeded) {
+    await recalcMachine(Number(id), new Date().toISOString().split('T')[0]);
   }
 
   return NextResponse.json({ success: true });
