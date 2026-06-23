@@ -155,9 +155,9 @@ export default function ScheduleBoard() {
   // 윤전·제책은 '구분(공정)' 대신 수량을 입력·표기한다. 윤전=수량(부), 제책=부수.
   const usesQuantity = isRoll || isJechae;
   const qtyLabel = isJechae ? "부수" : "수량";
-  // 제책: 부수 ÷ 생산성(부/시간) = 소요시간(시간). 둘 다 양수일 때만 계산.
+  // 제책: 부수 ÷ 생산성(부/시간) = 소요시간(시간). 정수로 반올림(소요시간 입력칸은 정수 단위).
   const calcDurationHours = (qty: number, prod: number): number | null =>
-    prod > 0 && qty > 0 ? Math.round((qty / prod) * 10) / 10 : null;
+    prod > 0 && qty > 0 ? Math.round(qty / prod) : null;
   const [machines, setMachines] = useState<Machine[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   // 전체 주문(대기·배정 완료 포함). 설비에 배정된 작업의 사양 편집에 사용.
