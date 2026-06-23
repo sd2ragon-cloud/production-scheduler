@@ -150,6 +150,8 @@ export default function ScheduleBoard() {
   const isAdmin = roleCanEditLine(role, processLine);
   // 윤전 라인은 매엽과 별도로 운영: '구분(공정)' 대신 '수량(부)'을 입력·표기한다.
   const isRoll = processLine === "윤전";
+  // 제책 라인은 1차 배정 칸을 쓰지 않고 기계별 작업 계획을 넓게 운영한다.
+  const isJechae = processLine === "제책";
   const [machines, setMachines] = useState<Machine[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   // 전체 주문(대기·배정 완료 포함). 설비에 배정된 작업의 사양 편집에 사용.
@@ -1635,8 +1637,8 @@ export default function ScheduleBoard() {
         })}
       </div>
 
-      {/* 가운데: 1차 배정 (국/4×6/MB6/HDP 등 칸) */}
-      <div className="w-[480px] bg-white shadow-sm flex flex-col overflow-hidden shrink-0">
+      {/* 가운데: 1차 배정 (국/4×6/MB6/HDP 등 칸) — 제책 라인은 사용하지 않음 */}
+      <div className={`w-[480px] bg-white shadow-sm flex flex-col overflow-hidden shrink-0 ${isJechae ? "hidden" : ""}`}>
         {/* 스크롤은 바깥에서 받고(스크롤바가 표 우측 테두리 바깥에 위치) 검정 테두리 표는 안쪽에 둔다 → 스크롤 생겨도 우측 라인 안 잘림 */}
         <div className="flex-1 overflow-y-auto">
         <div className="border border-black m-3">
