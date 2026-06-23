@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
   });
   const machine = machineResult.rows[0] as unknown as { name: string; speed_sheets_per_hour: number; setup_time_minutes: number; process_line: string } | undefined;
   // 양면설비면 기본 양면(소요시간 절반), 단면설비면 단면. 윤전은 양면 개념이 없어 항상 단면(입력 소요시간 그대로).
-  const machineMode = machine && machine.process_line !== '윤전' && isDoubleSided(machine.name) ? 'double' : 'single';
+  const machineMode = machine && !['윤전', '제책'].includes(machine.process_line) && isDoubleSided(machine.name) ? 'double' : 'single';
 
   const incomingParts = parseParts(part);
   const today = new Date().toISOString().split('T')[0];

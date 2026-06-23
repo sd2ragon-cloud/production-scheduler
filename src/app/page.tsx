@@ -1576,14 +1576,14 @@ export default function ScheduleBoard() {
                                 className="w-14 h-6 border border-gray-300 px-1 py-0 text-[11px] text-center font-mono focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
                                 value={entry.duration_minutes ? Math.round(entry.duration_minutes / 60 * 10) / 10 : ""}
                                 placeholder="시간"
-                                title={isRoll ? "소요시간 (입력값 그대로 적용). 0.5시간(30분) 단위" : "실제 소요시간 (양면 설비는 절반 적용). 0.5시간(30분) 단위"}
+                                title={isRoll || isJechae ? "소요시간 (입력값 그대로 적용). 0.5시간(30분) 단위" : "실제 소요시간 (양면 설비는 절반 적용). 0.5시간(30분) 단위"}
                                 onMouseDown={(e) => e.stopPropagation()}
                                 onClick={(e) => e.stopPropagation()}
                                 onChange={(e) => handleDurationChange(entry.id, Number(e.target.value) || 0)}
                                 disabled={!isAdmin}
                               />
                               {/* 윤전은 양면 개념이 없어 양면/단면 칩·토글을 표시하지 않는다 (입력 소요시간 그대로). */}
-                              {isRoll ? null : isDoubleSided(machine.name) && isAdmin ? (
+                              {isRoll || isJechae ? null : isDoubleSided(machine.name) && isAdmin ? (
                                 <button
                                   onClick={() => handlePrintModeToggle(entry)}
                                   disabled={loading}

@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
   const tgtMachineResult = await db.execute({ sql: 'SELECT name, process_line FROM machines WHERE id = ?', args: [targetMachine] });
   const tgtMachine = tgtMachineResult.rows[0] as unknown as { name: string; process_line: string } | undefined;
   const tgtMachineName = tgtMachine?.name ?? '';
-  const targetMode = tgtMachine?.process_line !== '윤전' && isDoubleSided(tgtMachineName) ? 'double' : 'single';
+  const targetMode = tgtMachine && !['윤전', '제책'].includes(tgtMachine.process_line) && isDoubleSided(tgtMachineName) ? 'double' : 'single';
   // 같은 설비 안에서는 원래 모드 유지, 다른 설비로 가면 대상 설비 기본 모드를 따른다.
   const newRowMode = srcMachine === targetMachine ? srcMode : targetMode;
 

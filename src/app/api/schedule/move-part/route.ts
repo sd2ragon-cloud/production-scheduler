@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
   const tgtMachine = tgtMachineResult.rows[0] as unknown as { name: string; process_line: string } | undefined;
   const tgtMachineName = tgtMachine?.name ?? '';
   // 윤전은 양면 개념이 없어 항상 단면(입력 소요시간 그대로)
-  const targetMode = tgtMachine?.process_line !== '윤전' && isDoubleSided(tgtMachineName) ? 'double' : 'single';
+  const targetMode = tgtMachine && !['윤전', '제책'].includes(tgtMachine.process_line) && isDoubleSided(tgtMachineName) ? 'double' : 'single';
   // 같은 설비 안에서 분리하면 원래 인쇄 모드를 유지, 다른 설비로 가면 대상 설비 기본 모드를 따른다.
   const newRowMode = srcMachine === targetMachine ? srcMode : targetMode;
 
