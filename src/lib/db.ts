@@ -229,6 +229,15 @@ async function initializeDb(db: Client) {
     // settings 미생성 등 예외는 무시 (위 배치에서 테이블은 항상 생성됨)
   }
 
+  // '무선' 라인을 '제책'으로 명칭 변경: 기존 데이터의 process_line 값을 이전한다.
+  try {
+    for (const table of ['machines', 'orders', 'buckets']) {
+      await db.execute({ sql: `UPDATE ${table} SET process_line = '제책' WHERE process_line = '무선'`, args: [] });
+    }
+  } catch {
+    // 컬럼/테이블 미생성 등 예외는 무시
+  }
+
   const result = await db.execute('SELECT COUNT(*) as count FROM machines');
   const count = Number(result.rows[0].count);
   if (count === 0) {
