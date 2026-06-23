@@ -152,6 +152,9 @@ export default function ScheduleBoard() {
   const isRoll = processLine === "윤전";
   // 제책 라인은 1차 배정 칸을 쓰지 않고 기계별 작업 계획을 넓게 운영한다.
   const isJechae = processLine === "제책";
+  // 윤전·제책은 '구분(공정)' 대신 수량을 입력·표기한다. 윤전=수량(부), 제책=부수.
+  const usesQuantity = isRoll || isJechae;
+  const qtyLabel = isJechae ? "부수" : "수량";
   const [machines, setMachines] = useState<Machine[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   // 전체 주문(대기·배정 완료 포함). 설비에 배정된 작업의 사양 편집에 사용.
@@ -684,14 +687,14 @@ export default function ScheduleBoard() {
       // 구성이 여러 개면 파트별 소요시간/구분을 저장, 전체 소요는 합계 (윤전은 구분 없음)
       for (const p of parts) {
         partDurations[p] = Math.round((newOrder.partHours[p] || 0) * 60);
-        partProcesses[p] = isRoll ? "" : (newOrder.partProcesses[p] || newOrder.special_process || "일반");
+        partProcesses[p] = usesQuantity ? "" : (newOrder.partProcesses[p] || newOrder.special_process || "일반");
       }
       durationMinutes = Object.values(partDurations).reduce((a, b) => a + b, 0);
     } else {
       durationMinutes = Math.round((newOrder.duration_hours || 0) * 60);
     }
-    // 윤전은 구분을 사용하지 않으므로 special_process를 비워 저장(공정 칩 미표시)
-    const specialProcess = isRoll ? "" : newOrder.special_process;
+    // 윤전·제책은 구분을 사용하지 않으므로 special_process를 비워 저장(공정 칩 미표시)
+    const specialProcess = usesQuantity ? "" : newOrder.special_process;
     if (editingOrderId !== null) {
       // 배정 완료된 작업을 설비 화면에서 수정해도 상태가 대기로 바뀌지 않도록 기존 상태 유지
       const existingStatus = allOrders.find((o) => o.id === editingOrderId)?.status || "pending";
@@ -1053,8 +1056,8 @@ export default function ScheduleBoard() {
               ))}
             </div>
           )}
-          {isRoll && order.quantity_sheets ? (
-            <p className="text-xs font-medium text-gray-600 mt-1.5">수량 : {order.quantity_sheets.toLocaleString()}부</p>
+          {usesQuantity && order.quantity_sheets ? (
+            <p className="text-xs font-medium text-gray-600 mt-1.5">{qtyLabel} : {order.quantity_sheets.toLocaleString()}부</p>
           ) : null}
           {order.notes && (
             <p className="text-xs text-gray-500 mt-1.5 break-all" title={order.notes}>비고 : {order.notes}</p>
@@ -1537,7 +1540,7 @@ export default function ScheduleBoard() {
                                 </span>
                               );
                             })()}
-                            {isRoll && entry.quantity_sheets ? (
+                            {usesQuantity && entry.quantity_sheets ? (
                               <span className="text-[11px] font-medium text-gray-600 shrink-0 whitespace-nowrap">{entry.quantity_sheets.toLocaleString()}부</span>
                             ) : null}
                             </div>
@@ -1777,10 +1780,10 @@ export default function ScheduleBoard() {
                   value={newOrder.component}
                   onChange={(e) => setNewOrder({ ...newOrder, component: e.target.value })}
                 />
-                {/* 윤전: 구분 대신 수량(부) 입력. 매엽: 구분 입력(구성 2개 이상이면 파트별 입력으로 대체). */}
-                {isRoll ? (
+                {/* 윤전·제책: 구분 대신 수량(윤전=수량(부), 제책=부수) 수기 입력. 매엽: 구분 입력. */}
+                {usesQuantity ? (
                   <div className="col-span-2">
-                    <label className="text-[10px] text-gray-500">수량 (부)</label>
+                    <label className="text-[10px] text-gray-500">{isJechae ? "부수" : "수량 (부)"}</label>
                     <input
                       type="number" min="0" step="1" placeholder="부"
                       className="border px-2 py-1.5 text-xs w-full"
@@ -1820,15 +1823,15 @@ export default function ScheduleBoard() {
                       </div>
                       {multi ? (
                         <div className="col-span-2">
-                          {/* 윤전은 구분·구성별 수량 없이 구성·소요시간만, 매엽은 구성·소요시간·구분 */}
-                          <div className={`grid ${isRoll ? "grid-cols-2" : "grid-cols-3"} gap-1 mb-1`}>
+                          {/* 윤전·제책은 구분 없이 구성·소요시간만, 매엽은 구성·소요시간·구분 */}
+                          <div className={`grid ${usesQuantity ? "grid-cols-2" : "grid-cols-3"} gap-1 mb-1`}>
                             <span className="text-[10px] text-gray-500">구성</span>
                             <span className="text-[10px] text-gray-500">소요(시간)</span>
-                            {!isRoll && <span className="text-[10px] text-gray-500">구분</span>}
+                            {!usesQuantity && <span className="text-[10px] text-gray-500">구분</span>}
                           </div>
                           <div className="space-y-1">
                             {newParts.map((p) => (
-                              <div key={p} className={`grid ${isRoll ? "grid-cols-2" : "grid-cols-3"} gap-1 items-center`}>
+                              <div key={p} className={`grid ${usesQuantity ? "grid-cols-2" : "grid-cols-3"} gap-1 items-center`}>
                                 <span className="text-[11px] text-gray-700 truncate" title={p}>{p}</span>
                                 <input
                                   type="number" min="0" step="1" placeholder="시간"
@@ -1836,7 +1839,7 @@ export default function ScheduleBoard() {
                                   value={newOrder.partHours[p] || ""}
                                   onChange={(e) => setNewOrder({ ...newOrder, partHours: { ...newOrder.partHours, [p]: Number(e.target.value) } })}
                                 />
-                                {!isRoll && (
+                                {!usesQuantity && (
                                   <select
                                     className="border px-1 py-1 text-xs w-full min-w-0"
                                     value={newOrder.partProcesses[p] || newOrder.special_process}
