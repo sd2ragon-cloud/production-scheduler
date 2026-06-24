@@ -32,7 +32,11 @@ function parseDayHoursUI(json: string | undefined): Record<number, [number, numb
   return out;
 }
 const pad2 = (n: number) => String(n).padStart(2, "0");
-const fmtHours = (s: number, e: number) => (e <= s ? "24시간" : `${pad2(s)}~${pad2(e)}시`);
+// 시각값(시 단위, 30분=0.5)을 "HH:MM"으로. 시작=종료(또는 종료<시작)면 24시간 가동.
+const hourOf = (v: number) => Math.floor(v);
+const isHalf = (v: number) => Math.round((v - Math.floor(v)) * 60) === 30;
+const fmtHM = (v: number) => `${pad2(Math.floor(v))}:${pad2(Math.round((v - Math.floor(v)) * 60))}`;
+const fmtHours = (s: number, e: number) => (e <= s ? "24시간" : `${fmtHM(s)}~${fmtHM(e)}`);
 // 근무일들의 근무시간을 요약. 전부 같으면 "08~24시", 다르면 "월·화·수·목·금 08~24시 · 토 08~18시".
 function hoursSummary(m: Machine): string {
   const off = new Set(parseOff(m.off_days));
@@ -105,7 +109,10 @@ function MachineColumn({ processLine, isAdmin }: { processLine: string; isAdmin:
   const toggleOff = (day: number) => {
     setEditDays((prev) => prev.map((c, d) => (d === day ? { ...c, off: !c.off } : c)));
   };
-  const setDayField = (day: number, key: "start" | "end", val: number) => {
+  // 요일별 시각 설정(시 + 30분 여부). 24시엔 :30 없음.
+  const setDayTime = (day: number, key: "start" | "end", hr: number, half: boolean) => {
+    let val = Math.min(Math.max(Number.isFinite(hr) ? hr : 0, 0), 24);
+    if (val < 24 && half) val += 0.5;
     setEditDays((prev) => prev.map((c, d) => (d === day ? { ...c, [key]: val } : c)));
   };
 
@@ -125,13 +132,15 @@ function MachineColumn({ processLine, isAdmin }: { processLine: string; isAdmin:
       .filter((c) => !c.off)
       .map((c) => { let s = clamp(c.start), e = clamp(c.end); if (e <= s) { s = 0; e = 24; } return { d: c.d, s, e }; });
     // 모든 근무일이 같은 시간이면 오버라이드 없이 기본 work_start/end만 저장. 다르면 day_hours에 요일별로.
+    // 단, 30분 단위(.5) 값이 있으면 INTEGER 컬럼 반올림 손실을 막기 위해 day_hours(JSON)에 보관한다.
     let work_start_hour = 8, work_end_hour = 22;
     const day_hours: Record<number, [number, number]> = {};
     if (norm.length > 0) {
-      work_start_hour = norm[0].s;
-      work_end_hour = norm[0].e;
+      work_start_hour = Math.floor(norm[0].s);
+      work_end_hour = Math.ceil(norm[0].e);
       const uniform = norm.every((n) => n.s === norm[0].s && n.e === norm[0].e);
-      if (!uniform) for (const n of norm) day_hours[n.d] = [n.s, n.e];
+      const anyHalf = norm.some((n) => isHalf(n.s) || isHalf(n.e));
+      if (!uniform || anyHalf) for (const n of norm) day_hours[n.d] = [n.s, n.e];
     }
     setLoading(true);
     await fetch(`/api/machines/${m.id}`, {
@@ -272,26 +281,41 @@ function MachineColumn({ processLine, isAdmin }: { processLine: string; isAdmin:
                               <input
                                 type="number" min="0" max="24"
                                 className="w-11 border px-1 py-0.5 text-sm text-center"
-                                value={cfg.start}
-                                onChange={(e) => setDayField(i, "start", Number(e.target.value))}
+                                value={hourOf(cfg.start)}
+                                onChange={(e) => setDayTime(i, "start", Number(e.target.value), isHalf(cfg.start))}
                                 title={`${d}요일 근무 시작 시`}
                               />
+                              <button
+                                type="button"
+                                onClick={() => setDayTime(i, "start", hourOf(cfg.start), !isHalf(cfg.start))}
+                                className="w-9 h-7 text-xs border bg-white hover:bg-gray-50"
+                                title={`${d}요일 시작 분 (:00↔:30)`}
+                              >
+                                {isHalf(cfg.start) ? ":30" : ":00"}
+                              </button>
                               <span className="text-gray-400">~</span>
                               <input
                                 type="number" min="0" max="24"
                                 className="w-11 border px-1 py-0.5 text-sm text-center"
-                                value={cfg.end}
-                                onChange={(e) => setDayField(i, "end", Number(e.target.value))}
+                                value={hourOf(cfg.end)}
+                                onChange={(e) => setDayTime(i, "end", Number(e.target.value), isHalf(cfg.end))}
                                 title={`${d}요일 근무 종료 시`}
                               />
-                              <span className="text-[11px] text-gray-500">시</span>
+                              <button
+                                type="button"
+                                onClick={() => setDayTime(i, "end", hourOf(cfg.end), !isHalf(cfg.end))}
+                                className="w-9 h-7 text-xs border bg-white hover:bg-gray-50"
+                                title={`${d}요일 종료 분 (:00↔:30)`}
+                              >
+                                {isHalf(cfg.end) ? ":30" : ":00"}
+                              </button>
                             </>
                           )}
                         </div>
                       );
                     })}
                   </div>
-                  <div className="text-[10px] text-gray-400">시작=종료로 두면 24시간 가동</div>
+                  <div className="text-[10px] text-gray-400">시작=종료로 두면 24시간 가동 · :00/:30 버튼으로 30분 단위</div>
                 </div>
               ) : (
                 <span className={`flex-1 min-w-0 text-sm font-medium ${m.is_active ? "text-gray-900" : "text-gray-400"}`}>
