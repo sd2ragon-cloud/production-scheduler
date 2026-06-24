@@ -1373,7 +1373,7 @@ export default function ScheduleBoard() {
                 <span className="font-bold shrink-0 whitespace-nowrap mr-4" style={{ width: machineNameWidth }}>{machine.name}</span>
                 <input
                   type="text"
-                  className="min-w-0 w-28 bg-gray-700 text-white text-xs px-2 py-0.5 border border-gray-500 focus:border-blue-400 outline-none disabled:opacity-60"
+                  className="flex-1 min-w-0 bg-gray-700 text-white text-xs px-2 py-0.5 border border-gray-500 focus:border-blue-400 outline-none disabled:opacity-60"
                   placeholder={isAdmin ? "메모" : ""}
                   value={machineMemos[machine.id] ?? ""}
                   onChange={(e) => handleMemoChange(machine.id, e.target.value)}
