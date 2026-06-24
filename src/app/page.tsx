@@ -86,6 +86,25 @@ interface ScheduleEntry {
 
 const DAY_NAMES = ["일", "월", "화", "수", "목", "금", "토"];
 
+// 설비 시작 일시(날짜+시각). 저장값은 "YYYY-MM-DD HH:MM"(또는 구버전 "HH:MM").
+// datetime-local 입력값 "YYYY-MM-DDTHH:MM"으로 정규화한다.
+const pad2n = (n: number) => String(n).padStart(2, "0");
+const localToday = () => { const d = new Date(); return `${d.getFullYear()}-${pad2n(d.getMonth() + 1)}-${pad2n(d.getDate())}`; };
+function startToLocalInput(stored: string | undefined): string {
+  const s = (stored || "").trim();
+  const m1 = s.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{1,2}):(\d{2})/);
+  if (m1) return `${m1[1]}T${pad2n(Number(m1[2]))}:${m1[3]}`;
+  const m2 = s.match(/^(\d{1,2}):(\d{2})$/);
+  if (m2) return `${localToday()}T${pad2n(Number(m2[1]))}:${m2[2]}`;
+  return `${localToday()}T08:00`;
+}
+// datetime-local 값에서 시작 요일(예: "수")을 구한다.
+function startWeekday(localVal: string): string {
+  const m = (localVal || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return "";
+  return DAY_NAMES[new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).getDay()];
+}
+
 // 제책 설비 하단 기타사항: 요일별(월~금) + 공통. extra_notes 컬럼에 JSON으로 저장.
 const EXTRA_DAYS: [string, string][] = [["mon", "월"], ["tue", "화"], ["wed", "수"], ["thu", "목"], ["fri", "금"], ["sat", "토"], ["sun", "일"]];
 // 저장값을 {mon,tue,...,general} 형태로 파싱. 구버전 단일 텍스트는 공통(general)으로 본다.
@@ -250,7 +269,7 @@ export default function ScheduleBoard() {
       const next = { ...prev };
       for (const m of activeMachines) {
         if (!(m.id in next)) {
-          next[m.id] = m.schedule_start_time || "08:00";
+          next[m.id] = startToLocalInput(m.schedule_start_time);
         }
       }
       return next;
@@ -1354,20 +1373,21 @@ export default function ScheduleBoard() {
                 <span className="font-bold shrink-0 whitespace-nowrap mr-4" style={{ width: machineNameWidth }}>{machine.name}</span>
                 <input
                   type="text"
-                  className="flex-1 min-w-0 bg-gray-700 text-white text-xs px-2 py-0.5 border border-gray-500 focus:border-blue-400 outline-none disabled:opacity-60"
+                  className="min-w-0 w-28 bg-gray-700 text-white text-xs px-2 py-0.5 border border-gray-500 focus:border-blue-400 outline-none disabled:opacity-60"
                   placeholder={isAdmin ? "메모" : ""}
                   value={machineMemos[machine.id] ?? ""}
                   onChange={(e) => handleMemoChange(machine.id, e.target.value)}
                   disabled={!isAdmin}
                 />
-                <div className="flex items-center gap-3 shrink-0 ml-3">
+                <div className="flex items-center gap-3 shrink-0 ml-auto">
                   <div className="flex items-center gap-1.5">
                     <span className="text-xs text-gray-400">시작</span>
+                    <span className="text-xs font-bold text-blue-300 w-4 text-center shrink-0">{startWeekday(machineStartTimes[machine.id] || "")}</span>
                     <input
-                      type="time"
+                      type="datetime-local"
                       className="bg-gray-700 text-white text-xs px-2 py-0.5 border border-gray-500 focus:border-blue-400 outline-none disabled:opacity-60"
-                      style={{ width: "7rem", colorScheme: "dark" }}
-                      value={machineStartTimes[machine.id] || "08:00"}
+                      style={{ width: "12.5rem", colorScheme: "dark" }}
+                      value={machineStartTimes[machine.id] || `${localToday()}T08:00`}
                       onChange={(e) => handleStartTimeChange(machine.id, e.target.value)}
                       disabled={!isAdmin}
                     />
