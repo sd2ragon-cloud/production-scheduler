@@ -16,13 +16,12 @@ interface AssignedEntry {
   duration_minutes: number;
 }
 
-// 휴무 요일 파싱: 0~6 범위의 유효한 값만. 7요일 모두 휴무는 무한루프 방지를 위해 무시(빈 배열).
+// 휴무 요일 파싱: 0~6 범위의 유효한 값만. 7요일 전부 휴무(전체 휴무 설비)도 허용.
 function parseOffDays(json: string | undefined | null): number[] {
   if (!json) return [];
   try {
     const a = JSON.parse(json);
-    const off = Array.isArray(a) ? Array.from(new Set(a.map(Number).filter((n) => n >= 0 && n <= 6))) : [];
-    return off.length >= 7 ? [] : off;
+    return Array.isArray(a) ? Array.from(new Set(a.map(Number).filter((n) => n >= 0 && n <= 6))) : [];
   } catch {
     return [];
   }
@@ -131,6 +130,18 @@ export async function recalcMachine(machineId: number, baseDate?: string, startT
   {
     const [h, m] = String(startStr).split(':').map(Number);
     if (!isNaN(h)) curMin = h * 60 + (isNaN(m) ? 0 : m);
+  }
+
+  // 전체 휴무 설비(7요일 모두 휴무): 일정 진행 불가 → 무한루프 방지. 모든 작업의 시작/완료를 비워
+  // 둔다(예상완료가 '-'로 표시됨). 보통 이런 설비엔 작업을 배정하지 않는다.
+  const noWorkDay = ![0, 1, 2, 3, 4, 5, 6].some((d) => isWorkDay(new Date(2024, 0, 7 + d), machine));
+  if (noWorkDay) {
+    const offUpdates = entries.map((e) => ({
+      sql: 'UPDATE schedule_entries SET start_time = ?, end_time = ?, scheduled_date = ? WHERE id = ?',
+      args: ['', '', formatDate(currentDate), Number(e.id)] as (string | number)[],
+    }));
+    if (offUpdates.length > 0) await db.batch(offUpdates, 'write');
+    return;
   }
 
   while (!isWorkDay(currentDate, machine)) {

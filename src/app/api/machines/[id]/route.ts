@@ -60,10 +60,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     await db.execute({ sql: 'UPDATE machines SET work_end_hour = ? WHERE id = ?', args: [Number(body.work_end_hour), id] });
     recalcNeeded = true;
   }
-  // 휴무 요일 변경 → 예상완료시간 재계산. 0~6만, 7요일 전체 휴무는 막는다(최소 1일 근무).
+  // 휴무 요일 변경 → 예상완료시간 재계산. 0~6 값만 허용(7요일 전체 휴무=전체 휴무 설비도 허용).
   if (Array.isArray(body.off_days)) {
-    let off = Array.from(new Set(body.off_days.map(Number).filter((n: number) => n >= 0 && n <= 6)));
-    if (off.length >= 7) off = off.slice(0, 6);
+    const off = Array.from(new Set(body.off_days.map(Number).filter((n: number) => n >= 0 && n <= 6)));
     await db.execute({ sql: 'UPDATE machines SET off_days = ? WHERE id = ?', args: [JSON.stringify(off), id] });
     recalcNeeded = true;
   }

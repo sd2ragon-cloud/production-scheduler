@@ -64,13 +64,9 @@ function MachineColumn({ processLine, isAdmin }: { processLine: string; isAdmin:
     setEditOff(parseOff(m.off_days));
   };
 
-  // 요일 토글: 휴무↔근무. 단, 7요일 전부 휴무는 막는다(최소 1일 근무).
+  // 요일 토글: 휴무↔근무. 7요일 전부 휴무(전체 휴무 설비)도 허용.
   const toggleOff = (day: number) => {
-    setEditOff((prev) => {
-      if (prev.includes(day)) return prev.filter((d) => d !== day);
-      if (prev.length >= 6) return prev; // 6일 휴무 상태에서 7일째 추가 금지
-      return [...prev, day].sort((a, b) => a - b);
-    });
+    setEditOff((prev) => (prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day].sort((a, b) => a - b)));
   };
 
   const cancelEdit = () => {
@@ -244,9 +240,11 @@ function MachineColumn({ processLine, isAdmin }: { processLine: string; isAdmin:
                 <span className={`flex-1 min-w-0 text-sm font-medium ${m.is_active ? "text-gray-900" : "text-gray-400"}`}>
                   {m.name}
                   <span className="ml-2 text-[11px] font-normal text-gray-400">{String(m.work_start_hour).padStart(2, "0")}~{String(m.work_end_hour).padStart(2, "0")}시</span>
-                  {parseOff(m.off_days).length > 0 && (
+                  {parseOff(m.off_days).length >= 7 ? (
+                    <span className="ml-1 text-[11px] font-normal text-red-500">· 전체 휴무</span>
+                  ) : parseOff(m.off_days).length > 0 ? (
                     <span className="ml-1 text-[11px] font-normal text-orange-500">· 휴무 {parseOff(m.off_days).map((i) => DAY_LABELS[i]).join("·")}</span>
-                  )}
+                  ) : null}
                 </span>
               )}
               {isAdmin && (
