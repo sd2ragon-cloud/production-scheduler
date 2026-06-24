@@ -99,8 +99,9 @@ function MachineColumn({ processLine, isAdmin }: { processLine: string; isAdmin:
   const daysFromMachine = (m: Machine) => {
     const off = new Set(parseOff(m.off_days));
     const dh = parseDayHoursUI(m.day_hours);
-    const defS = Number(m.work_start_hour) || 8;
-    const defE = Number(m.work_end_hour) || 22;
+    // 0시(자정)는 falsy라 || 로 기본값 처리하면 8시로 바뀐다 → 유한수면 그대로 사용.
+    const defS = Number.isFinite(Number(m.work_start_hour)) ? Number(m.work_start_hour) : 8;
+    const defE = Number.isFinite(Number(m.work_end_hour)) ? Number(m.work_end_hour) : 22;
     return DAY_LABELS.map((_, d) => {
       const ov = dh[d];
       return { off: off.has(d), start: ov ? ov[0] : defS, end: ov ? ov[1] : defE };
