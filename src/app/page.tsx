@@ -1724,7 +1724,7 @@ export default function ScheduleBoard() {
                           <div className={`bg-gray-800 text-white text-center text-[11px] font-semibold py-0.5 ${idx > 0 ? "border-l border-white" : ""}`}>{label}</div>
                           <textarea
                             style={{ height: rowH }}
-                            className={`w-full border-0 border-t border-black px-1.5 py-1 text-[12px] leading-snug resize-none outline-none focus:bg-blue-50/40 disabled:opacity-60 ${idx > 0 ? "border-l" : ""}`}
+                            className={`w-full border-0 border-t border-black px-1.5 py-1 text-[12px] leading-snug text-center resize-none outline-none focus:bg-blue-50/40 disabled:opacity-60 ${idx > 0 ? "border-l" : ""}`}
                             value={ex[key] ?? ""}
                             onChange={(e) => setField(key, e.target.value)}
                             disabled={!isAdmin}
