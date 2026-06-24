@@ -8,6 +8,7 @@ interface Machine {
   works_saturday: number;
   works_sunday: number;
   off_days?: string; // 휴무 요일 JSON 배열 (0=일~6=토)
+  day_hours?: string; // 요일별 근무시간 오버라이드 JSON (예: {"6":[8,18]})
   schedule_start_time?: string;
 }
 
@@ -25,6 +26,31 @@ function parseOffDays(json: string | undefined | null): number[] {
   } catch {
     return [];
   }
+}
+
+// 요일별 근무시간 오버라이드 파싱. { "1":[8,24], "6":[8,18] } (키=요일 0~6, 값=[시작시,종료시]).
+function parseDayHours(json: string | undefined | null): Record<number, [number, number]> {
+  const out: Record<number, [number, number]> = {};
+  if (!json) return out;
+  try {
+    const o = JSON.parse(json);
+    if (o && typeof o === 'object') {
+      for (const k of Object.keys(o)) {
+        const d = Number(k);
+        const v = (o as Record<string, unknown>)[k];
+        if (d >= 0 && d <= 6 && Array.isArray(v) && v.length === 2) {
+          const s = Number(v[0]);
+          const e = Number(v[1]);
+          if (Number.isFinite(s) && Number.isFinite(e)) {
+            out[d] = [Math.min(Math.max(s, 0), 24), Math.min(Math.max(e, 0), 24)];
+          }
+        }
+      }
+    }
+  } catch {
+    /* 잘못된 JSON → 오버라이드 없음 */
+  }
+  return out;
 }
 
 function isWorkDay(date: Date, machine: Machine): boolean {
@@ -110,14 +136,19 @@ export async function recalcMachine(machineId: number, baseDate?: string, startT
   const startDate = baseDate ? new Date(baseDate) : new Date();
   startDate.setHours(0, 0, 0, 0);
 
-  let workStart = Number(machine.work_start_hour) * 60;
-  let workEnd = Number(machine.work_end_hour) * 60;
-  // 종료가 시작보다 작거나 같으면(예: 8~8) 가동 구간이 없어 무한루프가 된다.
-  // 이 경우 24시간 가동(0~24시)으로 해석한다. (자정을 넘기는 야간교대 구간은 미지원)
-  if (workEnd <= workStart) {
-    workStart = 0;
-    workEnd = 24 * 60;
-  }
+  // 해당 날짜(요일)의 근무 구간[분]을 구한다. 요일별 오버라이드(day_hours)가 있으면 그 값을,
+  // 없으면 기본 work_start/work_end를 쓴다. 종료<=시작(예: 8~8)이면 24시간 가동(0~24시)으로 해석한다.
+  const dayOverrides = parseDayHours(machine.day_hours);
+  const hoursFor = (date: Date): { start: number; end: number } => {
+    const ov = dayOverrides[date.getDay()];
+    let start = (ov ? ov[0] : Number(machine.work_start_hour)) * 60;
+    let end = (ov ? ov[1] : Number(machine.work_end_hour)) * 60;
+    if (end <= start) {
+      start = 0;
+      end = 24 * 60;
+    }
+    return { start, end };
+  };
 
   // 식사·휴게 시간을 DB에서 읽는다. 비어 있으면(=사용자가 전부 삭제) 제외 시간 없음, 테이블이 없으면 기본값으로 폴백.
   let breaks: Break[] = DEFAULT_BREAKS;
@@ -132,7 +163,7 @@ export async function recalcMachine(machineId: number, baseDate?: string, startT
   // 시작시각 우선순위: 명시 인자 > 기계에 저장된 schedule_start_time > 기본 08:00.
   // (배정해제·소요시간변경·순서변경 등 start_time 없이 호출돼도 저장된 시작시각을 유지)
   const startStr = startTimeStr || machine.schedule_start_time || '08:00';
-  let curMin = workStart;
+  let curMin = hoursFor(currentDate).start;
   {
     const [h, m] = String(startStr).split(':').map(Number);
     if (!isNaN(h)) curMin = h * 60 + (isNaN(m) ? 0 : m);
@@ -155,15 +186,16 @@ export async function recalcMachine(machineId: number, baseDate?: string, startT
   }
 
   // 근무일/근무시간/휴게시간을 건너뛰어 다음 '작업 가능한' 시각으로 정렬한다.
+  // 근무시간은 요일마다 다를 수 있으므로 날짜가 바뀔 때마다 hoursFor로 다시 구한다.
   const advanceToWorking = () => {
-    let pos = nextWorkingMinute(curMin, workEnd, breaks);
+    let pos = nextWorkingMinute(curMin, hoursFor(currentDate).end, breaks);
     while (pos === null) {
       currentDate.setDate(currentDate.getDate() + 1);
       while (!isWorkDay(currentDate, machine)) {
         currentDate.setDate(currentDate.getDate() + 1);
       }
-      curMin = workStart;
-      pos = nextWorkingMinute(curMin, workEnd, breaks);
+      curMin = hoursFor(currentDate).start;
+      pos = nextWorkingMinute(curMin, hoursFor(currentDate).end, breaks);
     }
     curMin = pos;
   };
@@ -178,7 +210,7 @@ export async function recalcMachine(machineId: number, baseDate?: string, startT
 
     while (remaining > 0) {
       advanceToWorking();
-      const boundary = nextBreakBoundary(curMin, workEnd, breaks);
+      const boundary = nextBreakBoundary(curMin, hoursFor(currentDate).end, breaks);
       const available = boundary - curMin;
       if (remaining <= available) {
         curMin += remaining;

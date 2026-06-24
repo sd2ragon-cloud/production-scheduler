@@ -37,6 +37,7 @@ async function initializeDb(db: Client) {
       memo TEXT NOT NULL DEFAULT '',
       extra_notes TEXT NOT NULL DEFAULT '',
       off_days TEXT NOT NULL DEFAULT '[0]',
+      day_hours TEXT NOT NULL DEFAULT '',
       created_at TEXT DEFAULT (datetime('now', 'localtime'))
     )`,
     `CREATE TABLE IF NOT EXISTS orders (
@@ -230,6 +231,14 @@ async function initializeDb(db: Client) {
     }
   } catch {
     // column already exists (백필은 최초 1회만)
+  }
+
+  // Migrate machines: add day_hours (요일별 근무시간 오버라이드 JSON, 예 {"6":[8,18]}).
+  // 비어 있으면 work_start_hour/work_end_hour를 모든 근무일에 적용(기존 동작 유지).
+  try {
+    await db.execute(`ALTER TABLE machines ADD COLUMN day_hours TEXT NOT NULL DEFAULT ''`);
+  } catch {
+    // column already exists
   }
 
   // Migrate schedule_entries: add base_minutes (단면 기준 원본 소요시간) column if missing

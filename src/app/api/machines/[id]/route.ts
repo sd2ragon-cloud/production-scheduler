@@ -66,6 +66,20 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     await db.execute({ sql: 'UPDATE machines SET off_days = ? WHERE id = ?', args: [JSON.stringify(off), id] });
     recalcNeeded = true;
   }
+  // 요일별 근무시간 오버라이드. { "1":[8,24], "6":[8,18] } 형태만 허용, 0~24 범위로 정제. 빈 객체면 오버라이드 해제('').
+  if (body.day_hours != null && typeof body.day_hours === 'object' && !Array.isArray(body.day_hours)) {
+    const clean: Record<string, [number, number]> = {};
+    for (const [k, v] of Object.entries(body.day_hours as Record<string, unknown>)) {
+      const d = Number(k);
+      if (d >= 0 && d <= 6 && Array.isArray(v) && v.length === 2) {
+        const s = Math.min(Math.max(Number(v[0]), 0), 24);
+        const e = Math.min(Math.max(Number(v[1]), 0), 24);
+        if (Number.isFinite(s) && Number.isFinite(e)) clean[d] = [s, e];
+      }
+    }
+    await db.execute({ sql: 'UPDATE machines SET day_hours = ? WHERE id = ?', args: [Object.keys(clean).length ? JSON.stringify(clean) : '', id] });
+    recalcNeeded = true;
+  }
   if (recalcNeeded) {
     await recalcMachine(Number(id), new Date().toISOString().split('T')[0]);
   }
