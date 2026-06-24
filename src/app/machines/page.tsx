@@ -10,6 +10,12 @@ interface Machine {
   is_active: number;
   work_start_hour: number;
   work_end_hour: number;
+  off_days: string; // 휴무 요일 JSON 배열 (0=일~6=토)
+}
+
+const DAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
+function parseOff(json: string | undefined): number[] {
+  try { const a = JSON.parse(json || "[]"); return Array.isArray(a) ? a.map(Number).filter((n) => n >= 0 && n <= 6) : []; } catch { return []; }
 }
 
 // 공정 라인 하나의 설비 목록 열. 추가/수정/삭제/드래그 순서변경을 모두 이 라인 안에서 처리한다.
@@ -21,6 +27,7 @@ function MachineColumn({ processLine, isAdmin }: { processLine: string; isAdmin:
   const [editName, setEditName] = useState("");
   const [editStart, setEditStart] = useState(8);
   const [editEnd, setEditEnd] = useState(22);
+  const [editOff, setEditOff] = useState<number[]>([]);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   // 삽입 슬롯: 0=맨 위, n=맨 아래 (행 i 앞 = i)
   const [overSlot, setOverSlot] = useState<number | null>(null);
@@ -54,6 +61,16 @@ function MachineColumn({ processLine, isAdmin }: { processLine: string; isAdmin:
     setEditName(m.name);
     setEditStart(Number(m.work_start_hour) || 8);
     setEditEnd(Number(m.work_end_hour) || 22);
+    setEditOff(parseOff(m.off_days));
+  };
+
+  // 요일 토글: 휴무↔근무. 단, 7요일 전부 휴무는 막는다(최소 1일 근무).
+  const toggleOff = (day: number) => {
+    setEditOff((prev) => {
+      if (prev.includes(day)) return prev.filter((d) => d !== day);
+      if (prev.length >= 6) return prev; // 6일 휴무 상태에서 7일째 추가 금지
+      return [...prev, day].sort((a, b) => a - b);
+    });
   };
 
   const cancelEdit = () => {
@@ -66,13 +83,15 @@ function MachineColumn({ processLine, isAdmin }: { processLine: string; isAdmin:
     if (!trimmed) { cancelEdit(); return; }
     const startH = Math.min(Math.max(editStart, 0), 24);
     const endH = Math.min(Math.max(editEnd, 0), 24);
-    const changed = trimmed !== m.name || startH !== Number(m.work_start_hour) || endH !== Number(m.work_end_hour);
+    const offSorted = [...editOff].sort((a, b) => a - b);
+    const offChanged = JSON.stringify(offSorted) !== JSON.stringify(parseOff(m.off_days).sort((a, b) => a - b));
+    const changed = trimmed !== m.name || startH !== Number(m.work_start_hour) || endH !== Number(m.work_end_hour) || offChanged;
     if (!changed) { cancelEdit(); return; }
     setLoading(true);
     await fetch(`/api/machines/${m.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: trimmed, work_start_hour: startH, work_end_hour: endH }),
+      body: JSON.stringify({ name: trimmed, work_start_hour: startH, work_end_hour: endH, off_days: offSorted }),
     });
     cancelEdit();
     await fetchMachines();
@@ -203,11 +222,31 @@ function MachineColumn({ processLine, isAdmin }: { processLine: string; isAdmin:
                     title="근무 종료 시"
                   />
                   <span className="text-[11px] text-gray-500">시</span>
+                  <span className="text-[11px] text-gray-500 whitespace-nowrap ml-1">근무요일</span>
+                  <div className="flex items-center gap-0.5">
+                    {DAY_LABELS.map((d, i) => {
+                      const off = editOff.includes(i);
+                      return (
+                        <button
+                          type="button"
+                          key={i}
+                          onClick={() => toggleOff(i)}
+                          className={`w-6 h-6 text-xs border ${off ? "bg-gray-100 text-gray-300 line-through border-gray-200" : "bg-blue-50 text-blue-700 border-blue-300 font-medium"}`}
+                          title={off ? `${d}요일 휴무 (클릭=근무)` : `${d}요일 근무 (클릭=휴무)`}
+                        >
+                          {d}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               ) : (
                 <span className={`flex-1 min-w-0 text-sm font-medium ${m.is_active ? "text-gray-900" : "text-gray-400"}`}>
                   {m.name}
                   <span className="ml-2 text-[11px] font-normal text-gray-400">{String(m.work_start_hour).padStart(2, "0")}~{String(m.work_end_hour).padStart(2, "0")}시</span>
+                  {parseOff(m.off_days).length > 0 && (
+                    <span className="ml-1 text-[11px] font-normal text-orange-500">· 휴무 {parseOff(m.off_days).map((i) => DAY_LABELS[i]).join("·")}</span>
+                  )}
                 </span>
               )}
               {isAdmin && (

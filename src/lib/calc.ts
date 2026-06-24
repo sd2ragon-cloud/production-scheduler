@@ -7,6 +7,7 @@ interface Machine {
   work_end_hour: number;
   works_saturday: number;
   works_sunday: number;
+  off_days?: string; // 휴무 요일 JSON 배열 (0=일~6=토)
   schedule_start_time?: string;
 }
 
@@ -15,8 +16,24 @@ interface AssignedEntry {
   duration_minutes: number;
 }
 
+// 휴무 요일 파싱: 0~6 범위의 유효한 값만. 7요일 모두 휴무는 무한루프 방지를 위해 무시(빈 배열).
+function parseOffDays(json: string | undefined | null): number[] {
+  if (!json) return [];
+  try {
+    const a = JSON.parse(json);
+    const off = Array.isArray(a) ? Array.from(new Set(a.map(Number).filter((n) => n >= 0 && n <= 6))) : [];
+    return off.length >= 7 ? [] : off;
+  } catch {
+    return [];
+  }
+}
+
 function isWorkDay(date: Date, machine: Machine): boolean {
   const day = date.getDay();
+  // off_days가 있으면 그걸로 판정, 없으면(구버전 행) works_saturday/works_sunday로 폴백.
+  if (machine.off_days != null && machine.off_days !== '') {
+    return !parseOffDays(machine.off_days).includes(day);
+  }
   if (day === 0) return machine.works_sunday === 1;
   if (day === 6) return machine.works_saturday === 1;
   return true;

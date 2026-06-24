@@ -36,6 +36,7 @@ async function initializeDb(db: Client) {
       schedule_start_time TEXT NOT NULL DEFAULT '08:00',
       memo TEXT NOT NULL DEFAULT '',
       extra_notes TEXT NOT NULL DEFAULT '',
+      off_days TEXT NOT NULL DEFAULT '[0]',
       created_at TEXT DEFAULT (datetime('now', 'localtime'))
     )`,
     `CREATE TABLE IF NOT EXISTS orders (
@@ -214,6 +215,21 @@ async function initializeDb(db: Client) {
     await db.execute(`ALTER TABLE machines ADD COLUMN extra_notes TEXT NOT NULL DEFAULT ''`);
   } catch {
     // column already exists
+  }
+
+  // Migrate machines: add off_days (요일별 휴무 JSON 배열, 0=일~6=토). 기존 토/일 설정을 이관한다.
+  try {
+    await db.execute(`ALTER TABLE machines ADD COLUMN off_days TEXT NOT NULL DEFAULT '[0]'`);
+    // 최초 1회 백필: works_saturday/works_sunday(0=휴무)에서 off_days를 계산해 채운다.
+    const rows = await db.execute('SELECT id, works_saturday, works_sunday FROM machines');
+    for (const r of rows.rows as unknown as { id: number; works_saturday: number; works_sunday: number }[]) {
+      const off: number[] = [];
+      if (Number(r.works_sunday) === 0) off.push(0);
+      if (Number(r.works_saturday) === 0) off.push(6);
+      await db.execute({ sql: 'UPDATE machines SET off_days = ? WHERE id = ?', args: [JSON.stringify(off), Number(r.id)] });
+    }
+  } catch {
+    // column already exists (백필은 최초 1회만)
   }
 
   // Migrate schedule_entries: add base_minutes (단면 기준 원본 소요시간) column if missing
