@@ -1373,20 +1373,20 @@ export default function ScheduleBoard() {
                 <span className="font-bold shrink-0 whitespace-nowrap mr-4" style={{ width: machineNameWidth }}>{machine.name}</span>
                 <input
                   type="text"
-                  className="flex-1 min-w-0 bg-gray-700 text-white text-xs px-2 py-0.5 border border-gray-500 focus:border-blue-400 outline-none disabled:opacity-60"
+                  className="flex-1 min-w-0 mr-10 bg-gray-700 text-white text-xs px-2 py-0.5 border border-gray-500 focus:border-blue-400 outline-none disabled:opacity-60"
                   placeholder={isAdmin ? "메모" : ""}
                   value={machineMemos[machine.id] ?? ""}
                   onChange={(e) => handleMemoChange(machine.id, e.target.value)}
                   disabled={!isAdmin}
                 />
-                <div className="flex items-center gap-3 shrink-0 ml-auto">
-                  <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-3 shrink-0">
+                  <div className="flex items-center gap-1">
                     <span className="text-xs text-gray-400">시작</span>
                     <span className="text-xs font-bold text-blue-300 w-4 text-center shrink-0">{startWeekday(machineStartTimes[machine.id] || "")}</span>
                     <input
                       type="datetime-local"
-                      className="bg-gray-700 text-white text-xs px-2 py-0.5 border border-gray-500 focus:border-blue-400 outline-none disabled:opacity-60"
-                      style={{ width: "12.5rem", colorScheme: "dark" }}
+                      className="bg-gray-700 text-white text-xs px-1 py-0.5 border border-gray-500 focus:border-blue-400 outline-none disabled:opacity-60"
+                      style={{ width: "10.5rem", colorScheme: "dark" }}
                       value={machineStartTimes[machine.id] || `${localToday()}T08:00`}
                       onChange={(e) => handleStartTimeChange(machine.id, e.target.value)}
                       disabled={!isAdmin}
