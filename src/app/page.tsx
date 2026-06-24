@@ -86,6 +86,19 @@ interface ScheduleEntry {
 
 const DAY_NAMES = ["일", "월", "화", "수", "목", "금", "토"];
 
+// 제책 설비 하단 기타사항: 요일별(월~금) + 공통. extra_notes 컬럼에 JSON으로 저장.
+const EXTRA_DAYS: [string, string][] = [["mon", "월"], ["tue", "화"], ["wed", "수"], ["thu", "목"], ["fri", "금"]];
+// 저장값을 {mon,tue,...,general} 형태로 파싱. 구버전 단일 텍스트는 공통(general)으로 본다.
+function parseExtraNotes(raw: string): Record<string, string> {
+  if (!raw) return {};
+  try {
+    const o = JSON.parse(raw);
+    return o && typeof o === "object" && !Array.isArray(o) ? (o as Record<string, string>) : { general: raw };
+  } catch {
+    return { general: raw };
+  }
+}
+
 const PROCESS_COLORS: Record<string, string> = {
   "일반": "bg-blue-100 text-blue-800 border-blue-200",
   "항바니쉬": "bg-purple-100 text-purple-800 border-purple-200",
@@ -1678,19 +1691,41 @@ export default function ScheduleBoard() {
                 </table>
                 </div>
               )}
-              {isJechae && (
-                <div className="px-3 pb-2 pt-1 border-t">
-                  <label className="text-[10px] text-gray-500 block mb-0.5">기타사항</label>
-                  <textarea
-                    rows={1}
-                    className="w-full border px-2 py-1 text-[13px] resize-y disabled:opacity-60"
-                    placeholder="기타사항 자유 기술"
-                    value={machineExtras[machine.id] ?? ""}
-                    onChange={(e) => handleMachineExtraChange(machine.id, e.target.value)}
-                    disabled={!isAdmin}
-                  />
-                </div>
-              )}
+              {isJechae && (() => {
+                const ex = parseExtraNotes(machineExtras[machine.id] ?? "");
+                const setField = (key: string, val: string) =>
+                  handleMachineExtraChange(machine.id, JSON.stringify({ ...ex, [key]: val }));
+                return (
+                  <div className="px-3 pb-2 pt-1.5 border-t">
+                    <div className="text-[10px] font-medium text-gray-500 mb-1">기타사항 (요일별)</div>
+                    <div className="grid grid-cols-5 gap-1.5">
+                      {EXTRA_DAYS.map(([key, label]) => (
+                        <div key={key} className="flex flex-col">
+                          <div className="text-[11px] font-semibold text-gray-600 text-center bg-gray-100 border border-b-0 border-gray-300 py-0.5">{label}</div>
+                          <textarea
+                            rows={3}
+                            className="w-full border border-gray-300 px-1.5 py-1 text-[12px] leading-snug resize-y outline-none focus:border-blue-400 disabled:opacity-60"
+                            value={ex[key] ?? ""}
+                            onChange={(e) => setField(key, e.target.value)}
+                            disabled={!isAdmin}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-1.5">
+                      <label className="text-[10px] font-medium text-gray-500 block mb-0.5">공통 (자유 기술)</label>
+                      <textarea
+                        rows={1}
+                        className="w-full border border-gray-300 px-2 py-1 text-[12px] resize-y outline-none focus:border-blue-400 disabled:opacity-60"
+                        placeholder="요일 구분 없이 자유롭게 기술"
+                        value={ex.general ?? ""}
+                        onChange={(e) => setField("general", e.target.value)}
+                        disabled={!isAdmin}
+                      />
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           );
         })}
