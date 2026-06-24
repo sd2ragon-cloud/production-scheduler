@@ -1682,7 +1682,7 @@ export default function ScheduleBoard() {
                 <div className="px-3 pb-2 pt-1 border-t">
                   <label className="text-[10px] text-gray-500 block mb-0.5">기타사항</label>
                   <textarea
-                    rows={2}
+                    rows={1}
                     className="w-full border px-2 py-1 text-[13px] resize-y disabled:opacity-60"
                     placeholder="기타사항 자유 기술"
                     value={machineExtras[machine.id] ?? ""}
