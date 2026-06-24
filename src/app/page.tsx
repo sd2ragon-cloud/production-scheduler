@@ -1696,16 +1696,16 @@ export default function ScheduleBoard() {
                 const setField = (key: string, val: string) =>
                   handleMachineExtraChange(machine.id, JSON.stringify({ ...ex, [key]: val }));
                 return (
-                  <div className="pb-2 pt-1.5 border-t">
+                  <div className="pt-1.5 border-t">
                     <div className="text-[10px] font-medium text-gray-500 mb-1 px-1">기타사항 (요일별)</div>
-                    {/* 여백 없는 박스형: 설비 헤더색(bg-gray-800)·설비 테두리. 어두운 헤더는 흰 선으로 요일 구분. */}
-                    <div className="grid grid-cols-7 border-y">
+                    {/* 헤더는 흰 선으로 요일 구분, 본문 구분선은 검정. 칸 크기 조절(resize-y) 가능. 하단 여백 없음. */}
+                    <div className="grid grid-cols-7 border-y border-black items-start">
                       {EXTRA_DAYS.map(([key, label], idx) => (
                         <div key={key} className="flex flex-col min-w-0">
                           <div className={`bg-gray-800 text-white text-center text-[11px] font-semibold py-0.5 ${idx > 0 ? "border-l border-white" : ""}`}>{label}</div>
                           <textarea
                             rows={3}
-                            className={`w-full border-0 border-t border-gray-300 px-1.5 py-1 text-[12px] leading-snug resize-none outline-none focus:bg-blue-50/40 disabled:opacity-60 ${idx > 0 ? "border-l" : ""}`}
+                            className={`w-full border-0 border-t border-black px-1.5 py-1 text-[12px] leading-snug resize-y outline-none focus:bg-blue-50/40 disabled:opacity-60 ${idx > 0 ? "border-l" : ""}`}
                             value={ex[key] ?? ""}
                             onChange={(e) => setField(key, e.target.value)}
                             disabled={!isAdmin}
