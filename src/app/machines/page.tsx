@@ -64,6 +64,9 @@ function MachineColumn({ processLine, isAdmin }: { processLine: string; isAdmin:
   const [editName, setEditName] = useState("");
   // 요일별(0=일~6=토) 근무 설정: 휴무 여부 + 근무 시작/종료 시
   const [editDays, setEditDays] = useState<{ off: boolean; start: number; end: number }[]>([]);
+  // 일괄 적용용 시작/종료(시, 30분=.5)
+  const [editBulkStart, setEditBulkStart] = useState(8);
+  const [editBulkEnd, setEditBulkEnd] = useState(22);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   // 삽입 슬롯: 0=맨 위, n=맨 아래 (행 i 앞 = i)
   const [overSlot, setOverSlot] = useState<number | null>(null);
@@ -92,17 +95,46 @@ function MachineColumn({ processLine, isAdmin }: { processLine: string; isAdmin:
     setLoading(false);
   };
 
-  const startEdit = (m: Machine) => {
-    setEditingId(m.id);
-    setEditName(m.name);
+  // 설비의 저장값에서 요일별 편집 상태를 만든다(편집 시작·다른 설비 복사 공용).
+  const daysFromMachine = (m: Machine) => {
     const off = new Set(parseOff(m.off_days));
     const dh = parseDayHoursUI(m.day_hours);
     const defS = Number(m.work_start_hour) || 8;
     const defE = Number(m.work_end_hour) || 22;
-    setEditDays(DAY_LABELS.map((_, d) => {
+    return DAY_LABELS.map((_, d) => {
       const ov = dh[d];
       return { off: off.has(d), start: ov ? ov[0] : defS, end: ov ? ov[1] : defE };
-    }));
+    });
+  };
+
+  const startEdit = (m: Machine) => {
+    setEditingId(m.id);
+    setEditName(m.name);
+    const days = daysFromMachine(m);
+    setEditDays(days);
+    const fw = days.find((c) => !c.off);
+    setEditBulkStart(fw ? fw.start : 8);
+    setEditBulkEnd(fw ? fw.end : 22);
+  };
+
+  // 일괄: 시작/종료를 정해 모든 요일(근무일)에 한 번에 적용. 휴무 여부는 그대로 둔다.
+  const setBulkTime = (which: "start" | "end", hr: number, half: boolean) => {
+    let v = Math.min(Math.max(Number.isFinite(hr) ? hr : 0, 0), 24);
+    if (v < 24 && half) v += 0.5;
+    if (which === "start") setEditBulkStart(v); else setEditBulkEnd(v);
+  };
+  const applyBulkToAll = () => {
+    setEditDays((prev) => prev.map((c) => ({ ...c, start: editBulkStart, end: editBulkEnd })));
+  };
+  // 다른 설비의 근무 패턴(휴무·요일별 시간)을 통째로 가져온다(저장 전까지는 편집 상태만 변경).
+  const copyFromMachine = (id: number) => {
+    const m2 = machines.find((x) => x.id === id);
+    if (!m2) return;
+    const days = daysFromMachine(m2);
+    setEditDays(days);
+    const fw = days.find((c) => !c.off);
+    setEditBulkStart(fw ? fw.start : 8);
+    setEditBulkEnd(fw ? fw.end : 22);
   };
 
   // 요일 토글: 휴무↔근무. 7요일 전부 휴무(전체 휴무 설비)도 허용.
@@ -260,6 +292,41 @@ function MachineColumn({ processLine, isAdmin }: { processLine: string; isAdmin:
                       if (e.key === "Escape") cancelEdit();
                     }}
                   />
+                  {/* 일괄 적용 + 다른 설비 복사: 매번 7일을 따로 만지지 않도록 */}
+                  <div className="flex flex-wrap items-center gap-1 bg-gray-50 border px-2 py-1.5">
+                    <span className="text-[11px] text-gray-500 mr-0.5">일괄</span>
+                    <input
+                      type="number" min="0" max="24"
+                      className="w-10 border px-1 py-0.5 text-sm text-center"
+                      value={hourOf(editBulkStart)}
+                      onChange={(e) => setBulkTime("start", Number(e.target.value), isHalf(editBulkStart))}
+                      title="일괄 시작 시"
+                    />
+                    <button type="button" onClick={() => setBulkTime("start", hourOf(editBulkStart), !isHalf(editBulkStart))} className="w-9 h-7 text-xs border bg-white hover:bg-gray-100">{isHalf(editBulkStart) ? ":30" : ":00"}</button>
+                    <span className="text-gray-400">~</span>
+                    <input
+                      type="number" min="0" max="24"
+                      className="w-10 border px-1 py-0.5 text-sm text-center"
+                      value={hourOf(editBulkEnd)}
+                      onChange={(e) => setBulkTime("end", Number(e.target.value), isHalf(editBulkEnd))}
+                      title="일괄 종료 시"
+                    />
+                    <button type="button" onClick={() => setBulkTime("end", hourOf(editBulkEnd), !isHalf(editBulkEnd))} className="w-9 h-7 text-xs border bg-white hover:bg-gray-100">{isHalf(editBulkEnd) ? ":30" : ":00"}</button>
+                    <button type="button" onClick={applyBulkToAll} className="h-7 px-2 text-xs border bg-blue-600 text-white hover:bg-blue-700">전체 적용</button>
+                    {machines.filter((x) => x.id !== m.id).length > 0 && (
+                      <select
+                        className="h-7 border text-xs px-1 ml-auto"
+                        value=""
+                        onChange={(e) => { if (e.target.value) copyFromMachine(Number(e.target.value)); }}
+                        title="다른 설비의 근무 패턴(휴무·요일별 시간) 가져오기"
+                      >
+                        <option value="">설비에서 복사</option>
+                        {machines.filter((x) => x.id !== m.id).map((x) => (
+                          <option key={x.id} value={x.id}>{x.name}</option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
                   <div className="text-[11px] text-gray-500">요일별 근무시간 (요일 클릭=근무↔휴무)</div>
                   <div className="flex flex-col gap-1">
                     {DAY_LABELS.map((d, i) => {
