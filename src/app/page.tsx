@@ -216,6 +216,8 @@ export default function ScheduleBoard() {
   const [machineMemos, setMachineMemos] = useState<Record<number, string>>({});
   // 설비 블록 하단 기타사항(제책) 자유 입력
   const [machineExtras, setMachineExtras] = useState<Record<number, string>>({});
+  // 기타사항 요일칸 높이(설비별, 7칸 공통). 하단 핸들을 드래그하면 한 번에 전체 변경.
+  const [extraHeights, setExtraHeights] = useState<Record<number, number>>({});
   // 인쇄 출력 종류: 'order'=기계별 작업순서표, 'full'=스케줄 전체 개요(기계계획+1차배정+대기)
   const [printView, setPrintView] = useState<"order" | "full">("order");
   const wantPrint = useRef(false);
@@ -332,6 +334,23 @@ export default function ScheduleBoard() {
         extraTimers.current.delete(machineId);
       }, 600)
     );
+  };
+
+  // 기타사항 칸 높이 조절: 하단 핸들 드래그 → 해당 설비 7칸 높이를 한꺼번에 변경.
+  const startExtraResize = (machineId: number, e: React.PointerEvent) => {
+    e.preventDefault();
+    const startY = e.clientY;
+    const startH = extraHeights[machineId] ?? 64;
+    const onMove = (ev: PointerEvent) => {
+      const h = Math.max(36, startH + (ev.clientY - startY));
+      setExtraHeights((prev) => ({ ...prev, [machineId]: h }));
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
   };
 
   // 식사시간 추가/수정/삭제. 변경 시 서버가 전 설비 일정을 재계산하므로, 끝나면 fetchAll로 갱신한다.
@@ -1695,17 +1714,17 @@ export default function ScheduleBoard() {
                 const ex = parseExtraNotes(machineExtras[machine.id] ?? "");
                 const setField = (key: string, val: string) =>
                   handleMachineExtraChange(machine.id, JSON.stringify({ ...ex, [key]: val }));
+                const rowH = extraHeights[machine.id] ?? 64;
                 return (
-                  <div className="pt-1.5 border-t">
-                    <div className="text-[10px] font-medium text-gray-500 mb-1 px-1">기타사항 (요일별)</div>
-                    {/* 헤더는 흰 선으로 요일 구분, 본문 구분선은 검정. 칸 크기 조절(resize-y) 가능. 하단 여백 없음. */}
-                    <div className="grid grid-cols-7 border-y border-black items-start">
+                  <div className="border-t border-black">
+                    {/* 헤더는 흰 선으로 요일 구분, 본문 구분선은 검정. 7칸 높이는 하단 핸들로 한꺼번에 조절. */}
+                    <div className="grid grid-cols-7">
                       {EXTRA_DAYS.map(([key, label], idx) => (
                         <div key={key} className="flex flex-col min-w-0">
                           <div className={`bg-gray-800 text-white text-center text-[11px] font-semibold py-0.5 ${idx > 0 ? "border-l border-white" : ""}`}>{label}</div>
                           <textarea
-                            rows={3}
-                            className={`w-full border-0 border-t border-black px-1.5 py-1 text-[12px] leading-snug resize-y outline-none focus:bg-blue-50/40 disabled:opacity-60 ${idx > 0 ? "border-l" : ""}`}
+                            style={{ height: rowH }}
+                            className={`w-full border-0 border-t border-black px-1.5 py-1 text-[12px] leading-snug resize-none outline-none focus:bg-blue-50/40 disabled:opacity-60 ${idx > 0 ? "border-l" : ""}`}
                             value={ex[key] ?? ""}
                             onChange={(e) => setField(key, e.target.value)}
                             disabled={!isAdmin}
@@ -1713,6 +1732,15 @@ export default function ScheduleBoard() {
                         </div>
                       ))}
                     </div>
+                    {isAdmin && (
+                      <div
+                        onPointerDown={(e) => startExtraResize(machine.id, e)}
+                        title="드래그하여 7칸 높이 조절"
+                        className="h-2 bg-gray-200 hover:bg-gray-300 cursor-row-resize flex items-center justify-center select-none touch-none"
+                      >
+                        <div className="w-8 h-0.5 bg-gray-400 rounded" />
+                      </div>
+                    )}
                   </div>
                 );
               })()}
