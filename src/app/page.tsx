@@ -18,6 +18,7 @@ interface Machine {
   work_start_hour: number;
   schedule_start_time: string;
   memo: string;
+  extra_notes: string; // 설비 블록 하단 기타사항 (제책)
 }
 
 interface Order {
@@ -200,6 +201,8 @@ export default function ScheduleBoard() {
   const dragOverMachine = useRef<number | null>(null);
   const [machineStartTimes, setMachineStartTimes] = useState<Record<number, string>>({});
   const [machineMemos, setMachineMemos] = useState<Record<number, string>>({});
+  // 설비 블록 하단 기타사항(제책) 자유 입력
+  const [machineExtras, setMachineExtras] = useState<Record<number, string>>({});
   // 인쇄 출력 종류: 'order'=기계별 작업순서표, 'full'=스케줄 전체 개요(기계계획+1차배정+대기)
   const [printView, setPrintView] = useState<"order" | "full">("order");
   const wantPrint = useRef(false);
@@ -235,6 +238,13 @@ export default function ScheduleBoard() {
       const next = { ...prev };
       for (const m of activeMachines) {
         if (!(m.id in next)) next[m.id] = m.memo || "";
+      }
+      return next;
+    });
+    setMachineExtras((prev) => {
+      const next = { ...prev };
+      for (const m of activeMachines) {
+        if (!(m.id in next)) next[m.id] = m.extra_notes || "";
       }
       return next;
     });
@@ -287,6 +297,26 @@ export default function ScheduleBoard() {
           body: JSON.stringify({ memo: value }),
         });
         memoTimers.current.delete(machineId);
+      }, 600)
+    );
+  };
+
+  const extraTimers = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
+
+  // 설비 블록 하단 기타사항(자유 수기) 저장. 스케줄에 영향 없으므로 PATCH만 (디바운스).
+  const handleMachineExtraChange = (machineId: number, value: string) => {
+    setMachineExtras((prev) => ({ ...prev, [machineId]: value }));
+    const existing = extraTimers.current.get(machineId);
+    if (existing) clearTimeout(existing);
+    extraTimers.current.set(
+      machineId,
+      setTimeout(async () => {
+        await fetch(`/api/machines/${machineId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ extra_notes: value }),
+        });
+        extraTimers.current.delete(machineId);
       }, 600)
     );
   };
@@ -1320,7 +1350,6 @@ export default function ScheduleBoard() {
                       <th className="px-1.5 py-0 text-left w-6">#</th>
                       <th className="px-1.5 py-0 text-center">작업명</th>
                       <th className={`px-1.5 py-0 text-center ${isJechae ? "" : "w-28"}`}>비고</th>
-                      {isJechae && <th className="px-1.5 py-0 text-center">기타사항</th>}
                       <th className="px-1.5 py-0 text-center w-28">소요(시간)</th>
                       <th className="px-1.5 py-0 text-left w-20">예상완료</th>
                       <th className="px-1.5 py-0 text-left w-20">납기</th>
@@ -1562,11 +1591,6 @@ export default function ScheduleBoard() {
                           <td className={`px-1.5 py-0 text-center truncate ${isJechae ? "text-[13px] text-black" : "text-[10px] text-gray-500"}`} title={entry.order_notes}>
                             {entry.order_notes}
                           </td>
-                          {isJechae && (
-                            <td className="px-1.5 py-0 text-center truncate text-[13px] text-black" title={entry.order_extra}>
-                              {entry.order_extra}
-                            </td>
-                          )}
                           <td className="px-1.5 py-0 text-center">
                             <div className="flex items-center justify-center gap-1">
                               <input
@@ -1652,6 +1676,19 @@ export default function ScheduleBoard() {
                     })}
                   </tbody>
                 </table>
+                </div>
+              )}
+              {isJechae && (
+                <div className="px-3 pb-2 pt-1 border-t">
+                  <label className="text-[10px] text-gray-500 block mb-0.5">기타사항</label>
+                  <textarea
+                    rows={2}
+                    className="w-full border px-2 py-1 text-[13px] resize-y disabled:opacity-60"
+                    placeholder="기타사항 자유 기술"
+                    value={machineExtras[machine.id] ?? ""}
+                    onChange={(e) => handleMachineExtraChange(machine.id, e.target.value)}
+                    disabled={!isAdmin}
+                  />
                 </div>
               )}
             </div>
@@ -1924,14 +1961,6 @@ export default function ScheduleBoard() {
                   value={newOrder.notes}
                   onChange={(e) => setNewOrder({ ...newOrder, notes: e.target.value })}
                 />
-                {isJechae && (
-                  <input
-                    type="text" placeholder="기타사항"
-                    className="border px-2 py-1.5 text-xs w-full col-span-2"
-                    value={newOrder.extra_notes}
-                    onChange={(e) => setNewOrder({ ...newOrder, extra_notes: e.target.value })}
-                  />
-                )}
               </div>
               <button type="submit" className="w-full py-1.5 bg-blue-600 text-white text-xs font-medium">
                 {editingOrderId !== null ? "수정 저장" : "등록"}

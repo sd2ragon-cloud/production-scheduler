@@ -35,6 +35,7 @@ async function initializeDb(db: Client) {
       process_line TEXT NOT NULL DEFAULT '매엽',
       schedule_start_time TEXT NOT NULL DEFAULT '08:00',
       memo TEXT NOT NULL DEFAULT '',
+      extra_notes TEXT NOT NULL DEFAULT '',
       created_at TEXT DEFAULT (datetime('now', 'localtime'))
     )`,
     `CREATE TABLE IF NOT EXISTS orders (
@@ -204,6 +205,13 @@ async function initializeDb(db: Client) {
   // Migrate machines: add memo (설비명 옆 수기 자유 메모) column if missing
   try {
     await db.execute(`ALTER TABLE machines ADD COLUMN memo TEXT NOT NULL DEFAULT ''`);
+  } catch {
+    // column already exists
+  }
+
+  // Migrate machines: add extra_notes (설비 블록 하단 기타사항 자유 입력, 제책 등) column if missing
+  try {
+    await db.execute(`ALTER TABLE machines ADD COLUMN extra_notes TEXT NOT NULL DEFAULT ''`);
   } catch {
     // column already exists
   }

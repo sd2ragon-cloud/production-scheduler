@@ -46,6 +46,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     await db.execute({ sql: 'UPDATE machines SET memo = ? WHERE id = ?', args: [body.memo, id] });
   }
 
+  if (typeof body.extra_notes === 'string') {
+    await db.execute({ sql: 'UPDATE machines SET extra_notes = ? WHERE id = ?', args: [body.extra_notes, id] });
+  }
+
   // 근무 시작/종료 시각 변경 → 예상완료시간이 달라지므로 이 설비 일정을 재계산한다.
   let recalcNeeded = false;
   if (body.work_start_hour != null && Number.isFinite(Number(body.work_start_hour))) {
