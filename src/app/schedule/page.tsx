@@ -25,6 +25,18 @@ const MACHINE_COLORS = [
   "bg-cyan-500", "bg-pink-500", "bg-yellow-500",
 ];
 
+// 완료시간 "MM-DD HH:MM" 표기. 정확히 자정(00:00) 완료는 전날 근무종료(24:00)로 보여 휴무 다음날 표기를 피한다.
+function formatEndShort(endTimeStr: string): string {
+  const dt = new Date(endTimeStr);
+  if (!isNaN(dt.getTime()) && dt.getHours() === 0 && dt.getMinutes() === 0) {
+    const prev = new Date(dt.getTime() - 60000);
+    const mm = String(prev.getMonth() + 1).padStart(2, "0");
+    const dd = String(prev.getDate()).padStart(2, "0");
+    return `${mm}-${dd} 24:00`;
+  }
+  return endTimeStr.slice(5, 16);
+}
+
 export default function SchedulePage() {
   const { processLine } = useProcess();
   const [entries, setEntries] = useState<ScheduleEntry[]>([]);
@@ -182,7 +194,7 @@ export default function SchedulePage() {
                     <td className="px-3 py-2">{entry.special_process}</td>
                     <td className="px-3 py-2 font-mono text-xs">{entry.start_time.slice(5, 16)}</td>
                     <td className={`px-3 py-2 font-mono text-xs ${isOver ? "text-red-600 font-bold" : ""}`}>
-                      {entry.end_time.slice(5, 16)}
+                      {formatEndShort(entry.end_time)}
                     </td>
                     <td className="px-3 py-2 text-xs">{entry.deadline.slice(5)}</td>
                     <td className="px-3 py-2">

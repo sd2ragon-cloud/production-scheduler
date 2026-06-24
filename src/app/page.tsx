@@ -123,6 +123,12 @@ function processesForParts(parts: string[], partProcessesJson: string, fallback:
 function formatEndTime(endTimeStr: string): string {
   const dt = new Date(endTimeStr);
   if (isNaN(dt.getTime())) return "-";
+  // 정확히 자정(00:00)에 끝난 작업은 전날 근무종료(24:00)에 끝난 것.
+  // 휴무인 다음날 00:00로 표기하면 혼동되므로 '전일 24:00'으로 보여준다.
+  if (dt.getHours() === 0 && dt.getMinutes() === 0) {
+    const prev = new Date(dt.getTime() - 60000);
+    return `${DAY_NAMES[prev.getDay()]} 24:00`;
+  }
   const day = DAY_NAMES[dt.getDay()];
   const h = String(dt.getHours()).padStart(2, "0");
   const m = String(dt.getMinutes()).padStart(2, "0");
