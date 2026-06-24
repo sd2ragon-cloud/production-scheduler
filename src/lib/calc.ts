@@ -110,8 +110,14 @@ export async function recalcMachine(machineId: number, baseDate?: string, startT
   const startDate = baseDate ? new Date(baseDate) : new Date();
   startDate.setHours(0, 0, 0, 0);
 
-  const workStart = Number(machine.work_start_hour) * 60;
-  const workEnd = Number(machine.work_end_hour) * 60;
+  let workStart = Number(machine.work_start_hour) * 60;
+  let workEnd = Number(machine.work_end_hour) * 60;
+  // 종료가 시작보다 작거나 같으면(예: 8~8) 가동 구간이 없어 무한루프가 된다.
+  // 이 경우 24시간 가동(0~24시)으로 해석한다. (자정을 넘기는 야간교대 구간은 미지원)
+  if (workEnd <= workStart) {
+    workStart = 0;
+    workEnd = 24 * 60;
+  }
 
   // 식사·휴게 시간을 DB에서 읽는다. 비어 있으면(=사용자가 전부 삭제) 제외 시간 없음, 테이블이 없으면 기본값으로 폴백.
   let breaks: Break[] = DEFAULT_BREAKS;

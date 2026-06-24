@@ -77,8 +77,10 @@ function MachineColumn({ processLine, isAdmin }: { processLine: string; isAdmin:
   const saveEdit = async (m: Machine) => {
     const trimmed = editName.trim();
     if (!trimmed) { cancelEdit(); return; }
-    const startH = Math.min(Math.max(editStart, 0), 24);
-    const endH = Math.min(Math.max(editEnd, 0), 24);
+    let startH = Math.min(Math.max(editStart, 0), 24);
+    let endH = Math.min(Math.max(editEnd, 0), 24);
+    // 종료가 시작보다 작거나 같으면(예: 8~8) 24시간 가동으로 보고 0~24시로 저장한다.
+    if (endH <= startH) { startH = 0; endH = 24; }
     const offSorted = [...editOff].sort((a, b) => a - b);
     const offChanged = JSON.stringify(offSorted) !== JSON.stringify(parseOff(m.off_days).sort((a, b) => a - b));
     const changed = trimmed !== m.name || startH !== Number(m.work_start_hour) || endH !== Number(m.work_end_hour) || offChanged;
