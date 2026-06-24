@@ -1441,7 +1441,7 @@ export default function ScheduleBoard() {
                                           setDragSplit(null);
                                         }}
                                         onDragEnd={() => setDragEntryId(null)}
-                                        className="px-1.5 py-0 border border-gray-300 bg-gray-100 text-gray-700 text-[10px] cursor-grab active:cursor-grabbing hover:bg-blue-100 hover:border-blue-300"
+                                        className={`px-1.5 py-0 border border-gray-300 bg-gray-100 text-gray-700 ${isJechae ? "text-[13px]" : "text-[10px]"} cursor-grab active:cursor-grabbing hover:bg-blue-100 hover:border-blue-300`}
                                         title="다른 설비로 드래그하여 이동"
                                       >
                                         {entry.component}
@@ -1538,7 +1538,7 @@ export default function ScheduleBoard() {
                                               setDragPart("");
                                             }}
                                             onDragEnd={() => { setDragSplit(null); setPartReorderTarget(null); }}
-                                            className={`px-1.5 py-0 border text-[10px] cursor-grab active:cursor-grabbing ${
+                                            className={`px-1.5 py-0 border ${isJechae ? "text-[13px]" : "text-[10px]"} cursor-grab active:cursor-grabbing ${
                                               isTarget
                                                 ? `bg-blue-50 text-blue-700 border-blue-500 ${partReorderTarget?.after ? "border-r-4" : "border-l-4"}`
                                                 : "border-gray-300 bg-gray-100 text-gray-700 hover:bg-blue-100 hover:border-blue-300"
@@ -1555,7 +1555,7 @@ export default function ScheduleBoard() {
                               );
                             })()}
                             {usesQuantity && entry.quantity_sheets ? (
-                              <span className="text-[11px] font-medium text-gray-600 shrink-0 whitespace-nowrap">{entry.quantity_sheets.toLocaleString()}부</span>
+                              <span className={`font-medium text-gray-600 shrink-0 whitespace-nowrap ${isJechae ? "text-[13px]" : "text-[11px]"}`}>{entry.quantity_sheets.toLocaleString()}부</span>
                             ) : null}
                             </div>
                           </td>
