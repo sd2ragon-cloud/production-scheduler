@@ -1038,8 +1038,8 @@ export default function ScheduleBoard() {
           공정: e.special_process || "",
           [qtyLabel]: e.quantity_sheets || "",
           "소요(시간)": e.duration_minutes ? Math.round((e.duration_minutes / 60) * 10) / 10 : "",
-          시작: e.start_time || "",
-          완료예정: e.end_time || "",
+          // 화면 표기와 동일하게: 예상완료를 "요일 HH:MM"(자정은 전일 24:00)으로
+          예상완료: e.end_time ? formatEndTime(e.end_time) : "",
           납기: e.deadline || "",
           비고: e.order_notes || "",
         });
