@@ -1032,7 +1032,7 @@ export default function ScheduleBoard() {
     try { const a = JSON.parse(m.off_days || "[]"); return new Set(Array.isArray(a) ? a.map(Number) : []); } catch { return new Set(); }
   };
   const buildJechaeMatrix = () => {
-    const cell: Record<string, Record<number, string[]>> = {};
+    const cell: Record<string, Record<number, { label: string; note: string; dur: string }[]>> = {};
     for (const m of machines) {
       const off = offDaysOf(m);
       for (const e of getEntriesForMachine(m.id)) {
@@ -1045,11 +1045,15 @@ export default function ScheduleBoard() {
         const comp = e.component_part || e.component || "";
         const qty = e.quantity_sheets ? ` = ${e.quantity_sheets.toLocaleString()}부` : "";
         const label = `${e.product_name}${comp ? `(${comp})` : ""}${qty}`;
+        const note = (e.order_notes || "").trim();
+        const h = e.duration_minutes ? Math.round((e.duration_minutes / 60) * 10) / 10 : 0;
+        const dur = h ? `${h}시간` : "";
+        const job = { label, note, dur };
         for (let cur = new Date(start), g = 0; cur <= end && g < 400; cur.setDate(cur.getDate() + 1), g++) {
           if (off.has(cur.getDay())) continue; // 휴무 요일은 제외
           const dk = ymd2(cur);
           (cell[dk] ??= {});
-          (cell[dk][m.id] ??= []).push(label);
+          (cell[dk][m.id] ??= []).push(job);
         }
       }
     }
@@ -1068,7 +1072,7 @@ export default function ScheduleBoard() {
       const aoa: (string | number)[][] = [["날짜", ...machines.map((m) => m.name)]];
       for (const dk of dates) {
         const dt = new Date(dk + "T00:00");
-        const perM = machines.map((m) => cell[dk]?.[m.id] || []);
+        const perM = machines.map((m) => (cell[dk]?.[m.id] || []).map((j) => [j.label, j.note, j.dur].filter(Boolean).join(" / ")));
         const maxL = Math.max(1, ...perM.map((a) => a.length));
         for (let k = 0; k < maxL; k++) {
           aoa.push([k === 0 ? `${dt.getMonth() + 1}/${dt.getDate()}(${DAY_NAMES[dt.getDay()]})` : "", ...perM.map((a) => a[k] || "")]);
@@ -1350,8 +1354,11 @@ export default function ScheduleBoard() {
     const colW = machines.length ? (285 - 16) / machines.length : 50; // 설비 열 폭(mm)
     const cpl = Math.max(10, Math.floor(colW / 1.7)); // 한 줄에 들어갈 대략 글자 수(7pt)
     const fitLines = Math.max(2, Math.floor(rowH / 3.6)); // 행 높이에 7pt로 들어가는 대략 줄 수
-    const fsFor = (jobs: string[]): string | undefined => {
-      const lines = jobs.reduce((s, j) => s + Math.max(1, Math.ceil(j.length / cpl)), 0);
+    // 제품마다: 이름(줄바꿈 가능) + 비고/소요(있으면 1줄) + 제품 간 공백(~0.6줄)
+    const jobLines = (j: { label: string; note: string; dur: string }) =>
+      Math.max(1, Math.ceil(j.label.length / cpl)) + (j.note || j.dur ? 1 : 0) + 0.6;
+    const fsFor = (jobs: { label: string; note: string; dur: string }[]): string | undefined => {
+      const lines = jobs.reduce((s, j) => s + jobLines(j), 0);
       if (lines <= fitLines) return undefined;
       return `${Math.max(4, Math.round(7 * Math.sqrt(fitLines / lines) * 10) / 10)}pt`;
     };
@@ -1378,7 +1385,12 @@ export default function ScheduleBoard() {
                       return (
                         <td key={m.id} className="jm-cell">
                           <div className="jm-daycell" style={{ height: cellH, fontSize: fsFor(jobs) }}>
-                            {jobs.map((line, i) => <div key={i} className="jm-job">{line}</div>)}
+                            {jobs.map((j, i) => (
+                              <div key={i} className="jm-job">
+                                <div className="jm-job-name">{j.label}</div>
+                                {(j.note || j.dur) && <div className="jm-job-sub">{[j.note, j.dur].filter(Boolean).join(" · ")}</div>}
+                              </div>
+                            ))}
                           </div>
                         </td>
                       );

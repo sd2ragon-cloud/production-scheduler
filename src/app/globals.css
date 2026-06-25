@@ -184,7 +184,11 @@ input[type="number"]::-webkit-outer-spin-button {
   .jm thead th.jm-dh { width: 12mm; }
   .jm-date { width: 12mm; text-align: center; font-weight: bold; white-space: nowrap; }
   .jm-wd { font-weight: normal; color: #555; }
-  .jm-job { line-height: 1.3; word-break: break-all; margin-bottom: 0.4mm; }
+  /* 제품 단위 블록: 제품마다 줄 간격(공백)을 둔다 */
+  .jm-job { line-height: 1.25; word-break: break-all; margin-bottom: 1.6mm; }
+  .jm-job:last-child { margin-bottom: 0; }
+  .jm-job-name { font-weight: 600; }
+  .jm-job-sub { color: #555; font-size: 0.88em; }
   .jm-empty { text-align: center; color: #888; font-size: 8pt; padding: 2mm; }
   /* 제책 매트릭스: 가로 용지. 여백은 @page(8mm)가 담당 → 패딩 0. 가용 높이(210-16=194mm)에 맞춰 한 장만. */
   .pf-page.pf-land { page: jmland; padding: 0; height: 194mm; min-height: 0; overflow: hidden; }
