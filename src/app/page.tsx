@@ -1339,16 +1339,12 @@ export default function ScheduleBoard() {
     const { cell } = buildJechaeMatrix();
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const monday = new Date(today); monday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
-    const week = Array.from({ length: 7 }, (_, i) => { const d = new Date(monday); d.setDate(monday.getDate() + i); return d; });
-    // 설비별 기타사항(월~일). 하나라도 작성된 설비만 하단에 표기.
-    const extraRows = machines
-      .map((m) => ({ m, ex: parseExtraNotes(machineExtras[m.id] ?? m.extra_notes ?? "") }))
-      .filter(({ ex }) => EXTRA_DAYS.some(([k]) => (ex[k] || "").trim()));
+    // 월~토 6일만(일요일 제외).
+    const week = Array.from({ length: 6 }, (_, i) => { const d = new Date(monday); d.setDate(monday.getDate() + i); return d; });
     const fmtMD = (d: Date) => `${d.getMonth() + 1}/${d.getDate()}`;
-    // 한 페이지(가로 A4)를 꽉 채우도록 요일 7행 높이를 계산. 기타사항 표 높이를 빼고 나눈다.
-    const PAGE_H = 192; // 가로 A4 인쇄 가용 높이(mm) — 약간 보수적으로
-    const extraH = extraRows.length > 0 ? (15 + extraRows.length * 6) : 0; // 여백+제목+헤더 + 설비행
-    const rowH = Math.max(14, Math.min(28, (PAGE_H - 16 - extraH) / 7)); // 제목+설비헤더 ~16mm 제외
+    // 한 페이지(가로 A4)를 꽉 채우도록 6행 높이를 계산. 절대 2장으로 넘기지 않게 보수적으로.
+    const PAGE_H = 190; // 가로 A4 인쇄 가용 높이(mm)
+    const rowH = Math.max(16, Math.min(34, (PAGE_H - 16) / 6)); // 제목+설비헤더 ~16mm 제외
     // 칸이 넘치면 글자 크기를 줄인다. 작업 수·글자 길이로 시각 줄 수를 추정해 행 높이에 맞춰 축소.
     const colW = machines.length ? (285 - 16) / machines.length : 50; // 설비 열 폭(mm)
     const cpl = Math.max(10, Math.floor(colW / 1.7)); // 한 줄에 들어갈 대략 글자 수(7pt)
@@ -1362,7 +1358,7 @@ export default function ScheduleBoard() {
     return (
       <div className="pf-page pf-land">
         <div className="jm-week">
-          <div className="pf-head jm-head">{processLine} 생산 스케줄 — {fmtMD(week[0])} ~ {fmtMD(week[6])}</div>
+          <div className="pf-head jm-head">{processLine} 생산 스케줄 — {fmtMD(week[0])} ~ {fmtMD(week[5])}</div>
           <table className="jm">
             <thead>
               <tr>
@@ -1392,27 +1388,6 @@ export default function ScheduleBoard() {
             </tbody>
           </table>
         </div>
-        {extraRows.length > 0 && (
-          <div className="jm-extra">
-            <div className="jm-extra-ttl">기타사항</div>
-            <table className="jm jm-extra-tbl">
-              <thead>
-                <tr>
-                  <th className="jm-dh">설비</th>
-                  {EXTRA_DAYS.map(([k, l]) => <th key={k}>{l}</th>)}
-                </tr>
-              </thead>
-              <tbody>
-                {extraRows.map(({ m, ex }) => (
-                  <tr key={m.id}>
-                    <td className="jm-date">{m.name}</td>
-                    {EXTRA_DAYS.map(([k]) => <td key={k} className="jm-cell">{(ex[k] || "").trim()}</td>)}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
       </div>
     );
   };
