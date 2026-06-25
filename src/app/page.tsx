@@ -1564,8 +1564,8 @@ export default function ScheduleBoard() {
                       <th className="px-1.5 py-0 text-left w-6">#</th>
                       <th className="px-1.5 py-0 text-center">작업명</th>
                       <th className={`px-1.5 py-0 text-center ${isJechae ? "" : "w-28"}`}>비고</th>
-                      <th className="px-1.5 py-0 text-center w-28">소요(시간)</th>
-                      <th className="px-1.5 py-0 text-left w-28">예상완료</th>
+                      <th className="px-1.5 py-0 text-center w-24">소요(시간)</th>
+                      <th className="px-1.5 py-0 text-left w-32 whitespace-nowrap">예상완료</th>
                       <th className="px-1.5 py-0 text-center w-12"></th>
                     </tr>
                   </thead>
@@ -1838,7 +1838,7 @@ export default function ScheduleBoard() {
                               )}
                             </div>
                           </td>
-                          <td className={`px-1.5 py-0 font-mono ${isJechae ? "text-[13px]" : "text-[11px]"} ${over ? "text-red-600 font-bold" : "text-gray-700"}`}>
+                          <td className={`px-1.5 py-0 font-mono whitespace-nowrap ${isJechae ? "text-[13px]" : "text-[11px]"} ${over ? "text-red-600 font-bold" : "text-gray-700"}`}>
                             {formatEndTime(entry.end_time)}
                           </td>
                           <td className="px-1.5 py-0 text-center">
