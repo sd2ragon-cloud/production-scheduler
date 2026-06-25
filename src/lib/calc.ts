@@ -133,6 +133,9 @@ export async function recalcMachine(machineId: number, baseDate?: string, startT
   });
   const entries = entriesResult.rows as unknown as AssignedEntry[];
 
+  const startDate = baseDate ? new Date(baseDate) : new Date();
+  startDate.setHours(0, 0, 0, 0);
+
   // 해당 날짜(요일)의 근무 구간[분]을 구한다. 요일별 오버라이드(day_hours)가 있으면 그 값을,
   // 없으면 기본 work_start/work_end를 쓴다. 종료<=시작(예: 8~8)이면 24시간 가동(0~24시)으로 해석한다.
   const dayOverrides = parseDayHours(machine.day_hours);
@@ -156,25 +159,15 @@ export async function recalcMachine(machineId: number, baseDate?: string, startT
     // breaks 테이블 없음 → 기본값 유지
   }
 
-  // 시작 일시 파싱: 인자(startTimeStr) 우선, 없으면 기계에 저장된 schedule_start_time.
-  //  - "YYYY-MM-DD HH:MM" / "YYYY-MM-DDTHH:MM": 날짜(시작 요일)+시각 모두 사용
-  //  - "HH:MM": 시각만(날짜는 baseDate=오늘)
-  // (배정해제·소요시간변경·순서변경 등 start_time 없이 호출돼도 저장된 시작 일시를 유지)
-  const rawStart = String((startTimeStr && startTimeStr.trim()) || machine.schedule_start_time || '').trim();
-  const dtMatch = rawStart.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{1,2}):(\d{2})/);
-  const tMatch = rawStart.match(/^(\d{1,2}):(\d{2})$/);
-
-  const currentDate = baseDate ? new Date(baseDate) : new Date();
-  currentDate.setHours(0, 0, 0, 0);
-  let startMin: number | null = null;
-  if (dtMatch) {
-    currentDate.setFullYear(Number(dtMatch[1]), Number(dtMatch[2]) - 1, Number(dtMatch[3]));
-    currentDate.setHours(0, 0, 0, 0);
-    startMin = Number(dtMatch[4]) * 60 + Number(dtMatch[5]);
-  } else if (tMatch) {
-    startMin = Number(tMatch[1]) * 60 + Number(tMatch[2]);
+  const currentDate = new Date(startDate);
+  // 시작시각 우선순위: 명시 인자 > 기계에 저장된 schedule_start_time > 기본 08:00.
+  // (배정해제·소요시간변경·순서변경 등 start_time 없이 호출돼도 저장된 시작시각을 유지)
+  const startStr = startTimeStr || machine.schedule_start_time || '08:00';
+  let curMin = hoursFor(currentDate).start;
+  {
+    const [h, m] = String(startStr).split(':').map(Number);
+    if (!isNaN(h)) curMin = h * 60 + (isNaN(m) ? 0 : m);
   }
-  let curMin = startMin != null ? startMin : hoursFor(currentDate).start;
 
   // 전체 휴무 설비(7요일 모두 휴무): 일정 진행 불가 → 무한루프 방지. 모든 작업의 시작/완료를 비워
   // 둔다(예상완료가 '-'로 표시됨). 보통 이런 설비엔 작업을 배정하지 않는다.
