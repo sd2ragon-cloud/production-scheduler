@@ -1333,60 +1333,60 @@ export default function ScheduleBoard() {
     ));
   };
 
-  // 제책 스케줄 인쇄: '요일(월~일) × 설비' 매트릭스를 주 단위로. 한 주씩(고정 높이 7행) 보여준다.
-  // 이번 주(오늘 포함)부터 시작 — 지난 요일은 공란으로 둔다.
+  // 제책 스케줄 인쇄: '요일(월~일) × 설비' 매트릭스. 이번 주 한 주만(고정 높이 7행).
+  // 일요일 이후 작업은 표시하지 않는다(다음 주에 출력하면 그 주에 나옴).
   const renderJechaeMatrix = () => {
     const { cell } = buildJechaeMatrix();
-    const allKeys = Object.keys(cell).sort();
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const monday = new Date(today); monday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
-    const maxWork = allKeys.length ? new Date(allKeys[allKeys.length - 1] + "T00:00") : new Date(monday);
-    const limit = maxWork > monday ? maxWork : new Date(monday);
-    const weekOf = (ws: Date) => Array.from({ length: 7 }, (_, i) => { const d = new Date(ws); d.setDate(ws.getDate() + i); return d; });
-    const weeks: Date[][] = [];
-    for (let ws = new Date(monday); ws <= limit; ws.setDate(ws.getDate() + 7)) {
-      const wd = weekOf(ws);
-      // 이번 주는 항상, 이후 주는 작업이 있을 때만 표시
-      if (ws.getTime() === monday.getTime() || wd.some((d) => cell[ymd2(d)])) weeks.push(wd);
-    }
-    if (weeks.length === 0) weeks.push(weekOf(monday));
+    const week = Array.from({ length: 7 }, (_, i) => { const d = new Date(monday); d.setDate(monday.getDate() + i); return d; });
     // 설비별 기타사항(월~일). 하나라도 작성된 설비만 하단에 표기.
     const extraRows = machines
       .map((m) => ({ m, ex: parseExtraNotes(machineExtras[m.id] ?? m.extra_notes ?? "") }))
       .filter(({ ex }) => EXTRA_DAYS.some(([k]) => (ex[k] || "").trim()));
     const fmtMD = (d: Date) => `${d.getMonth() + 1}/${d.getDate()}`;
+    // 칸이 넘치면 글자 크기를 줄인다. 작업 수·글자 길이로 시각 줄 수를 추정해 7pt 기준에서 축소.
+    const colW = machines.length ? (285 - 16) / machines.length : 50; // 설비 열 폭(mm)
+    const cpl = Math.max(10, Math.floor(colW / 1.7)); // 한 줄에 들어갈 대략 글자 수(7pt)
+    const FIT_LINES = 4; // 15mm 칸에 7pt로 들어가는 대략 줄 수
+    const fsFor = (jobs: string[]): string | undefined => {
+      const lines = jobs.reduce((s, j) => s + Math.max(1, Math.ceil(j.length / cpl)), 0);
+      if (lines <= FIT_LINES) return undefined;
+      return `${Math.max(4, Math.round(7 * Math.sqrt(FIT_LINES / lines) * 10) / 10)}pt`;
+    };
     return (
       <div className="pf-page pf-land">
-        {weeks.map((wk, wi) => (
-          <div className={`jm-week${wi < weeks.length - 1 || extraRows.length > 0 ? " jm-break" : ""}`} key={wi}>
-            <div className="pf-head">{processLine} 생산 스케줄 — {fmtMD(wk[0])} ~ {fmtMD(wk[6])}</div>
-            <table className="jm">
-              <thead>
-                <tr>
-                  <th className="jm-dh">요일</th>
-                  {machines.map((m) => <th key={m.id}>{m.name}</th>)}
-                </tr>
-              </thead>
-              <tbody>
-                {wk.map((d, di) => {
-                  const dk = ymd2(d);
-                  return (
-                    <tr key={di}>
-                      <td className="jm-date"><div className="jm-daycell jm-datecell">{DAY_NAMES[d.getDay()]}<br /><span className="jm-wd">{fmtMD(d)}</span></div></td>
-                      {machines.map((m) => (
+        <div className="jm-week">
+          <div className="pf-head">{processLine} 생산 스케줄 — {fmtMD(week[0])} ~ {fmtMD(week[6])}</div>
+          <table className="jm">
+            <thead>
+              <tr>
+                <th className="jm-dh">요일</th>
+                {machines.map((m) => <th key={m.id}>{m.name}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {week.map((d, di) => {
+                const dk = ymd2(d);
+                return (
+                  <tr key={di}>
+                    <td className="jm-date"><div className="jm-daycell jm-datecell">{DAY_NAMES[d.getDay()]}<br /><span className="jm-wd">{fmtMD(d)}</span></div></td>
+                    {machines.map((m) => {
+                      const jobs = cell[dk]?.[m.id] || [];
+                      return (
                         <td key={m.id} className="jm-cell">
-                          <div className="jm-daycell">
-                            {(cell[dk]?.[m.id] || []).map((line, i) => <div key={i} className="jm-job">{line}</div>)}
+                          <div className="jm-daycell" style={{ fontSize: fsFor(jobs) }}>
+                            {jobs.map((line, i) => <div key={i} className="jm-job">{line}</div>)}
                           </div>
                         </td>
-                      ))}
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        ))}
+                      );
+                    })}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
         {extraRows.length > 0 && (
           <div className="jm-extra">
             <div className="jm-extra-ttl">기타사항</div>
