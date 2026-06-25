@@ -45,8 +45,8 @@ input[type="number"]::-webkit-outer-spin-button {
 @media print {
   /* 여백 0 → 브라우저 머리글/바닥글(출력일시·문서제목·페이지번호) 영역이 사라진다 */
   @page { size: A4 portrait; margin: 0; }
-  /* 제책 일자별 매트릭스 전용 가로 용지 */
-  @page jmland { size: A4 landscape; margin: 0; }
+  /* 제책 일자별 매트릭스 전용 가로 용지. 상/하/좌/우 동일 여백(프린터 가장자리 잘림 방지) */
+  @page jmland { size: A4 landscape; margin: 8mm; }
 
   /* 인쇄 영역만 남기고 화면 UI(네비게이션·작업판)는 레이아웃에서 제거.
      display:none으로 빼야 빈 페이지가 생기지 않는다. */
@@ -186,8 +186,8 @@ input[type="number"]::-webkit-outer-spin-button {
   .jm-wd { font-weight: normal; color: #555; }
   .jm-job { line-height: 1.3; word-break: break-all; margin-bottom: 0.4mm; }
   .jm-empty { text-align: center; color: #888; font-size: 8pt; padding: 2mm; }
-  /* 제책 매트릭스: 가로 용지. 한 장만(넘치면 잘라내 2장 방지). */
-  .pf-page.pf-land { page: jmland; height: 198mm; min-height: 0; overflow: hidden; }
+  /* 제책 매트릭스: 가로 용지. 여백은 @page(8mm)가 담당 → 패딩 0. 가용 높이(210-16=194mm)에 맞춰 한 장만. */
+  .pf-page.pf-land { page: jmland; padding: 0; height: 194mm; min-height: 0; overflow: hidden; }
   /* 이번 주 7행(월~일). 높이는 인라인(rowH)으로 한 페이지를 채우도록 계산. 넘침은 잘라냄. */
   .jm-daycell { overflow: hidden; }
   .jm-datecell { text-align: center; font-weight: bold; }

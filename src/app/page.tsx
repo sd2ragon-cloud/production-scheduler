@@ -1342,9 +1342,10 @@ export default function ScheduleBoard() {
     // 월~토 6일만(일요일 제외).
     const week = Array.from({ length: 6 }, (_, i) => { const d = new Date(monday); d.setDate(monday.getDate() + i); return d; });
     const fmtMD = (d: Date) => `${d.getMonth() + 1}/${d.getDate()}`;
-    // 한 페이지(가로 A4)를 꽉 채우도록 6행 높이를 계산. 절대 2장으로 넘기지 않게 보수적으로.
-    const PAGE_H = 190; // 가로 A4 인쇄 가용 높이(mm)
-    const rowH = Math.max(16, Math.min(34, (PAGE_H - 16) / 6)); // 제목+설비헤더 ~16mm 제외
+    // 한 페이지(가로 A4, 여백 8mm → 가용 194mm)를 채우도록 6행 높이를 계산.
+    // 행마다 셀 패딩/테두리 ~2mm가 더 붙으므로 그만큼 빼서 잘림을 막는다.
+    const PAGE_H = 190; // 가용 194mm 중 안전 여유 두고 목표 높이
+    const rowH = Math.max(16, Math.min(32, (PAGE_H - 16) / 6 - 2)); // 제목+설비헤더 ~16mm, 행당 ~2mm 제외
     // 칸이 넘치면 글자 크기를 줄인다. 작업 수·글자 길이로 시각 줄 수를 추정해 행 높이에 맞춰 축소.
     const colW = machines.length ? (285 - 16) / machines.length : 50; // 설비 열 폭(mm)
     const cpl = Math.max(10, Math.floor(colW / 1.7)); // 한 줄에 들어갈 대략 글자 수(7pt)
