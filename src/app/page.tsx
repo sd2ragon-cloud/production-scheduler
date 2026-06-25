@@ -124,16 +124,15 @@ function processesForParts(parts: string[], partProcessesJson: string, fallback:
 function formatEndTime(endTimeStr: string): string {
   const dt = new Date(endTimeStr);
   if (isNaN(dt.getTime())) return "-";
-  // 정확히 자정(00:00)에 끝난 작업은 전날 근무종료(24:00)에 끝난 것.
-  // 휴무인 다음날 00:00로 표기하면 혼동되므로 '전일 24:00'으로 보여준다.
+  // "M/D(요일) HH:MM" — 일자·요일·시간.
+  // 정확히 자정(00:00)에 끝난 작업은 전날 근무종료(24:00)에 끝난 것 → 전일 날짜+24:00으로.
   if (dt.getHours() === 0 && dt.getMinutes() === 0) {
     const prev = new Date(dt.getTime() - 60000);
-    return `${DAY_NAMES[prev.getDay()]} 24:00`;
+    return `${prev.getMonth() + 1}/${prev.getDate()}(${DAY_NAMES[prev.getDay()]}) 24:00`;
   }
-  const day = DAY_NAMES[dt.getDay()];
   const h = String(dt.getHours()).padStart(2, "0");
   const m = String(dt.getMinutes()).padStart(2, "0");
-  return `${day} ${h}:${m}`;
+  return `${dt.getMonth() + 1}/${dt.getDate()}(${DAY_NAMES[dt.getDay()]}) ${h}:${m}`;
 }
 
 function isOverDeadline(endTime: string, deadline: string): boolean {
@@ -157,13 +156,6 @@ function deadlineColor(deadline: string): string {
   if (days <= 2) return "text-orange-600 font-semibold";
   if (days <= 5) return "text-yellow-600";
   return "text-gray-500";
-}
-
-// 숫자 입력(예: 20260608)을 자동으로 YYYY-MM-DD 형태로 포맷
-function formatDeadlineInput(value: string): string {
-  const digits = value.replace(/\D/g, "").slice(0, 8);
-  const parts = [digits.slice(0, 4), digits.slice(4, 6), digits.slice(6, 8)].filter(Boolean);
-  return parts.join("-");
 }
 
 export default function ScheduleBoard() {
@@ -1573,8 +1565,7 @@ export default function ScheduleBoard() {
                       <th className="px-1.5 py-0 text-center">작업명</th>
                       <th className={`px-1.5 py-0 text-center ${isJechae ? "" : "w-28"}`}>비고</th>
                       <th className="px-1.5 py-0 text-center w-28">소요(시간)</th>
-                      <th className="px-1.5 py-0 text-left w-20">예상완료</th>
-                      <th className="px-1.5 py-0 text-left w-20">납기</th>
+                      <th className="px-1.5 py-0 text-left w-28">예상완료</th>
                       <th className="px-1.5 py-0 text-center w-12"></th>
                     </tr>
                   </thead>
@@ -1849,9 +1840,6 @@ export default function ScheduleBoard() {
                           </td>
                           <td className={`px-1.5 py-0 font-mono ${isJechae ? "text-[13px]" : "text-[11px]"} ${over ? "text-red-600 font-bold" : "text-gray-700"}`}>
                             {formatEndTime(entry.end_time)}
-                          </td>
-                          <td className={`px-1.5 py-0 ${isJechae ? "text-[13px]" : "text-[11px]"} ${deadlineColor(entry.deadline)}`}>
-                            {entry.deadline}
                           </td>
                           <td className="px-1.5 py-0 text-center">
                             <div className="flex items-center justify-center gap-1">
@@ -2151,16 +2139,6 @@ export default function ScheduleBoard() {
                   const multi = newParts.length >= 2;
                   return (
                     <>
-                      <div className={multi ? "col-span-2" : ""}>
-                        <label className="text-[10px] text-gray-500">납기일 (선택)</label>
-                        <input
-                          type="text" inputMode="numeric" placeholder="YYYYMMDD (선택)"
-                          maxLength={10}
-                          className="border px-2 py-1.5 text-xs w-full"
-                          value={newOrder.deadline}
-                          onChange={(e) => setNewOrder({ ...newOrder, deadline: formatDeadlineInput(e.target.value) })}
-                        />
-                      </div>
                       {multi ? (
                         <div className="col-span-2">
                           {/* 윤전·제책은 구분 없이 구성·소요시간만, 매엽은 구성·소요시간·구분 */}
