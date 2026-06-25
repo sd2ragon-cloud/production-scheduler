@@ -124,15 +124,14 @@ function processesForParts(parts: string[], partProcessesJson: string, fallback:
 function formatEndTime(endTimeStr: string): string {
   const dt = new Date(endTimeStr);
   if (isNaN(dt.getTime())) return "-";
-  // "M/D(요일) HH:MM" — 일자·요일·시간.
+  const p2 = (n: number) => String(n).padStart(2, "0");
+  // "MM/DD(요일) HH:MM" — 일자·요일·시간 (월/일은 2자리 정렬).
   // 정확히 자정(00:00)에 끝난 작업은 전날 근무종료(24:00)에 끝난 것 → 전일 날짜+24:00으로.
   if (dt.getHours() === 0 && dt.getMinutes() === 0) {
     const prev = new Date(dt.getTime() - 60000);
-    return `${prev.getMonth() + 1}/${prev.getDate()}(${DAY_NAMES[prev.getDay()]}) 24:00`;
+    return `${p2(prev.getMonth() + 1)}/${p2(prev.getDate())}(${DAY_NAMES[prev.getDay()]}) 24:00`;
   }
-  const h = String(dt.getHours()).padStart(2, "0");
-  const m = String(dt.getMinutes()).padStart(2, "0");
-  return `${dt.getMonth() + 1}/${dt.getDate()}(${DAY_NAMES[dt.getDay()]}) ${h}:${m}`;
+  return `${p2(dt.getMonth() + 1)}/${p2(dt.getDate())}(${DAY_NAMES[dt.getDay()]}) ${p2(dt.getHours())}:${p2(dt.getMinutes())}`;
 }
 
 function isOverDeadline(endTime: string, deadline: string): boolean {
