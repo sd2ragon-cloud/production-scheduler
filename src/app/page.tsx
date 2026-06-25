@@ -1264,6 +1264,7 @@ export default function ScheduleBoard() {
             );
           })}
         </div>
+        {!isJechae && (
         <div className="pf-bottom">
           <div className="pf-sect">
             <div className="pf-secttl">1차 배정 <span className="pf-secsum">{fmtH(buckets.reduce((s, b) => s + locationMinutes(orders.filter((o) => showsAt(o, b.id)), b.id), 0))}</span></div>
@@ -1288,6 +1289,7 @@ export default function ScheduleBoard() {
             </div>
           </div>
         </div>
+        )}
       </div>
     );
   };
@@ -1308,22 +1310,22 @@ export default function ScheduleBoard() {
             <p className="text-xs text-gray-500">{dateStr}</p>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => triggerPrint("order")}
-              className="text-sm border border-gray-300 bg-white px-3 py-1.5 hover:bg-gray-100 text-gray-700 whitespace-nowrap"
-              title="기계별 작업순서를 엑셀 양식으로 인쇄합니다"
-            >
-              🖨 작업순서
-            </button>
-            {(processLine === "매엽" || processLine === "윤전") && (
+            {!isJechae && (
               <button
-                onClick={() => triggerPrint("full")}
+                onClick={() => triggerPrint("order")}
                 className="text-sm border border-gray-300 bg-white px-3 py-1.5 hover:bg-gray-100 text-gray-700 whitespace-nowrap"
-                title="기계별 작업계획 + 1차 배정·배정 대기를 A4 한 장에 인쇄합니다"
+                title="기계별 작업순서를 엑셀 양식으로 인쇄합니다"
               >
-                🖨 스케줄
+                🖨 작업순서
               </button>
             )}
+            <button
+              onClick={() => triggerPrint("full")}
+              className="text-sm border border-gray-300 bg-white px-3 py-1.5 hover:bg-gray-100 text-gray-700 whitespace-nowrap"
+              title="기계별 작업계획을 A4 한 장에 인쇄합니다"
+            >
+              🖨 스케줄
+            </button>
             {isAdmin && (
               <button
                 onClick={() => setShowBreaks(true)}
