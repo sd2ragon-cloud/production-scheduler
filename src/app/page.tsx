@@ -721,7 +721,9 @@ export default function ScheduleBoard() {
   };
 
   // 대기 주문 편집 시작: 폼을 해당 주문 값으로 채운다
-  const startEditOrder = (order: Order) => {
+  // asCopy=true면 같은 사양으로 '새 주문'을 만든다(값만 채우고 editingOrderId는 비움 → 저장 시 신규 생성).
+  // 한 제품을 생산하다 중단·다른 제품 후 이어서 생산하는 계획에서, 다시 입력하지 않고 분량만 고쳐 배정할 수 있다.
+  const startEditOrder = (order: Order, asCopy = false) => {
     const parts = parseParts(order.component);
     const pd = parsePartDurations(order.part_durations);
     const pp = parsePartProcesses(order.part_processes);
@@ -754,7 +756,7 @@ export default function ScheduleBoard() {
       partProcesses,
       partQuantities,
     });
-    setEditingOrderId(order.id);
+    setEditingOrderId(asCopy ? null : order.id);
     setShowAddForm(true);
   };
 
@@ -1090,6 +1092,14 @@ export default function ScheduleBoard() {
                 title="주문 수정"
               >
                 ✎
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); startEditOrder(order, true); }}
+                onMouseDown={(e) => e.stopPropagation()}
+                className="text-gray-400 hover:text-green-600 text-base leading-none px-1 py-0.5"
+                title="같은 사양으로 새 주문 만들기 (복사)"
+              >
+                ⧉
               </button>
               <button
                 onClick={(e) => { e.stopPropagation(); handleDeleteOrder(order.id, order.product_name); }}
@@ -1681,6 +1691,14 @@ export default function ScheduleBoard() {
                                 title="작업 사양 수정 (제품명·구성·비고·납기 등)"
                               >
                                 ✎
+                              </button>
+                              <button
+                                onClick={() => { const o = allOrders.find((x) => x.id === entry.order_id); if (o) startEditOrder(o, true); }}
+                                disabled={loading}
+                                className="text-gray-400 hover:text-green-600 text-sm leading-none px-0.5"
+                                title="이 작업과 같은 사양으로 새 주문 만들기 (이어서 생산용 — 분량만 고쳐 배정)"
+                              >
+                                ⧉
                               </button>
                               <button
                                 onClick={() => handleDeleteOrder(entry.order_id, entry.product_name)}
