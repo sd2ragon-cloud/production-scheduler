@@ -192,8 +192,10 @@ input[type="number"]::-webkit-outer-spin-button {
   .jm-empty { text-align: center; color: #888; font-size: 8pt; padding: 2mm; }
   /* 제책 매트릭스: 가로 용지. 여백은 @page(8mm)가 담당 → 패딩 0. 가용 높이(210-16=194mm)에 맞춰 한 장만. */
   .pf-page.pf-land { page: jmland; padding: 0; height: 194mm; min-height: 0; overflow: hidden; }
-  /* 이번 주 7행(월~일). 높이는 인라인(rowH)으로 한 페이지를 채우도록 계산. 넘침은 잘라냄. */
-  .jm-daycell { overflow: hidden; }
+  /* 요일 행 칸: 위=작업(jm-jobs), 아래=기타사항(jm-note) 고정 구분선 strip. 높이는 인라인(rowH). */
+  .jm-daycell { overflow: hidden; display: flex; flex-direction: column; }
+  .jm-jobs { flex: 1 1 auto; overflow: hidden; min-height: 0; }
+  .jm-note { flex: 0 0 auto; height: 9mm; overflow: hidden; border-top: 0.3mm solid #333; padding-top: 0.6mm; margin-top: 0.6mm; font-size: 7pt; line-height: 1.2; word-break: break-all; }
   .jm-datecell { text-align: center; font-weight: bold; }
   /* 상단 제목: 색상 헤더로 눈에 띄게 */
   .jm-head {

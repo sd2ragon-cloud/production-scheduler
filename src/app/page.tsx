@@ -89,6 +89,8 @@ const DAY_NAMES = ["일", "월", "화", "수", "목", "금", "토"];
 
 // 제책 설비 하단 기타사항: 요일별(월~금) + 공통. extra_notes 컬럼에 JSON으로 저장.
 const EXTRA_DAYS: [string, string][] = [["mon", "월"], ["tue", "화"], ["wed", "수"], ["thu", "목"], ["fri", "금"], ["sat", "토"], ["sun", "일"]];
+// getDay()(0=일~6=토) → 기타사항 키
+const WD_KEY = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
 // 저장값을 {mon,tue,...,general} 형태로 파싱. 구버전 단일 텍스트는 공통(general)으로 본다.
 function parseExtraNotes(raw: string): Record<string, string> {
   if (!raw) return {};
@@ -1026,7 +1028,7 @@ export default function ScheduleBoard() {
         const label = `${e.product_name}${comp ? `(${comp})` : ""}${qty}`;
         const note = (e.order_notes || "").trim();
         const h = e.duration_minutes ? Math.round((e.duration_minutes / 60) * 10) / 10 : 0;
-        const dur = h ? `${h}시간` : "";
+        const dur = h ? `${h}H` : "";
         const job = { label, note, dur };
         for (let cur = new Date(start), g = 0; cur <= end && g < 400; cur.setDate(cur.getDate() + 1), g++) {
           if (off.has(cur.getDay())) continue; // 휴무 요일은 제외
@@ -1337,6 +1339,9 @@ export default function ScheduleBoard() {
       return `${Math.max(4, Math.round(7 * Math.sqrt(fitLines / lines) * 10) / 10)}pt`;
     };
     const cellH = `${rowH}mm`;
+    // 설비별 기타사항(요일 키별)을 미리 파싱
+    const exByMachine: Record<number, Record<string, string>> = {};
+    for (const m of machines) exByMachine[m.id] = parseExtraNotes(machineExtras[m.id] ?? m.extra_notes ?? "");
     return (
       <>
         {chunks.map((days, ci) => (
@@ -1355,18 +1360,26 @@ export default function ScheduleBoard() {
                     const dk = ymd2(d);
                     return (
                       <tr key={di}>
-                        <td className="jm-date"><div className="jm-daycell jm-datecell" style={{ height: cellH }}>{DAY_NAMES[d.getDay()]}<br /><span className="jm-wd">{fmtMD(d)}</span></div></td>
+                        <td className="jm-date">
+                          <div className="jm-daycell jm-datecell" style={{ height: cellH }}>
+                            <div className="jm-jobs">{DAY_NAMES[d.getDay()]}<br /><span className="jm-wd">{fmtMD(d)}</span></div>
+                            <div className="jm-note" />
+                          </div>
+                        </td>
                         {machines.map((m) => {
                           const jobs = cell[dk]?.[m.id] || [];
                           return (
                             <td key={m.id} className="jm-cell">
-                              <div className="jm-daycell" style={{ height: cellH, fontSize: fsFor(jobs, colMm(m)) }}>
-                                {jobs.map((j, i) => (
-                                  <div key={i} className="jm-job">
-                                    <div className="jm-job-name">{j.label}</div>
-                                    {(j.note || j.dur) && <div className="jm-job-sub">{[j.note, j.dur].filter(Boolean).join(" · ")}</div>}
-                                  </div>
-                                ))}
+                              <div className="jm-daycell" style={{ height: cellH }}>
+                                <div className="jm-jobs" style={{ fontSize: fsFor(jobs, colMm(m)) }}>
+                                  {jobs.map((j, i) => (
+                                    <div key={i} className="jm-job">
+                                      <div className="jm-job-name">{j.label}</div>
+                                      {(j.note || j.dur) && <div className="jm-job-sub">{[j.note, j.dur].filter(Boolean).join(" · ")}</div>}
+                                    </div>
+                                  ))}
+                                </div>
+                                <div className="jm-note">{exByMachine[m.id]?.[WD_KEY[d.getDay()]] || ""}</div>
                               </div>
                             </td>
                           );
