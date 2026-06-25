@@ -1360,7 +1360,7 @@ export default function ScheduleBoard() {
                   onChange={(e) => handleMemoChange(machine.id, e.target.value)}
                   disabled={!isAdmin}
                 />
-                <div className="flex items-center gap-3 shrink-0 ml-3">
+                <div className="flex items-center gap-3 shrink-0 ml-8">
                   <div className="flex items-center gap-1.5">
                     <span className="text-xs text-gray-400">시작</span>
                     <input
