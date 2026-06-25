@@ -86,9 +86,7 @@ export default function NavBar() {
         <div className="flex items-center gap-1">
           <a href="/" className="text-lg font-bold text-gray-900 mr-3">생산 스케줄링</a>
           <a href="/" className="px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100 transition">대시보드</a>
-          <a href="/orders" className="px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100 transition">주문 관리</a>
           <a href="/machines" className="px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100 transition">설비 관리</a>
-          <a href="/schedule" className="px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100 transition">스케줄 보기</a>
         </div>
         <div className="flex items-center gap-3">
           {isAdmin ? (
