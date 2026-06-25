@@ -135,29 +135,6 @@ function formatEndTime(endTimeStr: string): string {
   return `${head(dt)} ${p2(dt.getHours())}:${p2(dt.getMinutes())}`;
 }
 
-function isOverDeadline(endTime: string, deadline: string): boolean {
-  const end = new Date(endTime);
-  const dl = new Date(deadline);
-  if (isNaN(end.getTime()) || isNaN(dl.getTime())) return false;
-  return end > dl;
-}
-
-function daysUntilDeadline(deadline: string): number {
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  const dl = new Date(deadline);
-  dl.setHours(0, 0, 0, 0);
-  return Math.ceil((dl.getTime() - now.getTime()) / 86400000);
-}
-
-function deadlineColor(deadline: string): string {
-  const days = daysUntilDeadline(deadline);
-  if (days < 0) return "text-red-600 font-bold";
-  if (days <= 2) return "text-orange-600 font-semibold";
-  if (days <= 5) return "text-yellow-600";
-  return "text-gray-500";
-}
-
 export default function ScheduleBoard() {
   const { processLine } = useProcess();
   const { role } = useAuth();
@@ -1134,7 +1111,6 @@ export default function ScheduleBoard() {
   // 주문 카드 (배정 대기 / 1차 배정 칸 공용). bucketId=undefined면 대기, 숫자면 그 칸.
   // 해당 위치에 표시할 남은 구성이 없으면 렌더하지 않음.
   const renderOrderCard = (order: Order, bucketId?: number) => {
-    const days = daysUntilDeadline(order.deadline);
     const parts = parseParts(order.component);
     const hasParts = parts.length >= 1;
     const totals = partTotals(order.component, order.part_durations, order.duration_minutes);
@@ -1157,22 +1133,12 @@ export default function ScheduleBoard() {
         title={hasParts ? "이 카드의 구성 전체를 설비/칸으로 드래그 (칸=한 칸에 모아 1차 배정)" : undefined}
         className={`p-2.5 border transition hover:shadow-sm cursor-grab active:cursor-grabbing ${
           dragOrderId === order.id && !dragPart ? "opacity-40" : ""
-        } ${
-          days < 0 ? "border-red-300 bg-red-50" : days <= 2 ? "border-orange-200 bg-orange-50/50" : "border-gray-200 bg-white"
-        }`}
+        } border-gray-200 bg-white`}
       >
         <div>
           <div className="flex items-center justify-between">
             <p className="font-medium text-xs leading-tight min-w-0 flex-1 break-all">{order.product_name}</p>
             <div className="flex items-center gap-1.5 shrink-0 ml-2">
-              <p className={`text-xs font-mono ${deadlineColor(order.deadline)}`}>
-                {order.deadline || "납기 미정"}
-              </p>
-              {order.deadline && (
-                <p className={`text-xs ${days < 0 ? "text-red-600" : days <= 2 ? "text-orange-500" : "text-gray-400"}`}>
-                  {days < 0 ? `${Math.abs(days)}일 초과` : days === 0 ? "오늘" : `D-${days}`}
-                </p>
-              )}
               {isAdmin && (<>
               <button
                 onClick={(e) => { e.stopPropagation(); startEditOrder(order); }}
@@ -1571,7 +1537,6 @@ export default function ScheduleBoard() {
                   </thead>
                   <tbody>
                     {entries.map((entry) => {
-                      const over = isOverDeadline(entry.end_time, entry.deadline);
                       const isReorderHover = reorderTarget === entry.id;
                       const isMergeHover = mergeHoverId === entry.id;
                       return (
@@ -1585,9 +1550,7 @@ export default function ScheduleBoard() {
                             setDragSplit(null);
                           }}
                           onDragEnd={() => { setDragEntryId(null); setReorderTarget(null); setMergeHoverId(null); }}
-                          className={`border-t cursor-grab active:cursor-grabbing h-7 ${
-                            over ? "bg-red-50" : "hover:bg-gray-50"
-                          } ${dragEntryId === entry.id ? "opacity-40" : ""} ${
+                          className={`border-t cursor-grab active:cursor-grabbing h-7 hover:bg-gray-50 ${dragEntryId === entry.id ? "opacity-40" : ""} ${
                             isReorderHover ? (reorderAfter ? "border-b-2 border-b-blue-500" : "border-t-2 border-t-blue-500") : ""
                           } ${isMergeHover ? "ring-2 ring-inset ring-green-500 bg-green-50" : ""}`}
                           onDragOver={(e) => {
@@ -1838,7 +1801,7 @@ export default function ScheduleBoard() {
                               )}
                             </div>
                           </td>
-                          <td className={`px-1.5 py-0 font-mono whitespace-nowrap ${isJechae ? "text-[13px] text-center" : "text-[11px] text-left"} ${over ? "text-red-600 font-bold" : "text-gray-700"}`}>
+                          <td className={`px-1.5 py-0 font-mono whitespace-nowrap text-gray-700 ${isJechae ? "text-[13px] text-center" : "text-[11px] text-left"}`}>
                             {formatEndTime(entry.end_time)}
                           </td>
                           <td className="px-1.5 py-0 text-center">

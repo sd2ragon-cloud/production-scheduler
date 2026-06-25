@@ -241,6 +241,15 @@ async function initializeDb(db: Client) {
     // column already exists
   }
 
+  // 1회성: 납기일 기능 제거에 따라 기존 주문의 deadline 데이터를 전부 비운다.
+  // 마커 테이블 생성이 성공한 최초 1회에만 실행(이후 재시작 시엔 테이블이 이미 있어 건너뜀).
+  try {
+    await db.execute(`CREATE TABLE _deadline_cleared (id INTEGER PRIMARY KEY)`);
+    await db.execute(`UPDATE orders SET deadline = ''`);
+  } catch {
+    // 이미 실행됨(마커 존재) → 건너뜀
+  }
+
   // Migrate schedule_entries: add base_minutes (단면 기준 원본 소요시간) column if missing
   try {
     await db.execute(`ALTER TABLE schedule_entries ADD COLUMN base_minutes INTEGER NOT NULL DEFAULT 0`);
