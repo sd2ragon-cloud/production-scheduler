@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
       body.product_name,
       body.component || '',
       body.quantity_sheets,
-      body.deadline,
+      body.deadline || '',
       body.special_process ?? '일반',
       body.priority || 5,
       body.notes || '',
