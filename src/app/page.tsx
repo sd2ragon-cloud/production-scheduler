@@ -107,7 +107,13 @@ const PROCESS_COLORS: Record<string, string> = {
   "IR코팅": "bg-green-100 text-green-800 border-green-200",
   "양면": "bg-cyan-100 text-cyan-800 border-cyan-200",
   "패키지": "bg-orange-100 text-orange-800 border-orange-200",
+  // 제책 구분
+  "무선": "bg-indigo-100 text-indigo-800 border-indigo-200",
+  "낙정": "bg-rose-100 text-rose-800 border-rose-200",
+  "배접": "bg-teal-100 text-teal-800 border-teal-200",
 };
+// 제책 배정 대기 구분(공정 종류). special_process 컬럼을 재활용해 저장한다.
+const JECHAE_CATS = ["무선", "낙정", "배접"] as const;
 
 // 파트 목록의 구분(공정)을 중복 없이 구한다. 파트별 지정이 없으면 주문 기본 구분(fallback) 사용.
 function processesForParts(parts: string[], partProcessesJson: string, fallback: string): string[] {
@@ -746,8 +752,12 @@ export default function ScheduleBoard() {
     } else {
       durationMinutes = Math.round((newOrder.duration_hours || 0) * 60);
     }
-    // 윤전·제책은 구분을 사용하지 않으므로 special_process를 비워 저장(공정 칩 미표시)
-    const specialProcess = usesQuantity ? "" : newOrder.special_process;
+    // 윤전은 구분 없음(빈값). 매엽=공정, 제책=배정대기 구분(무선/낙정/배접; 그 외엔 미지정='').
+    const specialProcess = isRoll
+      ? ""
+      : isJechae
+        ? ((JECHAE_CATS as readonly string[]).includes(newOrder.special_process) ? newOrder.special_process : "")
+        : newOrder.special_process;
     if (editingOrderId !== null) {
       // 배정 완료된 작업을 설비 화면에서 수정해도 상태가 대기로 바뀌지 않도록 기존 상태 유지
       const existingStatus = allOrders.find((o) => o.id === editingOrderId)?.status || "pending";
@@ -2070,6 +2080,17 @@ export default function ScheduleBoard() {
                           }}
                         />
                       </div>
+                      <div className="col-span-2">
+                        <label className="text-[10px] text-gray-500">구분 (배정 대기 분류)</label>
+                        <select
+                          className="border px-2 py-1.5 text-xs w-full"
+                          value={(JECHAE_CATS as readonly string[]).includes(newOrder.special_process) ? newOrder.special_process : ""}
+                          onChange={(e) => setNewOrder({ ...newOrder, special_process: e.target.value })}
+                        >
+                          <option value="">미지정</option>
+                          {JECHAE_CATS.map((c) => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                      </div>
                     </>
                   ) : (
                     <div className="col-span-2">
@@ -2166,6 +2187,22 @@ export default function ScheduleBoard() {
             <div className="text-center text-gray-400 text-sm py-8">
               대기 중인 주문이 없습니다
             </div>
+          ) : isJechae ? (
+            // 제책: 구분(무선/낙정/배접)별로 묶어 표시. 미지정은 맨 아래.
+            [...JECHAE_CATS, ""].map((cat) => {
+              const group = waitingOrders.filter((o) => ((JECHAE_CATS as readonly string[]).includes(o.special_process) ? o.special_process : "") === cat);
+              if (group.length === 0) return null;
+              return (
+                <div key={cat || "none"} className="mb-2">
+                  <div className="sticky top-0 z-10 px-2 py-1 text-[11px] font-bold text-gray-700 bg-gray-100 border-b">
+                    {cat || "미지정"} <span className="font-normal text-gray-400">({group.length})</span>
+                  </div>
+                  <div className="space-y-1 mt-1">
+                    {group.map((o) => renderOrderCard(o, undefined))}
+                  </div>
+                </div>
+              );
+            })
           ) : (
             waitingOrders.map((o) => renderOrderCard(o, undefined))
           )}
