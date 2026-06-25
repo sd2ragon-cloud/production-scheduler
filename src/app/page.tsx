@@ -1023,6 +1023,37 @@ export default function ScheduleBoard() {
   // 분 → "N.Nh" (소요시간 합계 표기)
   const fmtH = (min: number) => `${Math.round(min / 6) / 10}h`;
 
+  // 스케줄을 엑셀(.xlsx)로 내려받기. 설비별 작업을 순서대로 한 행씩. 클릭 시에만 라이브러리를 동적 로드.
+  const downloadExcel = async () => {
+    const mod = await import("xlsx");
+    const XLSX = "utils" in mod ? mod : (mod as unknown as { default: typeof mod }).default;
+    const rows: Record<string, string | number>[] = [];
+    for (const m of machines) {
+      getEntriesForMachine(m.id).forEach((e, i) => {
+        rows.push({
+          설비: m.name,
+          순서: i + 1,
+          제품명: e.product_name,
+          구성: e.component_part || e.component || "",
+          공정: e.special_process || "",
+          [qtyLabel]: e.quantity_sheets || "",
+          "소요(시간)": e.duration_minutes ? Math.round((e.duration_minutes / 60) * 10) / 10 : "",
+          시작: e.start_time || "",
+          완료예정: e.end_time || "",
+          납기: e.deadline || "",
+          비고: e.order_notes || "",
+        });
+      });
+    }
+    if (rows.length === 0) rows.push({ 설비: "(배정된 작업 없음)" });
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, processLine);
+    const d = new Date();
+    const ymd = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
+    XLSX.writeFile(wb, `스케줄_${processLine}_${ymd}.xlsx`);
+  };
+
   // 특정 위치(대기=undefined / 칸=bucketId)에 표시되는 주문들의 '남은 구성' 소요시간 합계(분)
   const locationMinutes = (orderList: Order[], bucketId?: number) =>
     orderList.reduce((sum, o) => {
@@ -1335,6 +1366,13 @@ export default function ScheduleBoard() {
               title="기계별 작업계획을 A4 한 장에 인쇄합니다"
             >
               🖨 스케줄
+            </button>
+            <button
+              onClick={downloadExcel}
+              className="text-sm border border-gray-300 bg-white px-3 py-1.5 hover:bg-gray-100 text-gray-700 whitespace-nowrap"
+              title="기계별 작업 계획을 엑셀(.xlsx) 파일로 내려받습니다"
+            >
+              📊 엑셀
             </button>
             {isAdmin && (
               <button
