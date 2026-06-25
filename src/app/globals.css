@@ -180,7 +180,7 @@ input[type="number"]::-webkit-outer-spin-button {
   /* 제책 일자별 매트릭스 (날짜 × 설비) */
   .jm { width: 100%; border-collapse: collapse; table-layout: fixed; }
   .jm th, .jm td { border: 0.3mm solid #333; padding: 0.8mm 1mm; vertical-align: top; font-size: 7pt; overflow: hidden; }
-  .jm thead th { background: #333; color: #fff; text-align: center; font-size: 7.5pt; }
+  .jm thead th { background: #2e75b6; color: #fff; text-align: center; font-size: 7.5pt; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .jm thead th.jm-dh { width: 12mm; }
   .jm-date { width: 12mm; text-align: center; font-weight: bold; white-space: nowrap; }
   .jm-wd { font-weight: normal; color: #555; }
@@ -188,9 +188,19 @@ input[type="number"]::-webkit-outer-spin-button {
   .jm-empty { text-align: center; color: #888; font-size: 8pt; padding: 2mm; }
   /* 제책 매트릭스: 가로 용지 */
   .pf-page.pf-land { page: jmland; min-height: 195mm; }
-  /* 이번 주 7행(월~일) 고정 높이. 한 주 + 기타사항이 한 페이지에 들어가도록 낮게. */
-  .jm-daycell { height: 15mm; overflow: hidden; }
+  /* 이번 주 7행(월~일). 높이는 인라인(rowH)으로 한 페이지를 채우도록 계산. 넘침은 잘라냄. */
+  .jm-daycell { overflow: hidden; }
   .jm-datecell { text-align: center; font-weight: bold; }
+  /* 상단 제목: 색상 헤더로 눈에 띄게 */
+  .jm-head {
+    background: #1f4e79;
+    color: #fff;
+    padding: 1.6mm 2mm;
+    margin-bottom: 2mm;
+    border-radius: 0;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
   /* 기타사항 하단 표 (설비 × 요일) */
   .jm-extra { margin-top: 4mm; break-inside: avoid; }
   .jm-extra-ttl { font-size: 9pt; font-weight: bold; margin-bottom: 1mm; }

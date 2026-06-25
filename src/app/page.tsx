@@ -1345,19 +1345,24 @@ export default function ScheduleBoard() {
       .map((m) => ({ m, ex: parseExtraNotes(machineExtras[m.id] ?? m.extra_notes ?? "") }))
       .filter(({ ex }) => EXTRA_DAYS.some(([k]) => (ex[k] || "").trim()));
     const fmtMD = (d: Date) => `${d.getMonth() + 1}/${d.getDate()}`;
-    // 칸이 넘치면 글자 크기를 줄인다. 작업 수·글자 길이로 시각 줄 수를 추정해 7pt 기준에서 축소.
+    // 한 페이지(가로 A4)를 꽉 채우도록 요일 7행 높이를 계산. 기타사항 표 높이를 빼고 나눈다.
+    const PAGE_H = 192; // 가로 A4 인쇄 가용 높이(mm) — 약간 보수적으로
+    const extraH = extraRows.length > 0 ? (15 + extraRows.length * 6) : 0; // 여백+제목+헤더 + 설비행
+    const rowH = Math.max(14, Math.min(28, (PAGE_H - 16 - extraH) / 7)); // 제목+설비헤더 ~16mm 제외
+    // 칸이 넘치면 글자 크기를 줄인다. 작업 수·글자 길이로 시각 줄 수를 추정해 행 높이에 맞춰 축소.
     const colW = machines.length ? (285 - 16) / machines.length : 50; // 설비 열 폭(mm)
     const cpl = Math.max(10, Math.floor(colW / 1.7)); // 한 줄에 들어갈 대략 글자 수(7pt)
-    const FIT_LINES = 4; // 15mm 칸에 7pt로 들어가는 대략 줄 수
+    const fitLines = Math.max(2, Math.floor(rowH / 3.6)); // 행 높이에 7pt로 들어가는 대략 줄 수
     const fsFor = (jobs: string[]): string | undefined => {
       const lines = jobs.reduce((s, j) => s + Math.max(1, Math.ceil(j.length / cpl)), 0);
-      if (lines <= FIT_LINES) return undefined;
-      return `${Math.max(4, Math.round(7 * Math.sqrt(FIT_LINES / lines) * 10) / 10)}pt`;
+      if (lines <= fitLines) return undefined;
+      return `${Math.max(4, Math.round(7 * Math.sqrt(fitLines / lines) * 10) / 10)}pt`;
     };
+    const cellH = `${rowH}mm`;
     return (
       <div className="pf-page pf-land">
         <div className="jm-week">
-          <div className="pf-head">{processLine} 생산 스케줄 — {fmtMD(week[0])} ~ {fmtMD(week[6])}</div>
+          <div className="pf-head jm-head">{processLine} 생산 스케줄 — {fmtMD(week[0])} ~ {fmtMD(week[6])}</div>
           <table className="jm">
             <thead>
               <tr>
@@ -1370,12 +1375,12 @@ export default function ScheduleBoard() {
                 const dk = ymd2(d);
                 return (
                   <tr key={di}>
-                    <td className="jm-date"><div className="jm-daycell jm-datecell">{DAY_NAMES[d.getDay()]}<br /><span className="jm-wd">{fmtMD(d)}</span></div></td>
+                    <td className="jm-date"><div className="jm-daycell jm-datecell" style={{ height: cellH }}>{DAY_NAMES[d.getDay()]}<br /><span className="jm-wd">{fmtMD(d)}</span></div></td>
                     {machines.map((m) => {
                       const jobs = cell[dk]?.[m.id] || [];
                       return (
                         <td key={m.id} className="jm-cell">
-                          <div className="jm-daycell" style={{ fontSize: fsFor(jobs) }}>
+                          <div className="jm-daycell" style={{ height: cellH, fontSize: fsFor(jobs) }}>
                             {jobs.map((line, i) => <div key={i} className="jm-job">{line}</div>)}
                           </div>
                         </td>
