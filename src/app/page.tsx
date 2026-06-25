@@ -1333,41 +1333,60 @@ export default function ScheduleBoard() {
     ));
   };
 
-  // 제책 스케줄 인쇄: '날짜 × 설비' 매트릭스. 각 칸에 그 날 그 설비의 작업(제품=부수)을 나열.
+  // 제책 스케줄 인쇄: '요일(월~일) × 설비' 매트릭스를 주 단위로. 한 주씩(고정 높이 7행) 보여준다.
+  // 이번 주(오늘 포함)부터 시작 — 지난 요일은 공란으로 둔다.
   const renderJechaeMatrix = () => {
-    const { cell, dates } = buildJechaeMatrix();
+    const { cell } = buildJechaeMatrix();
+    const allKeys = Object.keys(cell).sort();
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const monday = new Date(today); monday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
+    const maxWork = allKeys.length ? new Date(allKeys[allKeys.length - 1] + "T00:00") : new Date(monday);
+    const limit = maxWork > monday ? maxWork : new Date(monday);
+    const weekOf = (ws: Date) => Array.from({ length: 7 }, (_, i) => { const d = new Date(ws); d.setDate(ws.getDate() + i); return d; });
+    const weeks: Date[][] = [];
+    for (let ws = new Date(monday); ws <= limit; ws.setDate(ws.getDate() + 7)) {
+      const wd = weekOf(ws);
+      // 이번 주는 항상, 이후 주는 작업이 있을 때만 표시
+      if (ws.getTime() === monday.getTime() || wd.some((d) => cell[ymd2(d)])) weeks.push(wd);
+    }
+    if (weeks.length === 0) weeks.push(weekOf(monday));
     // 설비별 기타사항(월~일). 하나라도 작성된 설비만 하단에 표기.
     const extraRows = machines
       .map((m) => ({ m, ex: parseExtraNotes(machineExtras[m.id] ?? m.extra_notes ?? "") }))
       .filter(({ ex }) => EXTRA_DAYS.some(([k]) => (ex[k] || "").trim()));
+    const fmtMD = (d: Date) => `${d.getMonth() + 1}/${d.getDate()}`;
     return (
       <div className="pf-page pf-land">
-        <div className="pf-head">{processLine} 생산 스케줄 (일자별) — {dateStr}</div>
-        <table className="jm">
-          <thead>
-            <tr>
-              <th className="jm-dh">날짜</th>
-              {machines.map((m) => <th key={m.id}>{m.name}</th>)}
-            </tr>
-          </thead>
-          <tbody>
-            {dates.length === 0 ? (
-              <tr><td className="jm-empty" colSpan={machines.length + 1}>배정된 작업이 없습니다</td></tr>
-            ) : dates.map((dk) => {
-              const dt = new Date(dk + "T00:00");
-              return (
-                <tr key={dk}>
-                  <td className="jm-date">{dt.getMonth() + 1}/{dt.getDate()}<br /><span className="jm-wd">{DAY_NAMES[dt.getDay()]}</span></td>
-                  {machines.map((m) => (
-                    <td key={m.id} className="jm-cell">
-                      {(cell[dk]?.[m.id] || []).map((line, i) => <div key={i} className="jm-job">{line}</div>)}
-                    </td>
-                  ))}
+        {weeks.map((wk, wi) => (
+          <div className={`jm-week${wi < weeks.length - 1 || extraRows.length > 0 ? " jm-break" : ""}`} key={wi}>
+            <div className="pf-head">{processLine} 생산 스케줄 — {fmtMD(wk[0])} ~ {fmtMD(wk[6])}</div>
+            <table className="jm">
+              <thead>
+                <tr>
+                  <th className="jm-dh">요일</th>
+                  {machines.map((m) => <th key={m.id}>{m.name}</th>)}
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
+              </thead>
+              <tbody>
+                {wk.map((d, di) => {
+                  const dk = ymd2(d);
+                  return (
+                    <tr key={di}>
+                      <td className="jm-date"><div className="jm-daycell jm-datecell">{DAY_NAMES[d.getDay()]}<br /><span className="jm-wd">{fmtMD(d)}</span></div></td>
+                      {machines.map((m) => (
+                        <td key={m.id} className="jm-cell">
+                          <div className="jm-daycell">
+                            {(cell[dk]?.[m.id] || []).map((line, i) => <div key={i} className="jm-job">{line}</div>)}
+                          </div>
+                        </td>
+                      ))}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ))}
         {extraRows.length > 0 && (
           <div className="jm-extra">
             <div className="jm-extra-ttl">기타사항</div>
