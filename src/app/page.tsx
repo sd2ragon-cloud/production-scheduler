@@ -121,12 +121,12 @@ function processesForParts(parts: string[], partProcessesJson: string, fallback:
   return seen.length > 0 ? seen : [fallback];
 }
 
-// withDate=true(제책): "MM/DD(요일) HH:MM" — 일자·요일·시간. false(매엽·윤전): "요일 HH:MM".
-function formatEndTime(endTimeStr: string, withDate = false): string {
+// "MM/DD(요일) HH:MM" — 일자·요일·시간 (모든 라인 공통).
+function formatEndTime(endTimeStr: string): string {
   const dt = new Date(endTimeStr);
   if (isNaN(dt.getTime())) return "-";
   const p2 = (n: number) => String(n).padStart(2, "0");
-  const head = (d: Date) => (withDate ? `${p2(d.getMonth() + 1)}/${p2(d.getDate())}(${DAY_NAMES[d.getDay()]})` : DAY_NAMES[d.getDay()]);
+  const head = (d: Date) => `${p2(d.getMonth() + 1)}/${p2(d.getDate())}(${DAY_NAMES[d.getDay()]})`;
   // 정확히 자정(00:00)에 끝난 작업은 전날 근무종료(24:00)에 끝난 것 → 전일 기준으로.
   if (dt.getHours() === 0 && dt.getMinutes() === 0) {
     const prev = new Date(dt.getTime() - 60000);
@@ -1565,7 +1565,7 @@ export default function ScheduleBoard() {
                       <th className="px-1.5 py-0 text-center">작업명</th>
                       <th className={`px-1.5 py-0 text-center ${isJechae ? "" : "w-28"}`}>비고</th>
                       <th className="px-1.5 py-0 text-center w-28">소요(시간)</th>
-                      <th className={`px-1.5 py-0 ${isJechae ? "text-center w-40 whitespace-nowrap" : "text-left w-20"}`}>예상완료</th>
+                      <th className={`px-1.5 py-0 whitespace-nowrap ${isJechae ? "text-center w-40" : "text-left w-32"}`}>예상완료</th>
                       <th className="px-1.5 py-0 text-center w-12"></th>
                     </tr>
                   </thead>
@@ -1838,8 +1838,8 @@ export default function ScheduleBoard() {
                               )}
                             </div>
                           </td>
-                          <td className={`px-1.5 py-0 font-mono ${isJechae ? "text-[13px] text-center whitespace-nowrap" : "text-[11px] text-left"} ${over ? "text-red-600 font-bold" : "text-gray-700"}`}>
-                            {formatEndTime(entry.end_time, isJechae)}
+                          <td className={`px-1.5 py-0 font-mono whitespace-nowrap ${isJechae ? "text-[13px] text-center" : "text-[11px] text-left"} ${over ? "text-red-600 font-bold" : "text-gray-700"}`}>
+                            {formatEndTime(entry.end_time)}
                           </td>
                           <td className="px-1.5 py-0 text-center">
                             <div className="flex items-center justify-center gap-1">
