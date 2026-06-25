@@ -1311,65 +1311,75 @@ export default function ScheduleBoard() {
     const { cell } = buildJechaeMatrix();
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const monday = new Date(today); monday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
-    // 월~토 6일만(일요일 제외).
     const week = Array.from({ length: 6 }, (_, i) => { const d = new Date(monday); d.setDate(monday.getDate() + i); return d; });
+    const chunks = [week.slice(0, 3), week.slice(3, 6)]; // 월화수 / 목금토 (한 페이지씩)
     const fmtMD = (d: Date) => `${d.getMonth() + 1}/${d.getDate()}`;
-    // 한 페이지(가로 A4, 여백 8mm → 가용 194mm)를 채우도록 6행 높이를 계산.
-    // 행마다 셀 패딩/테두리 ~2mm가 더 붙으므로 그만큼 빼서 잘림을 막는다.
-    const PAGE_H = 190; // 가용 194mm 중 안전 여유 두고 목표 높이
-    const rowH = Math.max(16, Math.min(32, (PAGE_H - 16) / 6 - 2)); // 제목+설비헤더 ~16mm, 행당 ~2mm 제외
-    // 칸이 넘치면 글자 크기를 줄인다. 작업 수·글자 길이로 시각 줄 수를 추정해 행 높이에 맞춰 축소.
-    const colW = machines.length ? (285 - 16) / machines.length : 50; // 설비 열 폭(mm)
-    const cpl = Math.max(10, Math.floor(colW / 1.7)); // 한 줄에 들어갈 대략 글자 수(7pt)
-    const fitLines = Math.max(2, Math.floor(rowH / 3.6)); // 행 높이에 7pt로 들어가는 대략 줄 수
-    // 제품마다: 이름(줄바꿈 가능) + 비고/소요(있으면 1줄) + 제품 간 공백(~0.6줄)
-    const jobLines = (j: { label: string; note: string; dur: string }) =>
-      Math.max(1, Math.ceil(j.label.length / cpl)) + (j.note || j.dur ? 1 : 0) + 0.6;
-    const fsFor = (jobs: { label: string; note: string; dur: string }[]): string | undefined => {
-      const lines = jobs.reduce((s, j) => s + jobLines(j), 0);
+    // 열 너비: 낙정·배접은 80% 축소(=20%), 그만큼 무선 열에 더해 확대.
+    const isMuseon = (m: Machine) => m.name.includes("무선");
+    const isNakBae = (m: Machine) => m.name.includes("낙정") || m.name.includes("배접");
+    const numMuseon = machines.filter(isMuseon).length;
+    const numNakBae = machines.filter(isNakBae).length;
+    const museonExtra = numMuseon > 0 ? (0.8 * numNakBae) / numMuseon : 0;
+    const weightOf = (m: Machine) => (isNakBae(m) ? 0.2 : isMuseon(m) ? 1 + museonExtra : 1);
+    const totalW = machines.reduce((s, m) => s + weightOf(m), 0) || 1;
+    const DATE_PCT = 5;
+    const colPct = (m: Machine) => `${((100 - DATE_PCT) * weightOf(m)) / totalW}%`;
+    const LAND_W = 281; // 가로 A4 가용 폭(mm, 여백 8mm 제외)
+    const colMm = (m: Machine) => (LAND_W * (100 - DATE_PCT) / 100 * weightOf(m)) / totalW;
+    // 한 페이지(가로 A4, 가용 ~194mm)에 3행이 꽉 차도록 높이를 크게.
+    const PAGE_H = 190;
+    const rowH = Math.max(20, Math.min(75, (PAGE_H - 16) / 3 - 2));
+    const fitLines = Math.max(3, Math.floor(rowH / 3.6));
+    const fsFor = (jobs: { label: string; note: string; dur: string }[], mm: number): string | undefined => {
+      const cpl = Math.max(6, Math.floor(mm / 1.7));
+      const lines = jobs.reduce((s, j) => s + Math.max(1, Math.ceil(j.label.length / cpl)) + (j.note || j.dur ? 1 : 0) + 0.6, 0);
       if (lines <= fitLines) return undefined;
       return `${Math.max(4, Math.round(7 * Math.sqrt(fitLines / lines) * 10) / 10)}pt`;
     };
     const cellH = `${rowH}mm`;
     return (
-      <div className="pf-page pf-land">
-        <div className="jm-week">
-          <div className="pf-head jm-head">{processLine} 생산 스케줄 — {fmtMD(week[0])} ~ {fmtMD(week[5])}</div>
-          <table className="jm">
-            <thead>
-              <tr>
-                <th className="jm-dh">요일</th>
-                {machines.map((m) => <th key={m.id}>{m.name}</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {week.map((d, di) => {
-                const dk = ymd2(d);
-                return (
-                  <tr key={di}>
-                    <td className="jm-date"><div className="jm-daycell jm-datecell" style={{ height: cellH }}>{DAY_NAMES[d.getDay()]}<br /><span className="jm-wd">{fmtMD(d)}</span></div></td>
-                    {machines.map((m) => {
-                      const jobs = cell[dk]?.[m.id] || [];
-                      return (
-                        <td key={m.id} className="jm-cell">
-                          <div className="jm-daycell" style={{ height: cellH, fontSize: fsFor(jobs) }}>
-                            {jobs.map((j, i) => (
-                              <div key={i} className="jm-job">
-                                <div className="jm-job-name">{j.label}</div>
-                                {(j.note || j.dur) && <div className="jm-job-sub">{[j.note, j.dur].filter(Boolean).join(" · ")}</div>}
-                              </div>
-                            ))}
-                          </div>
-                        </td>
-                      );
-                    })}
+      <>
+        {chunks.map((days, ci) => (
+          <div key={ci} className="pf-page pf-land" style={{ breakAfter: ci < chunks.length - 1 ? "page" : undefined }}>
+            <div className="jm-week">
+              <div className="pf-head jm-head">{processLine} 생산 스케줄 — {fmtMD(days[0])}({DAY_NAMES[days[0].getDay()]}) ~ {fmtMD(days[days.length - 1])}({DAY_NAMES[days[days.length - 1].getDay()]})</div>
+              <table className="jm">
+                <thead>
+                  <tr>
+                    <th className="jm-dh" style={{ width: `${DATE_PCT}%` }}>요일</th>
+                    {machines.map((m) => <th key={m.id} style={{ width: colPct(m) }}>{m.name}</th>)}
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
+                </thead>
+                <tbody>
+                  {days.map((d, di) => {
+                    const dk = ymd2(d);
+                    return (
+                      <tr key={di}>
+                        <td className="jm-date"><div className="jm-daycell jm-datecell" style={{ height: cellH }}>{DAY_NAMES[d.getDay()]}<br /><span className="jm-wd">{fmtMD(d)}</span></div></td>
+                        {machines.map((m) => {
+                          const jobs = cell[dk]?.[m.id] || [];
+                          return (
+                            <td key={m.id} className="jm-cell">
+                              <div className="jm-daycell" style={{ height: cellH, fontSize: fsFor(jobs, colMm(m)) }}>
+                                {jobs.map((j, i) => (
+                                  <div key={i} className="jm-job">
+                                    <div className="jm-job-name">{j.label}</div>
+                                    {(j.note || j.dur) && <div className="jm-job-sub">{[j.note, j.dur].filter(Boolean).join(" · ")}</div>}
+                                  </div>
+                                ))}
+                              </div>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ))}
+      </>
     );
   };
 
