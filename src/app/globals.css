@@ -175,6 +175,15 @@ input[type="number"]::-webkit-outer-spin-button {
   .pf-job { word-break: break-all; }
   .pf-eta { white-space: nowrap; color: #444; font-variant-numeric: tabular-nums; }
   .pf-empty { font-size: 8pt; color: #888; padding: 1mm 1.5mm; }
+  /* 제책 일자별 매트릭스 (날짜 × 설비) */
+  .jm { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  .jm th, .jm td { border: 0.3mm solid #333; padding: 0.8mm 1mm; vertical-align: top; font-size: 7pt; overflow: hidden; }
+  .jm thead th { background: #333; color: #fff; text-align: center; font-size: 7.5pt; }
+  .jm thead th.jm-dh { width: 12mm; }
+  .jm-date { width: 12mm; text-align: center; font-weight: bold; white-space: nowrap; }
+  .jm-wd { font-weight: normal; color: #555; }
+  .jm-job { line-height: 1.3; word-break: break-all; margin-bottom: 0.4mm; }
+  .jm-empty { text-align: center; color: #888; font-size: 8pt; padding: 2mm; }
   .pf-bottom {
     flex: 1 1 auto;
     display: grid;

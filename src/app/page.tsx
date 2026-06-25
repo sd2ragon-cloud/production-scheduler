@@ -19,6 +19,7 @@ interface Machine {
   schedule_start_time: string;
   memo: string;
   extra_notes: string; // 설비 블록 하단 기타사항 (제책)
+  off_days?: string; // 휴무 요일 JSON 배열 (0=일~6=토)
 }
 
 interface Order {
@@ -1024,9 +1025,61 @@ export default function ScheduleBoard() {
   const fmtH = (min: number) => `${Math.round(min / 6) / 10}h`;
 
   // 스케줄을 엑셀(.xlsx)로 내려받기. 설비별 작업을 순서대로 한 행씩. 클릭 시에만 라이브러리를 동적 로드.
+  // 제책용 '날짜 × 설비' 매트릭스 데이터. 각 작업을 시작~완료 날짜마다 해당 설비 칸에 넣는다.
+  // (여러 날 걸치는 작업은 그 날짜들마다 반복 표기 — 업로드 엑셀과 동일한 일자별 계획)
+  const ymd2 = (dt: Date) => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+  const offDaysOf = (m: Machine): Set<number> => {
+    try { const a = JSON.parse(m.off_days || "[]"); return new Set(Array.isArray(a) ? a.map(Number) : []); } catch { return new Set(); }
+  };
+  const buildJechaeMatrix = () => {
+    const cell: Record<string, Record<number, string[]>> = {};
+    for (const m of machines) {
+      const off = offDaysOf(m);
+      for (const e of getEntriesForMachine(m.id)) {
+        if (!e.start_time || !e.end_time) continue;
+        const start = new Date(e.start_time.slice(0, 10) + "T00:00");
+        // 완료가 정확히 00:00이면 전날 24:00에 끝난 것 → 마지막 작업일은 전날
+        const end = new Date(e.end_time.slice(0, 10) + "T00:00");
+        if (/00:00$/.test(e.end_time.replace("T", " "))) end.setDate(end.getDate() - 1);
+        if (isNaN(start.getTime()) || isNaN(end.getTime()) || end < start) continue;
+        const comp = e.component_part || e.component || "";
+        const qty = e.quantity_sheets ? ` = ${e.quantity_sheets.toLocaleString()}부` : "";
+        const label = `${e.product_name}${comp ? `(${comp})` : ""}${qty}`;
+        for (let cur = new Date(start), g = 0; cur <= end && g < 400; cur.setDate(cur.getDate() + 1), g++) {
+          if (off.has(cur.getDay())) continue; // 휴무 요일은 제외
+          const dk = ymd2(cur);
+          (cell[dk] ??= {});
+          (cell[dk][m.id] ??= []).push(label);
+        }
+      }
+    }
+    return { cell, dates: Object.keys(cell).sort() };
+  };
+
   const downloadExcel = async () => {
     const mod = await import("xlsx");
     const XLSX = "utils" in mod ? mod : (mod as unknown as { default: typeof mod }).default;
+    const d = new Date();
+    const ymd = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
+    const wb = XLSX.utils.book_new();
+    if (isJechae) {
+      // 날짜 × 설비 매트릭스: 한 작업 라인당 한 행, 날짜는 그 날 첫 행에만.
+      const { cell, dates } = buildJechaeMatrix();
+      const aoa: (string | number)[][] = [["날짜", ...machines.map((m) => m.name)]];
+      for (const dk of dates) {
+        const dt = new Date(dk + "T00:00");
+        const perM = machines.map((m) => cell[dk]?.[m.id] || []);
+        const maxL = Math.max(1, ...perM.map((a) => a.length));
+        for (let k = 0; k < maxL; k++) {
+          aoa.push([k === 0 ? `${dt.getMonth() + 1}/${dt.getDate()}(${DAY_NAMES[dt.getDay()]})` : "", ...perM.map((a) => a[k] || "")]);
+        }
+      }
+      const ws = XLSX.utils.aoa_to_sheet(aoa);
+      ws["!cols"] = [{ wch: 11 }, ...machines.map(() => ({ wch: 34 }))];
+      XLSX.utils.book_append_sheet(wb, ws, processLine);
+      XLSX.writeFile(wb, `스케줄_${processLine}_${ymd}.xlsx`);
+      return;
+    }
     const rows: Record<string, string | number>[] = [];
     for (const m of machines) {
       getEntriesForMachine(m.id).forEach((e, i) => {
@@ -1047,10 +1100,7 @@ export default function ScheduleBoard() {
     }
     if (rows.length === 0) rows.push({ 설비: "(배정된 작업 없음)" });
     const ws = XLSX.utils.json_to_sheet(rows);
-    const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, processLine);
-    const d = new Date();
-    const ymd = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
     XLSX.writeFile(wb, `스케줄_${processLine}_${ymd}.xlsx`);
   };
 
@@ -1271,6 +1321,41 @@ export default function ScheduleBoard() {
     ));
   };
 
+  // 제책 스케줄 인쇄: '날짜 × 설비' 매트릭스. 각 칸에 그 날 그 설비의 작업(제품=부수)을 나열.
+  const renderJechaeMatrix = () => {
+    const { cell, dates } = buildJechaeMatrix();
+    return (
+      <div className="pf-page">
+        <div className="pf-head">{processLine} 생산 스케줄 (일자별) — {dateStr}</div>
+        <table className="jm">
+          <thead>
+            <tr>
+              <th className="jm-dh">날짜</th>
+              {machines.map((m) => <th key={m.id}>{m.name}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {dates.length === 0 ? (
+              <tr><td className="jm-empty" colSpan={machines.length + 1}>배정된 작업이 없습니다</td></tr>
+            ) : dates.map((dk) => {
+              const dt = new Date(dk + "T00:00");
+              return (
+                <tr key={dk}>
+                  <td className="jm-date">{dt.getMonth() + 1}/{dt.getDate()}<br /><span className="jm-wd">{DAY_NAMES[dt.getDay()]}</span></td>
+                  {machines.map((m) => (
+                    <td key={m.id} className="jm-cell">
+                      {(cell[dk]?.[m.id] || []).map((line, i) => <div key={i} className="jm-job">{line}</div>)}
+                    </td>
+                  ))}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
   // 스케줄 전체 개요 인쇄: 상단 기계별 작업계획 + 하단 1차 배정·배정 대기. A4 한 장에 꽉 차게.
   const renderFullPrint = () => {
     const ov = (o: Order) => {
@@ -1338,7 +1423,7 @@ export default function ScheduleBoard() {
   return (
     <>
     <div className="print-root print-area">
-      {printView === "full" ? renderFullPrint() : renderPrint()}
+      {printView === "full" ? (isJechae ? renderJechaeMatrix() : renderFullPrint()) : renderPrint()}
     </div>
     <div className="overflow-auto h-[calc(100vh-80px)]">
     {/* 고정 폭(반응형 축소 없음). 화면이 작으면 비율 축소 대신 가로/세로 스크롤로 본다. */}
