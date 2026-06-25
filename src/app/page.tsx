@@ -1314,13 +1314,13 @@ export default function ScheduleBoard() {
     const week = Array.from({ length: 6 }, (_, i) => { const d = new Date(monday); d.setDate(monday.getDate() + i); return d; });
     const chunks = [week.slice(0, 3), week.slice(3, 6)]; // 월화수 / 목금토 (한 페이지씩)
     const fmtMD = (d: Date) => `${d.getMonth() + 1}/${d.getDate()}`;
-    // 열 너비: 낙정·배접은 80% 축소(=20%), 그만큼 무선 열에 더해 확대.
+    // 열 너비: 낙정·배접은 20%만 축소(=원래의 80%), 그만큼 무선 열에 더해 확대.
     const isMuseon = (m: Machine) => m.name.includes("무선");
     const isNakBae = (m: Machine) => m.name.includes("낙정") || m.name.includes("배접");
     const numMuseon = machines.filter(isMuseon).length;
     const numNakBae = machines.filter(isNakBae).length;
-    const museonExtra = numMuseon > 0 ? (0.8 * numNakBae) / numMuseon : 0;
-    const weightOf = (m: Machine) => (isNakBae(m) ? 0.2 : isMuseon(m) ? 1 + museonExtra : 1);
+    const museonExtra = numMuseon > 0 ? (0.2 * numNakBae) / numMuseon : 0;
+    const weightOf = (m: Machine) => (isNakBae(m) ? 0.8 : isMuseon(m) ? 1 + museonExtra : 1);
     const totalW = machines.reduce((s, m) => s + weightOf(m), 0) || 1;
     const DATE_PCT = 5;
     const colPct = (m: Machine) => `${((100 - DATE_PCT) * weightOf(m)) / totalW}%`;
