@@ -1074,6 +1074,18 @@ export default function ScheduleBoard() {
           aoa.push([k === 0 ? `${dt.getMonth() + 1}/${dt.getDate()}(${DAY_NAMES[dt.getDay()]})` : "", ...perM.map((a) => a[k] || "")]);
         }
       }
+      // 하단: 설비별 기타사항(설비 × 요일)
+      const exRows = machines
+        .map((m) => ({ m, ex: parseExtraNotes(machineExtras[m.id] ?? m.extra_notes ?? "") }))
+        .filter(({ ex }) => EXTRA_DAYS.some(([k]) => (ex[k] || "").trim()));
+      if (exRows.length > 0) {
+        aoa.push([]);
+        aoa.push(["기타사항"]);
+        aoa.push(["설비", ...EXTRA_DAYS.map(([, l]) => l)]);
+        for (const { m, ex } of exRows) {
+          aoa.push([m.name, ...EXTRA_DAYS.map(([k]) => (ex[k] || "").trim())]);
+        }
+      }
       const ws = XLSX.utils.aoa_to_sheet(aoa);
       ws["!cols"] = [{ wch: 11 }, ...machines.map(() => ({ wch: 34 }))];
       XLSX.utils.book_append_sheet(wb, ws, processLine);
@@ -1324,8 +1336,12 @@ export default function ScheduleBoard() {
   // 제책 스케줄 인쇄: '날짜 × 설비' 매트릭스. 각 칸에 그 날 그 설비의 작업(제품=부수)을 나열.
   const renderJechaeMatrix = () => {
     const { cell, dates } = buildJechaeMatrix();
+    // 설비별 기타사항(월~일). 하나라도 작성된 설비만 하단에 표기.
+    const extraRows = machines
+      .map((m) => ({ m, ex: parseExtraNotes(machineExtras[m.id] ?? m.extra_notes ?? "") }))
+      .filter(({ ex }) => EXTRA_DAYS.some(([k]) => (ex[k] || "").trim()));
     return (
-      <div className="pf-page">
+      <div className="pf-page pf-land">
         <div className="pf-head">{processLine} 생산 스케줄 (일자별) — {dateStr}</div>
         <table className="jm">
           <thead>
@@ -1352,6 +1368,27 @@ export default function ScheduleBoard() {
             })}
           </tbody>
         </table>
+        {extraRows.length > 0 && (
+          <div className="jm-extra">
+            <div className="jm-extra-ttl">기타사항</div>
+            <table className="jm jm-extra-tbl">
+              <thead>
+                <tr>
+                  <th className="jm-dh">설비</th>
+                  {EXTRA_DAYS.map(([k, l]) => <th key={k}>{l}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {extraRows.map(({ m, ex }) => (
+                  <tr key={m.id}>
+                    <td className="jm-date">{m.name}</td>
+                    {EXTRA_DAYS.map(([k]) => <td key={k} className="jm-cell">{(ex[k] || "").trim()}</td>)}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     );
   };
