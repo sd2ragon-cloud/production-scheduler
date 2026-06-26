@@ -100,6 +100,15 @@ async function initializeDb(db: Client) {
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
     )`,
+    // 설비별 비가동시간(설비고장·교육훈련 등 일회성 중단). 그 시간대에는 작업하지 않아 완료시각이 밀린다.
+    `CREATE TABLE IF NOT EXISTS downtimes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      machine_id INTEGER NOT NULL,
+      start_time TEXT NOT NULL,
+      end_time TEXT NOT NULL,
+      reason TEXT NOT NULL DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now', 'localtime'))
+    )`,
   ], 'write');
 
   // Migrate existing tables: add factory/process_line columns if missing

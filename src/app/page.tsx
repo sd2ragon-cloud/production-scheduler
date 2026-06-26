@@ -57,6 +57,14 @@ interface Break {
   end_min: number;
 }
 
+interface Downtime {
+  id: number;
+  machine_id: number;
+  start_time: string; // "YYYY-MM-DD HH:MM"
+  end_time: string;
+  reason: string;
+}
+
 // 분(자정 기준) ↔ "HH:MM" 변환
 const minToHHMM = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
 const hhmmToMin = (s: string) => { const [h, m] = s.split(":").map(Number); return (isNaN(h) ? 0 : h) * 60 + (isNaN(m) ? 0 : m); };
@@ -166,6 +174,10 @@ export default function ScheduleBoard() {
   const [buckets, setBuckets] = useState<Bucket[]>([]);
   const [breaks, setBreaks] = useState<Break[]>([]);
   const [showBreaks, setShowBreaks] = useState(false);
+  // 설비별 비가동시간(설비고장·교육훈련 등)
+  const [downtimes, setDowntimes] = useState<Downtime[]>([]);
+  const [dtModalMachine, setDtModalMachine] = useState<number | null>(null);
+  const [dtForm, setDtForm] = useState({ start: "", end: "", reason: "" });
   const [dragOrderId, setDragOrderId] = useState<number | null>(null);
   const [dragPart, setDragPart] = useState<string>("");
   const [dragEntryId, setDragEntryId] = useState<number | null>(null);
@@ -209,15 +221,17 @@ export default function ScheduleBoard() {
   const fetchAll = useCallback(async () => {
     const qs = `?process_line=${encodeURIComponent(processLine)}`;
     // 식사시간(breaks)은 전 공정 공통이라 process_line 필터 없이 받는다.
-    const [machRes, orderRes, schedRes, bucketRes, breakRes] = await Promise.all([
-      fetch(`/api/machines${qs}`), fetch(`/api/orders${qs}`), fetch(`/api/schedule${qs}`), fetch(`/api/buckets${qs}`), fetch(`/api/breaks`),
+    const [machRes, orderRes, schedRes, bucketRes, breakRes, dtRes] = await Promise.all([
+      fetch(`/api/machines${qs}`), fetch(`/api/orders${qs}`), fetch(`/api/schedule${qs}`), fetch(`/api/buckets${qs}`), fetch(`/api/breaks`), fetch(`/api/downtimes`),
     ]);
     const machData = await machRes.json();
     const orderData = await orderRes.json();
     const schedData = await schedRes.json();
     const bucketData = await bucketRes.json();
     const breakData = await breakRes.json();
+    const dtData = await dtRes.json().catch(() => []);
     setBreaks(Array.isArray(breakData) ? breakData : []);
+    setDowntimes(Array.isArray(dtData) ? dtData : []);
     const activeMachines = machData.filter((m: Machine) => m.is_active);
     setMachines(activeMachines);
     setOrders(orderData.filter((o: Order) => o.status === "pending"));
@@ -364,6 +378,28 @@ export default function ScheduleBoard() {
     if (!window.confirm("이 식사시간을 삭제할까요? 예상완료시간이 다시 계산됩니다.")) return;
     setLoading(true);
     await fetch(`/api/breaks/${id}`, { method: "DELETE" });
+    await fetchAll();
+    setLoading(false);
+  };
+
+  // 비가동시간 추가/삭제. 변경 시 서버가 해당 설비를 재계산하므로, 끝나면 fetchAll로 갱신한다.
+  const addDowntime = async (machineId: number) => {
+    if (!dtForm.start || !dtForm.end) { alert("시작/종료 일시를 입력하세요."); return; }
+    if (new Date(dtForm.end) <= new Date(dtForm.start)) { alert("종료가 시작보다 늦어야 합니다."); return; }
+    setLoading(true);
+    const r = await fetch("/api/downtimes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ machine_id: machineId, start_time: dtForm.start, end_time: dtForm.end, reason: dtForm.reason }),
+    });
+    if (!r.ok) { alert((await r.json().catch(() => ({}))).error || "추가 실패"); setLoading(false); return; }
+    setDtForm({ start: "", end: "", reason: "" });
+    await fetchAll();
+    setLoading(false);
+  };
+  const deleteDowntime = async (id: number) => {
+    setLoading(true);
+    await fetch(`/api/downtimes/${id}`, { method: "DELETE" });
     await fetchAll();
     setLoading(false);
   };
@@ -1552,6 +1588,13 @@ export default function ScheduleBoard() {
                       disabled={!isAdmin}
                     />
                   </div>
+                  <button
+                    onClick={() => { setDtModalMachine(machine.id); setDtForm({ start: "", end: "", reason: "" }); }}
+                    className="text-xs px-2 py-0.5 border border-gray-500 bg-gray-700 text-gray-200 hover:bg-gray-600 whitespace-nowrap shrink-0"
+                    title="설비 비가동시간(설비고장·교육훈련 등) 관리"
+                  >
+                    🛠 비가동{downtimes.filter((d) => d.machine_id === machine.id).length > 0 && <span className="text-gray-400"> ({downtimes.filter((d) => d.machine_id === machine.id).length})</span>}
+                  </button>
                   <span className="text-sm text-gray-300 w-16 text-right shrink-0">{fmtH(entries.reduce((s, e) => s + (e.duration_minutes || 0), 0))}</span>
                 </div>
               </div>
@@ -2304,6 +2347,60 @@ export default function ScheduleBoard() {
         </div>
       </div>
     )}
+
+    {dtModalMachine !== null && (() => {
+      const mac = machines.find((m) => m.id === dtModalMachine);
+      const list = downtimes.filter((d) => d.machine_id === dtModalMachine).sort((a, b) => a.start_time.localeCompare(b.start_time));
+      return (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center" onClick={() => setDtModalMachine(null)}>
+          <div className="bg-white shadow-xl w-[480px] max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="px-4 py-3 border-b flex items-center justify-between bg-gray-50">
+              <h3 className="font-bold text-gray-900">🛠 {mac?.name} 비가동시간</h3>
+              <button onClick={() => setDtModalMachine(null)} className="text-gray-400 hover:text-gray-700 text-lg leading-none">✕</button>
+            </div>
+            <div className="p-3 space-y-2 overflow-y-auto">
+              <p className="text-xs text-gray-500 leading-relaxed">
+                설비고장·교육훈련 등으로 <b className="text-gray-700">작업이 멈추는 시간대</b>를 등록하면, 그 시간만큼 이 설비의
+                <b className="text-gray-700"> 예상완료시간이 자동으로 밀립니다.</b>
+              </p>
+              {list.length === 0 ? (
+                <div className="text-sm text-gray-400 text-center py-3">등록된 비가동시간이 없습니다</div>
+              ) : (
+                list.map((d) => (
+                  <div key={d.id} className="flex items-center gap-2 border p-2 text-sm">
+                    <span className="font-mono text-gray-700">{d.start_time}</span>
+                    <span className="text-gray-400">~</span>
+                    <span className="font-mono text-gray-700">{d.end_time}</span>
+                    {d.reason && <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 text-xs">{d.reason}</span>}
+                    {isAdmin && <button onClick={() => deleteDowntime(d.id)} className="ml-auto text-red-400 hover:text-red-600" title="삭제">✕</button>}
+                  </div>
+                ))
+              )}
+              {isAdmin && (
+                <div className="border-t pt-3 mt-1 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-500 w-9 shrink-0">시작</span>
+                    <input type="datetime-local" value={dtForm.start} onChange={(e) => setDtForm((f) => ({ ...f, start: e.target.value }))} className="border px-1.5 py-1 text-sm flex-1" />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-500 w-9 shrink-0">종료</span>
+                    <input type="datetime-local" value={dtForm.end} onChange={(e) => setDtForm((f) => ({ ...f, end: e.target.value }))} className="border px-1.5 py-1 text-sm flex-1" />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-500 w-9 shrink-0">사유</span>
+                    <input type="text" value={dtForm.reason} onChange={(e) => setDtForm((f) => ({ ...f, reason: e.target.value }))} placeholder="예: 설비고장" className="border px-1.5 py-1 text-sm flex-1" />
+                    {["설비고장", "교육훈련", "기타"].map((r) => (
+                      <button key={r} type="button" onClick={() => setDtForm((f) => ({ ...f, reason: r }))} className="px-1.5 py-1 text-xs border bg-white hover:bg-gray-100 whitespace-nowrap">{r}</button>
+                    ))}
+                  </div>
+                  <button onClick={() => addDowntime(dtModalMachine)} className="w-full border border-dashed border-gray-300 py-2 text-sm text-gray-600 hover:bg-gray-50">+ 비가동시간 추가</button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    })()}
     </div>
     </>
   );

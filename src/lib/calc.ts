@@ -197,6 +197,29 @@ export async function recalcMachine(machineId: number, baseDate?: string, startT
   }
   work = work.filter(([s, e]) => e > s).sort((a, b) => a[0] - b[0]);
 
+  // 비가동시간(설비고장·교육훈련 등) 차감: 'YYYY-MM-DD HH:MM'를 절대분으로 바꿔 work에서 제거.
+  let downtimes: { start_time: string; end_time: string }[] = [];
+  try {
+    const dt = await db.execute({ sql: 'SELECT start_time, end_time FROM downtimes WHERE machine_id = ?', args: [machineId] });
+    downtimes = dt.rows as unknown as { start_time: string; end_time: string }[];
+  } catch {
+    // downtimes 테이블 없음 → 무시
+  }
+  const baseMs = startDate.getTime();
+  for (const dn of downtimes) {
+    const a = Math.round((new Date(String(dn.start_time).replace(' ', 'T')).getTime() - baseMs) / 60000);
+    const b = Math.round((new Date(String(dn.end_time).replace(' ', 'T')).getTime() - baseMs) / 60000);
+    if (!Number.isFinite(a) || !Number.isFinite(b) || b <= a) continue;
+    const next: [number, number][] = [];
+    for (const [ws, we] of work) {
+      if (b <= ws || a >= we) { next.push([ws, we]); continue; }
+      if (a > ws) next.push([ws, a]);
+      if (b < we) next.push([b, we]);
+    }
+    work = next;
+  }
+  work = work.filter(([s, e]) => e > s).sort((a, b) => a[0] - b[0]);
+
   // 근무 가능 시간이 전혀 없으면(전체 휴무 등) 모든 작업의 시작/완료를 비운다.
   if (work.length === 0) {
     const offUpdates = entries.map((e) => ({
