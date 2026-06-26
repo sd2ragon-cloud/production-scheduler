@@ -1227,6 +1227,8 @@ export default function ScheduleBoard() {
 
   const now = new Date();
   const dateStr = `${now.getFullYear()}년 ${now.getMonth() + 1}월 ${now.getDate()}일`;
+  const p2x = (n: number) => String(n).padStart(2, "0");
+  const printStamp = `${now.getFullYear()}-${p2x(now.getMonth() + 1)}-${p2x(now.getDate())} ${p2x(now.getHours())}:${p2x(now.getMinutes())}`;
 
   // 설비명 칸 너비 = 현재 탭에서 가장 긴 설비명의 실제 픽셀 폭(canvas 측정).
   // 설비명은 좌측 정렬, 칸 오른쪽에 좌측 패딩(px-4=16px)과 동일한 여백을 둔 뒤 메모란이 시작된다.
@@ -1347,7 +1349,10 @@ export default function ScheduleBoard() {
         {chunks.map((days, ci) => (
           <div key={ci} className="pf-page pf-land" style={{ breakAfter: ci < chunks.length - 1 ? "page" : undefined }}>
             <div className="jm-week">
-              <div className="pf-head jm-head">{processLine} 생산 스케줄 — {fmtMD(days[0])}({DAY_NAMES[days[0].getDay()]}) ~ {fmtMD(days[days.length - 1])}({DAY_NAMES[days[days.length - 1].getDay()]})</div>
+              <div className="pf-head jm-head">
+                <span>{processLine} 생산 스케줄 — {fmtMD(days[0])}({DAY_NAMES[days[0].getDay()]}) ~ {fmtMD(days[days.length - 1])}({DAY_NAMES[days[days.length - 1].getDay()]})</span>
+                <span className="jm-head-time">출력 {printStamp}</span>
+              </div>
               <table className="jm">
                 <thead>
                   <tr>
