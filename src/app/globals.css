@@ -196,6 +196,8 @@ input[type="number"]::-webkit-outer-spin-button {
   .jm-daycell { overflow: hidden; display: flex; flex-direction: column; }
   .jm-jobs { flex: 1 1 auto; overflow: hidden; min-height: 0; }
   .jm-note { flex: 0 0 auto; height: 9mm; overflow: hidden; border-top: 0.3mm solid #333; margin-top: 0.6mm; font-size: 7pt; line-height: 1.2; word-break: break-all; white-space: pre-wrap; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+  /* 요일(날짜) 칸은 구분선 없음 */
+  .jm-datecell .jm-note { border-top: 0; }
   .jm-datecell { text-align: center; font-weight: bold; }
   /* 상단 제목: 색상 헤더로 눈에 띄게 */
   .jm-head {
