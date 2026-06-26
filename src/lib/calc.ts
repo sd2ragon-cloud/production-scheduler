@@ -1,4 +1,5 @@
 import { getDb } from './db';
+import { SHIFTS, parseDayShifts } from './shifts';
 
 interface Machine {
   id: number;
@@ -9,6 +10,7 @@ interface Machine {
   works_sunday: number;
   off_days?: string; // 휴무 요일 JSON 배열 (0=일~6=토)
   day_hours?: string; // 요일별 근무시간 오버라이드 JSON (예: {"6":[8,18]})
+  day_shifts?: string; // 요일별 근무체제 JSON (예: {"1":["정상(주)","정상(야)"]})
   schedule_start_time?: string;
 }
 
@@ -88,28 +90,6 @@ const DEFAULT_BREAKS: Break[] = [
   [0 * 60, 1 * 60],
 ];
 
-// min(분) 이후로 가장 이른 '작업 가능' 시각을 반환. 휴게시간이면 그 끝으로 밀어낸다.
-// 근무 종료(workEnd)를 넘으면 null. (하한은 호출부에서 curMin으로 정함 — 수동 시작시간을 그대로 존중)
-function nextWorkingMinute(min: number, workEnd: number, breaks: Break[]): number | null {
-  let m = min;
-  for (let i = 0; i <= breaks.length; i++) {
-    if (m >= workEnd) return null;
-    const hit = breaks.find(([bs, be]) => m >= bs && m < be);
-    if (!hit) return m;
-    m = hit[1];
-  }
-  return m >= workEnd ? null : m;
-}
-
-// 작업 가능한 시각 m 이후 작업이 끊기는 다음 경계(근무 종료 또는 다음 휴게 시작).
-function nextBreakBoundary(m: number, workEnd: number, breaks: Break[]): number {
-  let boundary = workEnd;
-  for (const [bs] of breaks) {
-    if (bs > m && bs < boundary) boundary = bs;
-  }
-  return boundary;
-}
-
 // 자정 기준 분 → "YYYY-MM-DD HH:MM". totalMin이 하루(1440분)를 넘으면(예: 24:00)
 // 날짜를 넘겨 다음날 00:00으로 정규화한다. (24시간 가동 기계의 자정 종료 표기 대응)
 function formatDateTimeMin(date: Date, totalMin: number): string {
@@ -159,72 +139,99 @@ export async function recalcMachine(machineId: number, baseDate?: string, startT
     // breaks 테이블 없음 → 기본값 유지
   }
 
-  const currentDate = new Date(startDate);
-  // 시작시각 우선순위: 명시 인자 > 기계에 저장된 schedule_start_time > 기본 08:00.
-  // (배정해제·소요시간변경·순서변경 등 start_time 없이 호출돼도 저장된 시작시각을 유지)
+  // 근무체제(교대) 사용 여부. 설정이 있으면 요일별 근무체제로, 없으면 구버전 시작/종료(또는 day_hours)로.
+  const dayShifts = parseDayShifts(machine.day_shifts);
+  const useShifts = Object.keys(dayShifts).length > 0;
+
+  // 해당 날짜의 근무 가능 구간들 [시작분, 종료분] (종료가 1440 초과면 익일까지 — 야간 근무).
+  const dayWindows = (date: Date): [number, number][] => {
+    if (useShifts) {
+      return (dayShifts[date.getDay()] || [])
+        .map((n) => SHIFTS[n])
+        .filter(Boolean)
+        .map((s) => [s.start, s.end] as [number, number]);
+    }
+    if (!isWorkDay(date, machine)) return [];
+    const { start, end } = hoursFor(date);
+    return [[start, end]];
+  };
+
+  // 시작 시각(분, 자정 기준): 명시 인자 > 저장값 > 08:00.
   const startStr = startTimeStr || machine.schedule_start_time || '08:00';
-  let curMin = hoursFor(currentDate).start;
+  let startMin = 8 * 60;
   {
     const [h, m] = String(startStr).split(':').map(Number);
-    if (!isNaN(h)) curMin = h * 60 + (isNaN(m) ? 0 : m);
+    if (!isNaN(h)) startMin = h * 60 + (isNaN(m) ? 0 : m);
   }
 
-  // 전체 휴무 설비(7요일 모두 휴무): 일정 진행 불가 → 무한루프 방지. 모든 작업의 시작/완료를 비워
-  // 둔다(예상완료가 '-'로 표시됨). 보통 이런 설비엔 작업을 배정하지 않는다.
-  const noWorkDay = ![0, 1, 2, 3, 4, 5, 6].some((d) => isWorkDay(new Date(2024, 0, 7 + d), machine));
-  if (noWorkDay) {
+  // 총 소요시간에 맞춰 충분한 일수의 '근무 가능 구간'을 절대 타임라인(startDate 자정 기준 분)으로 만든다.
+  const totalDur = entries.reduce((s, e) => s + (Number(e.duration_minutes) || 0), 0);
+  const horizon = Math.min(500, Math.max(45, Math.ceil(totalDur / 240) + 21));
+  const rawIv: [number, number][] = [];
+  for (let d = 0; d < horizon; d++) {
+    const date = new Date(startDate);
+    date.setDate(startDate.getDate() + d);
+    for (const [s, e] of dayWindows(date)) rawIv.push([d * 1440 + s, d * 1440 + e]);
+  }
+  rawIv.sort((a, b) => a[0] - b[0]);
+  const merged: [number, number][] = [];
+  for (const iv of rawIv) {
+    const last = merged[merged.length - 1];
+    if (last && iv[0] <= last[1]) last[1] = Math.max(last[1], iv[1]);
+    else merged.push([iv[0], iv[1]]);
+  }
+  // 식사·휴게시간 차감(매일 반복; 야간이 자정을 넘기므로 끝쪽 며칠 더 포함).
+  let work: [number, number][] = merged;
+  for (let d = 0; d <= horizon + 1; d++) {
+    for (const [bs, be] of breaks) {
+      const a = d * 1440 + bs;
+      const b = d * 1440 + be;
+      const next: [number, number][] = [];
+      for (const [ws, we] of work) {
+        if (b <= ws || a >= we) { next.push([ws, we]); continue; }
+        if (a > ws) next.push([ws, a]);
+        if (b < we) next.push([b, we]);
+      }
+      work = next;
+    }
+  }
+  work = work.filter(([s, e]) => e > s).sort((a, b) => a[0] - b[0]);
+
+  // 근무 가능 시간이 전혀 없으면(전체 휴무 등) 모든 작업의 시작/완료를 비운다.
+  if (work.length === 0) {
     const offUpdates = entries.map((e) => ({
       sql: 'UPDATE schedule_entries SET start_time = ?, end_time = ?, scheduled_date = ? WHERE id = ?',
-      args: ['', '', formatDate(currentDate), Number(e.id)] as (string | number)[],
+      args: ['', '', formatDate(startDate), Number(e.id)] as (string | number)[],
     }));
     if (offUpdates.length > 0) await db.batch(offUpdates, 'write');
     return;
   }
 
-  while (!isWorkDay(currentDate, machine)) {
-    currentDate.setDate(currentDate.getDate() + 1);
-  }
-
-  // 근무일/근무시간/휴게시간을 건너뛰어 다음 '작업 가능한' 시각으로 정렬한다.
-  // 근무시간은 요일마다 다를 수 있으므로 날짜가 바뀔 때마다 hoursFor로 다시 구한다.
-  const advanceToWorking = () => {
-    let pos = nextWorkingMinute(curMin, hoursFor(currentDate).end, breaks);
-    while (pos === null) {
-      currentDate.setDate(currentDate.getDate() + 1);
-      while (!isWorkDay(currentDate, machine)) {
-        currentDate.setDate(currentDate.getDate() + 1);
-      }
-      curMin = hoursFor(currentDate).start;
-      pos = nextWorkingMinute(curMin, hoursFor(currentDate).end, breaks);
-    }
-    curMin = pos;
-  };
-
+  // 작업을 순서대로 근무 가능 구간에 채워 시작/완료를 정한다.
+  let cursor = startMin;
+  let ivIdx = 0;
   const updates: { sql: string; args: (string | number)[] }[] = [];
-
   for (const entry of entries) {
-    advanceToWorking();
-    const startTime = formatDateTimeMin(currentDate, curMin);
-    const scheduledDate = formatDate(currentDate);
-    let remaining = Number(entry.duration_minutes);
-
-    while (remaining > 0) {
-      advanceToWorking();
-      const boundary = nextBreakBoundary(curMin, hoursFor(currentDate).end, breaks);
-      const available = boundary - curMin;
-      if (remaining <= available) {
-        curMin += remaining;
-        remaining = 0;
-      } else {
-        remaining -= available;
-        curMin = boundary;
-      }
+    while (ivIdx < work.length && work[ivIdx][1] <= cursor) ivIdx++;
+    if (ivIdx >= work.length) cursor = work[work.length - 1][1];
+    const startAbs = ivIdx < work.length ? Math.max(cursor, work[ivIdx][0]) : cursor;
+    let remaining = Number(entry.duration_minutes) || 0;
+    let pos = startAbs;
+    let i = ivIdx;
+    while (remaining > 0 && i < work.length) {
+      const ws = Math.max(pos, work[i][0]);
+      const avail = work[i][1] - ws;
+      if (remaining <= avail) { pos = ws + remaining; remaining = 0; }
+      else { remaining -= avail; pos = work[i][1]; i++; }
     }
-
-    const endTime = formatDateTimeMin(currentDate, curMin);
+    const endAbs = pos;
+    cursor = endAbs;
+    ivIdx = Math.min(i, work.length - 1);
+    const eDate = new Date(startDate);
+    eDate.setDate(startDate.getDate() + Math.floor(startAbs / 1440));
     updates.push({
       sql: 'UPDATE schedule_entries SET start_time = ?, end_time = ?, scheduled_date = ? WHERE id = ?',
-      args: [startTime, endTime, scheduledDate, Number(entry.id)],
+      args: [formatDateTimeMin(startDate, startAbs), formatDateTimeMin(startDate, endAbs), formatDate(eDate), Number(entry.id)],
     });
   }
 

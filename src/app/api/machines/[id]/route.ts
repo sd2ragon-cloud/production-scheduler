@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { guardMachine } from '@/lib/permits';
 import { recalcMachine } from '@/lib/calc';
+import { SHIFTS } from '@/lib/shifts';
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -78,6 +79,19 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       }
     }
     await db.execute({ sql: 'UPDATE machines SET day_hours = ? WHERE id = ?', args: [Object.keys(clean).length ? JSON.stringify(clean) : '', id] });
+    recalcNeeded = true;
+  }
+  // 요일별 근무체제. { "1": ["정상(주)","정상(야)"], ... } 형태만 허용(유효 체제명만).
+  if (body.day_shifts != null && typeof body.day_shifts === 'object' && !Array.isArray(body.day_shifts)) {
+    const clean: Record<string, string[]> = {};
+    for (const [k, v] of Object.entries(body.day_shifts as Record<string, unknown>)) {
+      const d = Number(k);
+      if (d >= 0 && d <= 6 && Array.isArray(v)) {
+        const names = v.filter((x): x is string => typeof x === 'string' && x in SHIFTS);
+        if (names.length) clean[d] = names;
+      }
+    }
+    await db.execute({ sql: 'UPDATE machines SET day_shifts = ? WHERE id = ?', args: [Object.keys(clean).length ? JSON.stringify(clean) : '', id] });
     recalcNeeded = true;
   }
   if (recalcNeeded) {

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { PROCESS_LINES, roleCanEditLine } from "@/lib/factory-config";
+import { SHIFT_NAMES, parseDayShifts } from "@/lib/shifts";
 import { useAuth } from "../components/AuthContext";
 
 interface Machine {
@@ -12,6 +13,7 @@ interface Machine {
   work_end_hour: number;
   off_days: string; // 휴무 요일 JSON 배열 (0=일~6=토)
   day_hours: string; // 요일별 근무시간 오버라이드 JSON (예: {"6":[8,18]})
+  day_shifts: string; // 요일별 근무체제 JSON (예: {"1":["정상(주)","정상(야)"]})
 }
 
 const DAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
@@ -32,9 +34,7 @@ function parseDayHoursUI(json: string | undefined): Record<number, [number, numb
   return out;
 }
 const pad2 = (n: number) => String(n).padStart(2, "0");
-// 시각값(시 단위, 30분=0.5)을 "HH:MM"으로. 시작=종료(또는 종료<시작)면 24시간 가동.
-const hourOf = (v: number) => Math.floor(v);
-const isHalf = (v: number) => Math.round((v - Math.floor(v)) * 60) === 30;
+// 시각값(시 단위, 30분=0.5)을 "HH:MM"으로. 시작=종료(또는 종료<시작)면 24시간 가동. (구버전 시간 요약용)
 const fmtHM = (v: number) => `${pad2(Math.floor(v))}:${pad2(Math.round((v - Math.floor(v)) * 60))}`;
 const fmtHours = (s: number, e: number) => (e <= s ? "24시간" : `${fmtHM(s)}~${fmtHM(e)}`);
 // 근무일들의 근무시간을 요약. 전부 같으면 "08~24시", 다르면 "월·화·수·목·금 08~24시 · 토 08~18시".
@@ -55,6 +55,28 @@ function hoursSummary(m: Machine): string {
   return groups.map((g) => `${g.days.map((d) => DAY_LABELS[d]).join("·")} ${g.key}`).join(" · ");
 }
 
+// 근무체제 기반 요약(설정이 있으면). 같은 체제끼리 요일을 묶어 "월·화·수 정상(주) · 토 정시(주)"처럼.
+function shiftSummary(m: Machine): string {
+  const ds = parseDayShifts(m.day_shifts);
+  if (Object.keys(ds).length === 0) return hoursSummary(m); // 구버전 → 시간 요약
+  const order = [1, 2, 3, 4, 5, 6, 0];
+  const groups: { key: string; days: number[] }[] = [];
+  for (const d of order) {
+    if (!ds[d]?.length) continue;
+    const key = ds[d].join("+");
+    let g = groups.find((x) => x.key === key);
+    if (!g) { g = { key, days: [] }; groups.push(g); }
+    g.days.push(d);
+  }
+  return groups.map((g) => `${g.days.map((d) => DAY_LABELS[d]).join("·")} ${g.key}`).join(" · ");
+}
+// 휴무 요일(근무체제 설정이 있으면 체제 없는 요일, 없으면 off_days)
+function offDaysOfMachine(m: Machine): number[] {
+  const ds = parseDayShifts(m.day_shifts);
+  if (Object.keys(ds).length === 0) return parseOff(m.off_days);
+  return [0, 1, 2, 3, 4, 5, 6].filter((d) => !(ds[d]?.length));
+}
+
 // 공정 라인 하나의 설비 목록 열. 추가/수정/삭제/드래그 순서변경을 모두 이 라인 안에서 처리한다.
 function MachineColumn({ processLine, isAdmin }: { processLine: string; isAdmin: boolean }) {
   const [machines, setMachines] = useState<Machine[]>([]);
@@ -62,11 +84,10 @@ function MachineColumn({ processLine, isAdmin }: { processLine: string; isAdmin:
   const [loading, setLoading] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editName, setEditName] = useState("");
-  // 요일별(0=일~6=토) 근무 설정: 휴무 여부 + 근무 시작/종료 시
-  const [editDays, setEditDays] = useState<{ off: boolean; start: number; end: number }[]>([]);
-  // 일괄 적용용 시작/종료(시, 30분=.5)
-  const [editBulkStart, setEditBulkStart] = useState(8);
-  const [editBulkEnd, setEditBulkEnd] = useState(22);
+  // 요일별(0=일~6=토) 근무체제(다중 선택). 빈 배열 = 휴무.
+  const [editShifts, setEditShifts] = useState<string[][]>([]);
+  // 일괄 적용용 근무체제 선택
+  const [editBulkShifts, setEditBulkShifts] = useState<string[]>([]);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   // 삽입 슬롯: 0=맨 위, n=맨 아래 (행 i 앞 = i)
   const [overSlot, setOverSlot] = useState<number | null>(null);
@@ -95,58 +116,36 @@ function MachineColumn({ processLine, isAdmin }: { processLine: string; isAdmin:
     setLoading(false);
   };
 
-  // 설비의 저장값에서 요일별 편집 상태를 만든다(편집 시작·다른 설비 복사 공용).
-  const daysFromMachine = (m: Machine) => {
-    const off = new Set(parseOff(m.off_days));
-    const dh = parseDayHoursUI(m.day_hours);
-    // 0시(자정)는 falsy라 || 로 기본값 처리하면 8시로 바뀐다 → 유한수면 그대로 사용.
-    const defS = Number.isFinite(Number(m.work_start_hour)) ? Number(m.work_start_hour) : 8;
-    const defE = Number.isFinite(Number(m.work_end_hour)) ? Number(m.work_end_hour) : 22;
-    return DAY_LABELS.map((_, d) => {
-      const ov = dh[d];
-      return { off: off.has(d), start: ov ? ov[0] : defS, end: ov ? ov[1] : defE };
-    });
+  // 설비 저장값 → 요일별 근무체제 편집 상태(편집 시작·복사 공용).
+  const shiftsFromMachine = (m: Machine): string[][] => {
+    const ds = parseDayShifts(m.day_shifts);
+    return DAY_LABELS.map((_, d) => (ds[d] ? [...ds[d]] : []));
   };
 
   const startEdit = (m: Machine) => {
     setEditingId(m.id);
     setEditName(m.name);
-    const days = daysFromMachine(m);
-    setEditDays(days);
-    const fw = days.find((c) => !c.off);
-    setEditBulkStart(fw ? fw.start : 8);
-    setEditBulkEnd(fw ? fw.end : 22);
+    setEditShifts(shiftsFromMachine(m));
+    setEditBulkShifts([]);
   };
 
-  // 일괄: 시작/종료를 정해 모든 요일(근무일)에 한 번에 적용. 휴무 여부는 그대로 둔다.
-  const setBulkTime = (which: "start" | "end", hr: number, half: boolean) => {
-    let v = Math.min(Math.max(Number.isFinite(hr) ? hr : 0, 0), 24);
-    if (v < 24 && half) v += 0.5;
-    if (which === "start") setEditBulkStart(v); else setEditBulkEnd(v);
+  // 요일별 근무체제 토글(다중)
+  const toggleShift = (day: number, name: string) => {
+    setEditShifts((prev) => prev.map((arr, d) => (d === day ? (arr.includes(name) ? arr.filter((x) => x !== name) : [...arr, name]) : arr)));
+  };
+  // 일괄 적용용 체제 토글 + 전체 적용
+  const toggleBulkShift = (name: string) => {
+    setEditBulkShifts((prev) => (prev.includes(name) ? prev.filter((x) => x !== name) : [...prev, name]));
   };
   const applyBulkToAll = () => {
-    setEditDays((prev) => prev.map((c) => ({ ...c, start: editBulkStart, end: editBulkEnd })));
+    setEditShifts((prev) => prev.map(() => [...editBulkShifts]));
   };
-  // 다른 설비의 근무 패턴(휴무·요일별 시간)을 통째로 가져온다(저장 전까지는 편집 상태만 변경).
+  // 다른 설비의 근무체제를 통째로 가져온다(저장 전까지 편집 상태만 변경).
   const copyFromMachine = (id: number) => {
     const m2 = machines.find((x) => x.id === id);
     if (!m2) return;
-    const days = daysFromMachine(m2);
-    setEditDays(days);
-    const fw = days.find((c) => !c.off);
-    setEditBulkStart(fw ? fw.start : 8);
-    setEditBulkEnd(fw ? fw.end : 22);
-  };
-
-  // 요일 토글: 휴무↔근무. 7요일 전부 휴무(전체 휴무 설비)도 허용.
-  const toggleOff = (day: number) => {
-    setEditDays((prev) => prev.map((c, d) => (d === day ? { ...c, off: !c.off } : c)));
-  };
-  // 요일별 시각 설정(시 + 30분 여부). 24시엔 :30 없음.
-  const setDayTime = (day: number, key: "start" | "end", hr: number, half: boolean) => {
-    let val = Math.min(Math.max(Number.isFinite(hr) ? hr : 0, 0), 24);
-    if (val < 24 && half) val += 0.5;
-    setEditDays((prev) => prev.map((c, d) => (d === day ? { ...c, [key]: val } : c)));
+    setEditShifts(shiftsFromMachine(m2));
+    setEditBulkShifts([]);
   };
 
   const cancelEdit = () => {
@@ -157,29 +156,15 @@ function MachineColumn({ processLine, isAdmin }: { processLine: string; isAdmin:
   const saveEdit = async (m: Machine) => {
     const trimmed = editName.trim();
     if (!trimmed) { cancelEdit(); return; }
-    const clamp = (n: number) => Math.min(Math.max(Number.isFinite(n) ? n : 0, 0), 24);
-    const offSorted = editDays.map((c, d) => (c.off ? d : -1)).filter((d) => d >= 0);
-    // 근무일별 시간 정규화: 종료<=시작이면(예: 8~8) 24시간 가동(0~24)으로.
-    const norm = editDays
-      .map((c, d) => ({ d, ...c }))
-      .filter((c) => !c.off)
-      .map((c) => { let s = clamp(c.start), e = clamp(c.end); if (e <= s) { s = 0; e = 24; } return { d: c.d, s, e }; });
-    // 모든 근무일이 같은 시간이면 오버라이드 없이 기본 work_start/end만 저장. 다르면 day_hours에 요일별로.
-    // 단, 30분 단위(.5) 값이 있으면 INTEGER 컬럼 반올림 손실을 막기 위해 day_hours(JSON)에 보관한다.
-    let work_start_hour = 8, work_end_hour = 22;
-    const day_hours: Record<number, [number, number]> = {};
-    if (norm.length > 0) {
-      work_start_hour = Math.floor(norm[0].s);
-      work_end_hour = Math.ceil(norm[0].e);
-      const uniform = norm.every((n) => n.s === norm[0].s && n.e === norm[0].e);
-      const anyHalf = norm.some((n) => isHalf(n.s) || isHalf(n.e));
-      if (!uniform || anyHalf) for (const n of norm) day_hours[n.d] = [n.s, n.e];
-    }
+    const day_shifts: Record<number, string[]> = {};
+    const offSorted: number[] = [];
+    editShifts.forEach((arr, d) => { if (arr.length) day_shifts[d] = arr; else offSorted.push(d); });
     setLoading(true);
     await fetch(`/api/machines/${m.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: trimmed, work_start_hour, work_end_hour, off_days: offSorted, day_hours }),
+      // 휴무(체제 없음) 요일은 off_days로도 저장 → 목록 휴무 표시에 사용
+      body: JSON.stringify({ name: trimmed, day_shifts, off_days: offSorted }),
     });
     cancelEdit();
     await fetchMachines();
@@ -293,33 +278,20 @@ function MachineColumn({ processLine, isAdmin }: { processLine: string; isAdmin:
                       if (e.key === "Escape") cancelEdit();
                     }}
                   />
-                  {/* 일괄 적용 + 다른 설비 복사: 매번 7일을 따로 만지지 않도록 */}
+                  {/* 일괄 적용 + 다른 설비 복사 */}
                   <div className="flex flex-wrap items-center gap-1 bg-gray-50 border px-2 py-1.5">
                     <span className="text-[11px] text-gray-500 mr-0.5">일괄</span>
-                    <input
-                      type="number" min="0" max="24"
-                      className="w-10 border px-1 py-0.5 text-sm text-center"
-                      value={hourOf(editBulkStart)}
-                      onChange={(e) => setBulkTime("start", Number(e.target.value), isHalf(editBulkStart))}
-                      title="일괄 시작 시"
-                    />
-                    <button type="button" onClick={() => setBulkTime("start", hourOf(editBulkStart), !isHalf(editBulkStart))} className="w-9 h-7 text-xs border bg-white hover:bg-gray-100">{isHalf(editBulkStart) ? ":30" : ":00"}</button>
-                    <span className="text-gray-400">~</span>
-                    <input
-                      type="number" min="0" max="24"
-                      className="w-10 border px-1 py-0.5 text-sm text-center"
-                      value={hourOf(editBulkEnd)}
-                      onChange={(e) => setBulkTime("end", Number(e.target.value), isHalf(editBulkEnd))}
-                      title="일괄 종료 시"
-                    />
-                    <button type="button" onClick={() => setBulkTime("end", hourOf(editBulkEnd), !isHalf(editBulkEnd))} className="w-9 h-7 text-xs border bg-white hover:bg-gray-100">{isHalf(editBulkEnd) ? ":30" : ":00"}</button>
+                    {SHIFT_NAMES.map((s) => (
+                      <button key={s} type="button" onClick={() => toggleBulkShift(s)}
+                        className={`h-7 px-1.5 text-[11px] border ${editBulkShifts.includes(s) ? "bg-blue-600 text-white border-blue-600 font-medium" : "bg-white text-gray-600 hover:bg-gray-100"}`}>{s}</button>
+                    ))}
                     <button type="button" onClick={applyBulkToAll} className="h-7 px-2 text-xs border bg-blue-600 text-white hover:bg-blue-700">전체 적용</button>
                     {machines.filter((x) => x.id !== m.id).length > 0 && (
                       <select
                         className="h-7 border text-xs px-1 ml-auto"
                         value=""
                         onChange={(e) => { if (e.target.value) copyFromMachine(Number(e.target.value)); }}
-                        title="다른 설비의 근무 패턴(휴무·요일별 시간) 가져오기"
+                        title="다른 설비의 근무체제 가져오기"
                       >
                         <option value="">설비에서 복사</option>
                         {machines.filter((x) => x.id !== m.id).map((x) => (
@@ -328,72 +300,37 @@ function MachineColumn({ processLine, isAdmin }: { processLine: string; isAdmin:
                       </select>
                     )}
                   </div>
-                  <div className="text-[11px] text-gray-500">요일별 근무시간 (요일 클릭=근무↔휴무)</div>
+                  <div className="text-[11px] text-gray-500">요일별 근무체제 (칩 클릭=선택/해제, 미선택=휴무)</div>
                   <div className="flex flex-col gap-1">
                     {DAY_LABELS.map((d, i) => {
-                      const cfg = editDays[i] || { off: false, start: 8, end: 22 };
+                      const sel = editShifts[i] || [];
                       return (
-                        <div key={i} className="flex items-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => toggleOff(i)}
-                            className={`w-7 h-7 text-xs border ${cfg.off ? "bg-gray-100 text-gray-300 line-through border-gray-200" : "bg-blue-50 text-blue-700 border-blue-300 font-medium"}`}
-                            title={cfg.off ? `${d}요일 휴무 (클릭=근무)` : `${d}요일 근무 (클릭=휴무)`}
-                          >
-                            {d}
-                          </button>
-                          {cfg.off ? (
-                            <span className="text-[11px] text-gray-400">휴무</span>
-                          ) : (
-                            <>
-                              <input
-                                type="number" min="0" max="24"
-                                className="w-11 border px-1 py-0.5 text-sm text-center"
-                                value={hourOf(cfg.start)}
-                                onChange={(e) => setDayTime(i, "start", Number(e.target.value), isHalf(cfg.start))}
-                                title={`${d}요일 근무 시작 시`}
-                              />
-                              <button
-                                type="button"
-                                onClick={() => setDayTime(i, "start", hourOf(cfg.start), !isHalf(cfg.start))}
-                                className="w-9 h-7 text-xs border bg-white hover:bg-gray-50"
-                                title={`${d}요일 시작 분 (:00↔:30)`}
-                              >
-                                {isHalf(cfg.start) ? ":30" : ":00"}
-                              </button>
-                              <span className="text-gray-400">~</span>
-                              <input
-                                type="number" min="0" max="24"
-                                className="w-11 border px-1 py-0.5 text-sm text-center"
-                                value={hourOf(cfg.end)}
-                                onChange={(e) => setDayTime(i, "end", Number(e.target.value), isHalf(cfg.end))}
-                                title={`${d}요일 근무 종료 시`}
-                              />
-                              <button
-                                type="button"
-                                onClick={() => setDayTime(i, "end", hourOf(cfg.end), !isHalf(cfg.end))}
-                                className="w-9 h-7 text-xs border bg-white hover:bg-gray-50"
-                                title={`${d}요일 종료 분 (:00↔:30)`}
-                              >
-                                {isHalf(cfg.end) ? ":30" : ":00"}
-                              </button>
-                            </>
-                          )}
+                        <div key={i} className="flex items-center gap-1 flex-wrap">
+                          <span className={`w-6 h-7 inline-flex items-center justify-center text-xs border ${sel.length ? "bg-blue-50 text-blue-700 border-blue-300 font-medium" : "bg-gray-100 text-gray-400 border-gray-200"}`}>{d}</span>
+                          {SHIFT_NAMES.map((s) => (
+                            <button key={s} type="button" onClick={() => toggleShift(i, s)}
+                              className={`h-7 px-1.5 text-[11px] border ${sel.includes(s) ? "bg-blue-600 text-white border-blue-600 font-medium" : "bg-white text-gray-600 hover:bg-gray-100"}`}
+                              title={`${d}요일 ${s}`}>{s}</button>
+                          ))}
+                          {sel.length === 0 && <span className="text-[11px] text-gray-400 ml-1">휴무</span>}
                         </div>
                       );
                     })}
                   </div>
-                  <div className="text-[10px] text-gray-400">시작=종료로 두면 24시간 가동 · :00/:30 버튼으로 30분 단위</div>
+                  <div className="text-[10px] text-gray-400">여러 개 선택 가능(예: 정상(주)+정상(야)=24시간). 미선택 요일=휴무.</div>
                 </div>
               ) : (
                 <span className={`flex-1 min-w-0 text-sm font-medium ${m.is_active ? "text-gray-900" : "text-gray-400"}`}>
                   {m.name}
-                  {hoursSummary(m) && <span className="ml-2 text-[11px] font-normal text-gray-400">{hoursSummary(m)}</span>}
-                  {parseOff(m.off_days).length >= 7 ? (
-                    <span className="ml-1 text-[11px] font-normal text-red-500">· 전체 휴무</span>
-                  ) : parseOff(m.off_days).length > 0 ? (
-                    <span className="ml-1 text-[11px] font-normal text-orange-500">· 휴무 {parseOff(m.off_days).map((i) => DAY_LABELS[i]).join("·")}</span>
-                  ) : null}
+                  {shiftSummary(m) && <span className="ml-2 text-[11px] font-normal text-gray-400">{shiftSummary(m)}</span>}
+                  {(() => {
+                    const off = offDaysOfMachine(m);
+                    return off.length >= 7 ? (
+                      <span className="ml-1 text-[11px] font-normal text-red-500">· 전체 휴무</span>
+                    ) : off.length > 0 ? (
+                      <span className="ml-1 text-[11px] font-normal text-orange-500">· 휴무 {off.map((i) => DAY_LABELS[i]).join("·")}</span>
+                    ) : null;
+                  })()}
                 </span>
               )}
               {isAdmin && (

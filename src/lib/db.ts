@@ -38,6 +38,7 @@ async function initializeDb(db: Client) {
       extra_notes TEXT NOT NULL DEFAULT '',
       off_days TEXT NOT NULL DEFAULT '[0]',
       day_hours TEXT NOT NULL DEFAULT '',
+      day_shifts TEXT NOT NULL DEFAULT '',
       created_at TEXT DEFAULT (datetime('now', 'localtime'))
     )`,
     `CREATE TABLE IF NOT EXISTS orders (
@@ -237,6 +238,13 @@ async function initializeDb(db: Client) {
   // 비어 있으면 work_start_hour/work_end_hour를 모든 근무일에 적용(기존 동작 유지).
   try {
     await db.execute(`ALTER TABLE machines ADD COLUMN day_hours TEXT NOT NULL DEFAULT ''`);
+  } catch {
+    // column already exists
+  }
+
+  // Migrate machines: add day_shifts (요일별 근무체제 JSON). 비어 있으면 구버전 시작/종료 사용.
+  try {
+    await db.execute(`ALTER TABLE machines ADD COLUMN day_shifts TEXT NOT NULL DEFAULT ''`);
   } catch {
     // column already exists
   }
