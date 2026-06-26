@@ -2131,21 +2131,7 @@ export default function ScheduleBoard() {
                       />
                     </div>
                   )
-                ) : (
-                  parseParts(newOrder.component).length < 2 && (
-                    <div className="col-span-2">
-                      <label className="text-[10px] text-gray-500">구분</label>
-                      <select
-                        className="border px-2 py-1.5 text-xs w-full"
-                        value={newOrder.special_process}
-                        onChange={(e) => setNewOrder({ ...newOrder, special_process: e.target.value })}
-                      >
-                        <option value="">(공란)</option>
-                        {PROCESSES.map((p) => <option key={p} value={p}>{p}</option>)}
-                      </select>
-                    </div>
-                  )
-                )}
+                ) : null}
                 {(() => {
                   const newParts = parseParts(newOrder.component);
                   const multi = newParts.length >= 2;
@@ -2183,15 +2169,30 @@ export default function ScheduleBoard() {
                           </div>
                         </div>
                       ) : (
-                        <div>
-                          <label className="text-[10px] text-gray-500">소요시간 (시간)</label>
-                          <input
-                            type="number" min="0" step="1" placeholder="자동"
-                            className="border px-2 py-1.5 text-xs w-full"
-                            value={newOrder.duration_hours || ""}
-                            onChange={(e) => setNewOrder({ ...newOrder, duration_hours: Number(e.target.value) })}
-                          />
-                        </div>
+                        <>
+                          <div>
+                            <label className="text-[10px] text-gray-500">소요시간 (시간)</label>
+                            <input
+                              type="number" min="0" step="1" placeholder="자동"
+                              className="border px-2 py-1.5 text-xs w-full"
+                              value={newOrder.duration_hours || ""}
+                              onChange={(e) => setNewOrder({ ...newOrder, duration_hours: Number(e.target.value) })}
+                            />
+                          </div>
+                          {!usesQuantity && (
+                            <div>
+                              <label className="text-[10px] text-gray-500">구분</label>
+                              <select
+                                className="border px-2 py-1.5 text-xs w-full"
+                                value={newOrder.special_process}
+                                onChange={(e) => setNewOrder({ ...newOrder, special_process: e.target.value })}
+                              >
+                                <option value="">(공란)</option>
+                                {PROCESSES.map((p) => <option key={p} value={p}>{p}</option>)}
+                              </select>
+                            </div>
+                          )}
+                        </>
                       )}
                     </>
                   );
