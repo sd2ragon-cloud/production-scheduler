@@ -2121,15 +2121,18 @@ export default function ScheduleBoard() {
                       </div>
                     </>
                   ) : (
-                    <div className="col-span-2">
-                      <label className="text-[10px] text-gray-500">수량 (부)</label>
-                      <input
-                        type="number" min="0" step="1" placeholder="부"
-                        className="border px-2 py-1.5 text-xs w-full"
-                        value={newOrder.quantity_sheets || ""}
-                        onChange={(e) => setNewOrder({ ...newOrder, quantity_sheets: Number(e.target.value) })}
-                      />
-                    </div>
+                    // 윤전: 여러 구성일 때만 수량을 풀폭으로(단일 소요시간칸이 없으므로). 단일 구성은 소요시간 옆으로.
+                    parseParts(newOrder.component).length >= 2 && (
+                      <div className="col-span-2">
+                        <label className="text-[10px] text-gray-500">수량 (부)</label>
+                        <input
+                          type="number" min="0" step="1" placeholder="부"
+                          className="border px-2 py-1.5 text-xs w-full"
+                          value={newOrder.quantity_sheets || ""}
+                          onChange={(e) => setNewOrder({ ...newOrder, quantity_sheets: Number(e.target.value) })}
+                        />
+                      </div>
+                    )
                   )
                 ) : null}
                 {(() => {
@@ -2190,6 +2193,17 @@ export default function ScheduleBoard() {
                                 <option value="">(공란)</option>
                                 {PROCESSES.map((p) => <option key={p} value={p}>{p}</option>)}
                               </select>
+                            </div>
+                          )}
+                          {isRoll && (
+                            <div>
+                              <label className="text-[10px] text-gray-500">수량 (부)</label>
+                              <input
+                                type="number" min="0" step="1" placeholder="부"
+                                className="border px-2 py-1.5 text-xs w-full"
+                                value={newOrder.quantity_sheets || ""}
+                                onChange={(e) => setNewOrder({ ...newOrder, quantity_sheets: Number(e.target.value) })}
+                              />
                             </div>
                           )}
                         </>
