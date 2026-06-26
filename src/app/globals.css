@@ -143,6 +143,9 @@ input[type="number"]::-webkit-outer-spin-button {
     text-align: center;
     margin-bottom: 3mm;
   }
+  /* 스케줄 출력 헤더: 제목은 가운데, 출력 시각은 우측 상단에 */
+  .pf-head-rel { position: relative; }
+  .pf-head-time { position: absolute; right: 0; top: 0; font-size: 8pt; font-weight: normal; white-space: nowrap; }
   /* 기계 박스: 2열·고정 크기로 오·열을 맞춘다 */
   .pf-machines {
     flex: 0 0 auto;

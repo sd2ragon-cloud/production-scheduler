@@ -1409,7 +1409,7 @@ export default function ScheduleBoard() {
     };
     return (
       <div className="pf-page">
-        <div className="pf-head">{processLine} 생산 스케줄 — {dateStr}</div>
+        <div className="pf-head pf-head-rel">{processLine} 생산 스케줄 — {dateStr}<span className="pf-head-time">출력 {printStamp}</span></div>
         <div className="pf-machines">
           {machines.map((m) => {
             const entries = getEntriesForMachine(m.id);
