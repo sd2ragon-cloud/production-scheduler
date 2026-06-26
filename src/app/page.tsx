@@ -1610,7 +1610,7 @@ export default function ScheduleBoard() {
                     <tr className={`text-gray-500 border-b h-7 ${isJechae ? "text-[13px]" : "text-[10px]"}`}>
                       <th className="px-1.5 py-0 text-left w-6">#</th>
                       <th className="px-1.5 py-0 text-center">작업명</th>
-                      <th className={`px-1.5 py-0 text-center ${isJechae ? "" : "w-28"}`}>비고</th>
+                      <th className={`px-1.5 py-0 text-center ${isJechae ? "" : "w-44"}`}>비고</th>
                       <th className="px-1.5 py-0 text-center w-28">소요(시간)</th>
                       <th className={`px-1.5 py-0 whitespace-nowrap ${isJechae ? "text-center w-40" : "text-left w-32"}`}>예상완료</th>
                       <th className="px-1.5 py-0 text-center w-12"></th>
