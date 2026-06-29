@@ -1451,6 +1451,17 @@ export default function ScheduleBoard() {
     };
     // 기계 박스(46mm 고정)에 들어가는 만큼만 표시 — 배정이 많아도 출력 크기를 넘지 않게 캡.
     const PF_ROWS = 10;
+    // 작업명(pf-job)이 한 줄을 넘으면 폰트를 줄여 한 줄에 맞춘다(완료시간 pf-eta 폰트는 유지).
+    //  실측: pf-job 가용 폭 ≈ 68mm, 8pt 기준 한글(전각) ≈ 2.82mm/자, 반각 ≈ 1.4mm/자.
+    const PF_JOB_W = 67; // mm (여유분 두고 살짝 작게)
+    const FULLW = /[ᄀ-ᇿ　-鿿가-힯＀-￯]/;
+    const pfJobStyle = (label: string) => {
+      let w = 0;
+      for (const ch of label) w += FULLW.test(ch) ? 2.82 : 1.4;
+      if (w <= PF_JOB_W) return undefined;
+      const fs = Math.max(5, Math.round((8 * PF_JOB_W / w) * 10) / 10);
+      return { fontSize: `${fs}pt` };
+    };
     return (
       <div className="pf-page">
         <div className="pf-head pf-head-rel">{processLine} 생산 스케줄 — {dateStr}<span className="pf-head-time">출력 {printStamp}</span></div>
@@ -1470,14 +1481,17 @@ export default function ScheduleBoard() {
                   <div className="pf-empty">-</div>
                 ) : (
                   <ol className="pf-list">
-                    {shown.map((e) => (
+                    {shown.map((e) => {
+                      const lbl = jobLabel(e);
+                      return (
                       <li key={e.id}>
                         <div className="pf-li">
-                          <span className="pf-job">{jobLabel(e)}</span>
+                          <span className="pf-job" style={pfJobStyle(lbl)}>{lbl}</span>
                           <span className="pf-eta">{formatEndTime(e.end_time)}</span>
                         </div>
                       </li>
-                    ))}
+                      );
+                    })}
                   </ol>
                 )}
               </div>
