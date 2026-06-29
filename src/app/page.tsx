@@ -91,9 +91,19 @@ interface ScheduleEntry {
   duration_minutes: number;
   start_time: string;
   end_time: string;
+  mark_color?: string; // 관리자가 #번호 클릭으로 칠하는 표시 색상(여러 관리자 공유)
 }
 
 const DAY_NAMES = ["일", "월", "화", "수", "목", "금", "토"];
+
+// #번호 클릭 시 순환하는 표시 색상(여러 관리자가 수정 표시를 공유). ''=표시 없음.
+const MARK_CYCLE = ["", "amber", "rose", "emerald", "sky"];
+const MARK_BG: Record<string, string> = {
+  amber: "#fde68a",   // 노랑
+  rose: "#fecdd3",    // 분홍
+  emerald: "#a7f3d0", // 초록
+  sky: "#bae6fd",     // 파랑
+};
 
 // 제책 설비 하단 기타사항: 요일별(월~금) + 공통. extra_notes 컬럼에 JSON으로 저장.
 const EXTRA_DAYS: [string, string][] = [["mon", "월"], ["tue", "화"], ["wed", "수"], ["thu", "목"], ["fri", "금"], ["sat", "토"], ["sun", "일"]];
@@ -414,6 +424,19 @@ export default function ScheduleBoard() {
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
+  };
+
+  // #번호 클릭 → 표시 색상을 다음 색으로 순환(없음→노랑→분홍→초록→파랑→없음). DB 저장으로 여러 관리자 공유.
+  const cycleMark = async (entry: ScheduleEntry) => {
+    if (!isAdmin) return;
+    const cur = entry.mark_color || "";
+    const next = MARK_CYCLE[(MARK_CYCLE.indexOf(cur) + 1) % MARK_CYCLE.length];
+    setSchedule((prev) => prev.map((e) => (e.id === entry.id ? { ...e, mark_color: next } : e)));
+    await fetch("/api/schedule/mark", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ entry_id: entry.id, color: next }),
+    });
   };
 
   // 식사시간 추가/수정/삭제. 변경 시 서버가 전 설비 일정을 재계산하므로, 끝나면 fetchAll로 갱신한다.
@@ -1713,6 +1736,7 @@ export default function ScheduleBoard() {
                             setDragSplit(null);
                           }}
                           onDragEnd={() => { setDragEntryId(null); setReorderTarget(null); setMergeHoverId(null); }}
+                          style={isMergeHover ? undefined : { background: MARK_BG[entry.mark_color || ""] || undefined }}
                           className={`border-t cursor-grab active:cursor-grabbing h-7 hover:bg-gray-50 ${dragEntryId === entry.id ? "opacity-40" : ""} ${
                             isReorderHover ? (reorderAfter ? "border-b-2 border-b-blue-500" : "border-t-2 border-t-blue-500") : ""
                           } ${isMergeHover ? "ring-2 ring-inset ring-green-500 bg-green-50" : ""}`}
@@ -1782,7 +1806,14 @@ export default function ScheduleBoard() {
                             }
                           }}
                         >
-                          <td className="px-1.5 py-0 text-gray-400 text-[10px]">{entry.sequence}</td>
+                          <td
+                            className={`px-1.5 py-0 text-[10px] select-none ${entry.mark_color ? "text-gray-700 font-bold" : "text-gray-400"} ${isAdmin ? "cursor-pointer hover:bg-black/10" : ""}`}
+                            title={isAdmin ? "클릭: 표시 색상 변경 (수정 표시 — 모든 관리자 공유)" : ""}
+                            draggable={false}
+                            onClick={(e) => { e.stopPropagation(); cycleMark(entry); }}
+                          >
+                            {entry.sequence}
+                          </td>
                           <td className="px-1.5 py-0">
                             <div className="flex items-center gap-1 overflow-x-auto jobscroll">
                             <span className={`font-medium shrink-0 ${isJechae ? "text-[13px] text-black" : "text-[11px]"}`}>{entry.product_name}</span>
