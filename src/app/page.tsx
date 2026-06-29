@@ -1449,6 +1449,8 @@ export default function ScheduleBoard() {
       const q = isRoll && o.quantity_sheets ? ` ${o.quantity_sheets.toLocaleString()}부` : "";
       return `${o.product_name}${o.component ? `(${o.component})` : ""}${q}`;
     };
+    // 기계 박스(46mm 고정)에 들어가는 만큼만 표시 — 배정이 많아도 출력 크기를 넘지 않게 캡.
+    const PF_ROWS = 10;
     return (
       <div className="pf-page">
         <div className="pf-head pf-head-rel">{processLine} 생산 스케줄 — {dateStr}<span className="pf-head-time">출력 {printStamp}</span></div>
@@ -1456,14 +1458,19 @@ export default function ScheduleBoard() {
           {machines.map((m) => {
             const entries = getEntriesForMachine(m.id);
             const total = entries.reduce((s, e) => s + (e.duration_minutes || 0), 0);
+            const shown = entries.slice(0, PF_ROWS);
+            const overflowCount = entries.length - shown.length;
             return (
               <div className="pf-mbox" key={m.id}>
-                <div className="pf-mname"><span>{m.name}</span><span className="pf-mtime">{fmtH(total)}</span></div>
+                <div className="pf-mname">
+                  <span>{m.name}{overflowCount > 0 ? <span className="pf-more"> 외 {overflowCount}건</span> : null}</span>
+                  <span className="pf-mtime">{fmtH(total)}</span>
+                </div>
                 {entries.length === 0 ? (
                   <div className="pf-empty">-</div>
                 ) : (
                   <ol className="pf-list">
-                    {entries.map((e) => (
+                    {shown.map((e) => (
                       <li key={e.id}>
                         <div className="pf-li">
                           <span className="pf-job">{jobLabel(e)}</span>
