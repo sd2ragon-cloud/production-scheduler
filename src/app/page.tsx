@@ -302,6 +302,34 @@ export default function ScheduleBoard() {
     document.body.removeChild(meas);
   }, [schedule, machines, printView, isJechae]);
 
+  // 작업순서 출력의 작업명(print-name-main)도 한 줄을 넘으면 폰트를 실측해 유동 축소.
+  //  단, 비고(print-note)는 별도 줄이므로 측정/축소 대상에서 제외(작업명 길이만 본다).
+  useEffect(() => {
+    if (printView !== "order") return;
+    const root = document.querySelector(".print-area");
+    if (!root) return;
+    const mains = root.querySelectorAll<HTMLElement>(".print-name-main");
+    if (!mains.length) return;
+    const PXMM = 96 / 25.4;
+    const BASE_PT = 11;              // print-name 기본 폰트
+    const AVAIL = (82 - 4 - 2) * PXMM; // 칸 82mm - 좌우 패딩 4mm - 안전 여백 2mm = 76mm
+    const cs = getComputedStyle(mains[0]);
+    const meas = document.createElement("span");
+    meas.style.cssText = "position:absolute;left:-9999px;top:-9999px;visibility:hidden;white-space:nowrap;";
+    meas.style.fontFamily = cs.fontFamily;
+    meas.style.fontWeight = cs.fontWeight;
+    meas.style.fontSize = `${(BASE_PT * 96) / 72}px`;
+    document.body.appendChild(meas);
+    mains.forEach((el) => {
+      meas.textContent = el.textContent || "";
+      const w = meas.getBoundingClientRect().width;
+      el.style.fontSize = w > AVAIL && AVAIL > 0
+        ? `${Math.max(6, Math.round((BASE_PT * AVAIL) / w * 10) / 10)}pt`
+        : "";
+    });
+    document.body.removeChild(meas);
+  }, [schedule, machines, printView]);
+
   // 인쇄 뷰가 바뀐 뒤(원하는 출력이 렌더된 후) 실제 인쇄 대화상자를 띄운다.
   useEffect(() => {
     if (wantPrint.current) { wantPrint.current = false; window.print(); }
@@ -1369,7 +1397,7 @@ export default function ScheduleBoard() {
                         <td className="print-name">
                           {e ? (
                             <>
-                              {orderSheetLabel(e)}
+                              <span className="print-name-main">{orderSheetLabel(e)}</span>
                               {e.order_notes && e.order_notes.trim() ? (
                                 <span className="print-note">{e.order_notes.trim()}</span>
                               ) : null}

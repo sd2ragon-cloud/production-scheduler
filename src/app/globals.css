@@ -125,6 +125,8 @@ input[type="number"]::-webkit-outer-spin-button {
     line-height: 1.15;
     word-break: break-all;
   }
+  /* 작업명(소요시간 포함) — 한 줄 유지(길면 JS가 폰트를 유동 축소). 비고는 아래 별도 줄. */
+  .print-name-main { display: block; }
   /* 비고: 작업명·소요시간 다음 줄에 작게 표기 */
   .print-note {
     display: block;
