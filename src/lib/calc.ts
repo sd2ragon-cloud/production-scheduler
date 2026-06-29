@@ -181,18 +181,22 @@ export async function recalcMachine(machineId: number, baseDate?: string, startT
     else merged.push([iv[0], iv[1]]);
   }
   // 식사·휴게시간 차감(매일 반복; 야간이 자정을 넘기므로 끝쪽 며칠 더 포함).
+  // 단, 근무체제(설비관리의 근무시간)는 그 자체가 CAPA(순 가용 작업시간)이므로 식사·휴게를
+  // 다시 빼지 않는다. 근무체제를 쓰지 않는 구버전 설비에서만 식사·휴게를 차감한다.
   let work: [number, number][] = merged;
-  for (let d = 0; d <= horizon + 1; d++) {
-    for (const [bs, be] of breaks) {
-      const a = d * 1440 + bs;
-      const b = d * 1440 + be;
-      const next: [number, number][] = [];
-      for (const [ws, we] of work) {
-        if (b <= ws || a >= we) { next.push([ws, we]); continue; }
-        if (a > ws) next.push([ws, a]);
-        if (b < we) next.push([b, we]);
+  if (!useShifts) {
+    for (let d = 0; d <= horizon + 1; d++) {
+      for (const [bs, be] of breaks) {
+        const a = d * 1440 + bs;
+        const b = d * 1440 + be;
+        const next: [number, number][] = [];
+        for (const [ws, we] of work) {
+          if (b <= ws || a >= we) { next.push([ws, we]); continue; }
+          if (a > ws) next.push([ws, a]);
+          if (b < we) next.push([b, we]);
+        }
+        work = next;
       }
-      work = next;
     }
   }
   work = work.filter(([s, e]) => e > s).sort((a, b) => a[0] - b[0]);
