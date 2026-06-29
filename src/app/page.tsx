@@ -181,6 +181,7 @@ export default function ScheduleBoard() {
   const [buckets, setBuckets] = useState<Bucket[]>([]);
   const [breaks, setBreaks] = useState<Break[]>([]);
   const [showBreaks, setShowBreaks] = useState(false);
+  const [savedAt, setSavedAt] = useState("");
   // 설비별 비가동시간(설비고장·교육훈련 등)
   const [downtimes, setDowntimes] = useState<Downtime[]>([]);
   const [dtModalMachine, setDtModalMachine] = useState<number | null>(null);
@@ -271,6 +272,25 @@ export default function ScheduleBoard() {
   }, [processLine]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  // 라인별 '마지막 저장' 시각을 불러온다(탭 전환 시 갱신). 여러 관리자가 공유.
+  useEffect(() => {
+    fetch(`/api/saved-at?process_line=${encodeURIComponent(processLine)}`)
+      .then((r) => r.json())
+      .then((d) => setSavedAt(d.saved_at || ""))
+      .catch(() => {});
+  }, [processLine]);
+
+  // '저장' 버튼: 현재 시각을 그 라인의 마지막 저장(수정) 시각으로 서버에 기록.
+  const saveStamp = async () => {
+    const res = await fetch("/api/saved-at", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ process_line: processLine }),
+    });
+    const d = await res.json().catch(() => ({}));
+    if (res.ok && d.saved_at) setSavedAt(d.saved_at);
+  };
 
   // 스케줄 출력의 작업명(pf-job)을 실제 글자폭으로 측정해, 완료시간을 뺀 가용 폭에 맞게
   // 폰트를 유동적으로 축소(한 줄 유지). 완료시간(pf-eta) 폰트는 건드리지 않는다.
@@ -1697,6 +1717,20 @@ export default function ScheduleBoard() {
             <p className="text-xs text-gray-500">{dateStr}</p>
           </div>
           <div className="flex items-center gap-2">
+            {savedAt && (
+              <span className="text-xs text-gray-500 whitespace-nowrap mr-1" title="마지막으로 '저장'을 누른 시각 (모든 관리자 공유)">
+                마지막 저장 {savedAt}
+              </span>
+            )}
+            {isAdmin && (
+              <button
+                onClick={saveStamp}
+                className="text-sm border border-blue-300 bg-blue-50 px-3 py-1.5 hover:bg-blue-100 text-blue-700 whitespace-nowrap"
+                title="현재 시각을 '마지막 저장'으로 기록합니다 (모든 관리자에게 표시)"
+              >
+                💾 저장
+              </button>
+            )}
             {!isJechae && (
               <button
                 onClick={() => triggerPrint("order")}
