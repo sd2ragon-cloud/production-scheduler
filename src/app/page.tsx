@@ -1294,7 +1294,9 @@ export default function ScheduleBoard() {
   };
 
   // 엑셀 '작업순서' 양식: 기계별 블록(제목 + 번호·작업명 목록)을 2열 그리드로. 인쇄 시에만 보인다.
-  const PRINT_MIN_ROWS = 10;
+  // 블록 1개 = 제목 18mm + 10행 × 11.2mm = 130mm 고정. 배정이 많아도 블록 크기(=출력 크기)만큼만
+  // 보이도록 행수를 고정하고, 넘치는 건수는 제목에 "외 N건"으로만 표기한다.
+  const PRINT_ROWS = 10;    // 블록당 고정 행수(인쇄 크기에 맞춤)
   const PRINT_PER_PAGE = 4; // 한 페이지 2열 × 2행
   const renderPrint = () => {
     const pages: Machine[][] = [];
@@ -1307,7 +1309,8 @@ export default function ScheduleBoard() {
         <div className="print-grid">
           {group.map((m) => {
             const entries = getEntriesForMachine(m.id);
-            const rowCount = Math.max(entries.length, PRINT_MIN_ROWS);
+            const overflowCount = Math.max(0, entries.length - PRINT_ROWS);
+            const rowCount = PRINT_ROWS; // 항상 고정 — 초과 배정은 출력하지 않는다
             return (
               <table className="print-block" key={m.id}>
                 <colgroup>
@@ -1316,7 +1319,10 @@ export default function ScheduleBoard() {
                 </colgroup>
                 <tbody>
                   <tr>
-                    <th className="print-title" colSpan={2}>{m.name} 작업순서</th>
+                    <th className="print-title" colSpan={2}>
+                      {m.name} 작업순서
+                      {overflowCount > 0 ? <span className="print-title-more"> · 외 {overflowCount}건</span> : null}
+                    </th>
                   </tr>
                   {Array.from({ length: rowCount }).map((_, i) => {
                     const e = entries[i];

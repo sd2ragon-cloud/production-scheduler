@@ -106,6 +106,11 @@ input[type="number"]::-webkit-outer-spin-button {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
+  /* 블록 행수를 초과한 배정 건수 표기 (제목 옆 작게) */
+  .print-title-more {
+    font-size: 10pt;
+    font-weight: normal;
+  }
   .print-num {
     height: 11.2mm;
     font-size: 16pt;
