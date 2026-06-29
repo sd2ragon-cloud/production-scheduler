@@ -1226,6 +1226,80 @@ export default function ScheduleBoard() {
     XLSX.writeFile(wb, `스케줄_${processLine}_${ymd}.xlsx`);
   };
 
+  // 제책 스케줄을 PPT(.pptx)로 — 출력물(요일×설비 주간 매트릭스)을 슬라이드 2장(월화수/목금토)으로 재현.
+  // 엑셀과 달리 셀 안 줄바꿈·배경색·정렬이 자유로워 출력물과 동일하게 표현된다.
+  const downloadPpt = async () => {
+    const PptxGenJS = (await import("pptxgenjs")).default;
+    const pptx = new PptxGenJS();
+    pptx.defineLayout({ name: "A4L", width: 11.69, height: 8.27 }); // A4 가로
+    pptx.layout = "A4L";
+    const FONT = "Malgun Gothic";
+    const d0 = new Date();
+    const ymd = `${d0.getFullYear()}${String(d0.getMonth() + 1).padStart(2, "0")}${String(d0.getDate()).padStart(2, "0")}`;
+
+    const { cell } = buildJechaeMatrix();
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const monday = new Date(today); monday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
+    const week = Array.from({ length: 6 }, (_, i) => { const d = new Date(monday); d.setDate(monday.getDate() + i); return d; });
+    const chunks = [week.slice(0, 3), week.slice(3, 6)]; // 월화수 / 목금토 (한 슬라이드씩)
+    const fmtMD = (d: Date) => `${d.getMonth() + 1}/${d.getDate()}`;
+    const exByMachine: Record<number, Record<string, string>> = {};
+    for (const m of machines) exByMachine[m.id] = parseExtraNotes(machineExtras[m.id] ?? m.extra_notes ?? "");
+
+    // 열 너비: 낙정·배접은 20%만 축소(=80%), 그만큼 무선 열로 — 출력물과 동일.
+    const isMuseon = (m: Machine) => m.name.includes("무선");
+    const isNakBae = (m: Machine) => m.name.includes("낙정") || m.name.includes("배접");
+    const numMuseon = machines.filter(isMuseon).length;
+    const numNakBae = machines.filter(isNakBae).length;
+    const museonExtra = numMuseon > 0 ? (0.2 * numNakBae) / numMuseon : 0;
+    const weightOf = (m: Machine) => (isNakBae(m) ? 0.8 : isMuseon(m) ? 1 + museonExtra : 1);
+    const totalW = machines.reduce((s, m) => s + weightOf(m), 0) || 1;
+    const TABLE_W = 11.2, DATE_W = 0.85;
+    const colW = [DATE_W, ...machines.map((m) => ((TABLE_W - DATE_W) * weightOf(m)) / totalW)];
+
+    // 한 설비·하루 칸: 작업들(제품 굵게 + 비고·시간 회색) 다음에 기타사항(※).
+    type Run = { text: string; options?: Record<string, unknown> };
+    const cellFor = (m: Machine, d: Date) => {
+      const jobs = cell[ymd2(d)]?.[m.id] || [];
+      const note = (exByMachine[m.id]?.[WD_KEY[d.getDay()]] || "").trim();
+      const runs: Run[] = [];
+      for (const j of jobs) {
+        const sub = [j.note, j.dur].filter(Boolean).join(" · ");
+        runs.push({ text: j.label, options: { bold: true, breakLine: !sub } });
+        if (sub) runs.push({ text: sub, options: { fontSize: 8, color: "555555", breakLine: true } });
+      }
+      if (note) runs.push({ text: `※ ${note}`, options: { fontSize: 8, italic: true, color: "1F4E79", breakLine: true } });
+      if (runs.length === 0) runs.push({ text: "" });
+      return { text: runs, options: { valign: "top", align: "left", fontSize: 10 } };
+    };
+
+    for (const days of chunks) {
+      const slide = pptx.addSlide();
+      slide.addText(
+        `${processLine} 생산 스케줄 — ${fmtMD(days[0])}(${DAY_NAMES[days[0].getDay()]}) ~ ${fmtMD(days[days.length - 1])}(${DAY_NAMES[days[days.length - 1].getDay()]})`,
+        { x: 0.25, y: 0.18, w: 8.5, h: 0.45, fontSize: 16, bold: true, color: "1F4E79", fontFace: FONT },
+      );
+      slide.addText(`출력 ${printStamp}`, { x: 8.4, y: 0.28, w: 3, h: 0.3, align: "right", fontSize: 9, color: "666666", fontFace: FONT });
+
+      const headFill = "2E75B6";
+      const header = [
+        { text: "요일", options: { fill: headFill, color: "FFFFFF", bold: true, align: "center", valign: "middle" } },
+        ...machines.map((m) => ({ text: m.name, options: { fill: headFill, color: "FFFFFF", bold: true, align: "center", valign: "middle" } })),
+      ];
+      const body = days.map((d) => [
+        { text: [{ text: DAY_NAMES[d.getDay()], options: { bold: true, breakLine: true } }, { text: fmtMD(d), options: { fontSize: 9, color: "333333" } }], options: { align: "center", valign: "middle", fill: "F2F2F2", bold: true } },
+        ...machines.map((m) => cellFor(m, d)),
+      ]);
+      const rowH = [0.32, ...days.map(() => (8.27 - 0.75 - 0.32 - 0.2) / days.length)];
+      slide.addTable([header, ...body] as never, {
+        x: 0.25, y: 0.72, w: TABLE_W, colW, rowH,
+        border: { type: "solid", pt: 0.5, color: "888888" },
+        fontFace: FONT, fontSize: 10, valign: "top", autoPage: false,
+      });
+    }
+    await pptx.writeFile({ fileName: `스케줄_${processLine}_${ymd}.pptx` });
+  };
+
   // 특정 위치(대기=undefined / 칸=bucketId)에 표시되는 주문들의 '남은 구성' 소요시간 합계(분)
   const locationMinutes = (orderList: Order[], bucketId?: number) =>
     orderList.reduce((sum, o) => {
@@ -1640,11 +1714,11 @@ export default function ScheduleBoard() {
               🖨 스케줄
             </button>
             <button
-              onClick={downloadExcel}
+              onClick={isJechae ? downloadPpt : downloadExcel}
               className="text-sm border border-gray-300 bg-white px-3 py-1.5 hover:bg-gray-100 text-gray-700 whitespace-nowrap"
-              title="기계별 작업 계획을 엑셀(.xlsx) 파일로 내려받습니다"
+              title={isJechae ? "주간 스케줄을 출력물과 동일한 PPT(.pptx)로 내려받습니다" : "기계별 작업 계획을 엑셀(.xlsx) 파일로 내려받습니다"}
             >
-              📊 엑셀
+              {isJechae ? "📑 PPT" : "📊 엑셀"}
             </button>
             {isAdmin && (
               <button
