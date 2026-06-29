@@ -96,13 +96,10 @@ interface ScheduleEntry {
 
 const DAY_NAMES = ["일", "월", "화", "수", "목", "금", "토"];
 
-// #번호 클릭 시 순환하는 표시 색상(여러 관리자가 수정 표시를 공유). ''=표시 없음.
-const MARK_CYCLE = ["", "amber", "rose", "emerald", "sky"];
+// #번호 클릭 시 표시 색상 토글(없음 ↔ 노랑). 여러 관리자가 수정 표시를 공유. ''=표시 없음.
+const MARK_CYCLE = ["", "amber"];
 const MARK_BG: Record<string, string> = {
-  amber: "#fde68a",   // 노랑
-  rose: "#fecdd3",    // 분홍
-  emerald: "#a7f3d0", // 초록
-  sky: "#bae6fd",     // 파랑
+  amber: "#fde68a", // 노랑
 };
 
 // 제책 설비 하단 기타사항: 요일별(월~금) + 공통. extra_notes 컬럼에 JSON으로 저장.
@@ -426,7 +423,7 @@ export default function ScheduleBoard() {
     window.addEventListener("pointerup", onUp);
   };
 
-  // #번호 클릭 → 표시 색상을 다음 색으로 순환(없음→노랑→분홍→초록→파랑→없음). DB 저장으로 여러 관리자 공유.
+  // #번호 클릭 → 표시 색상 토글(없음 ↔ 노랑). DB 저장으로 여러 관리자 공유.
   const cycleMark = async (entry: ScheduleEntry) => {
     if (!isAdmin) return;
     const cur = entry.mark_color || "";
