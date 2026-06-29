@@ -174,6 +174,7 @@ export default function ScheduleBoard() {
   const [buckets, setBuckets] = useState<Bucket[]>([]);
   const [breaks, setBreaks] = useState<Break[]>([]);
   const [showBreaks, setShowBreaks] = useState(false);
+  const [recalcing, setRecalcing] = useState(false);
   // 설비별 비가동시간(설비고장·교육훈련 등)
   const [downtimes, setDowntimes] = useState<Downtime[]>([]);
   const [dtModalMachine, setDtModalMachine] = useState<number | null>(null);
@@ -414,6 +415,20 @@ export default function ScheduleBoard() {
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
+  };
+
+  // 전 설비 일괄 재계산. 계산 규칙이 바뀐 뒤 기존 일정에 반영하려고 수동 트리거.
+  const recalcAll = async () => {
+    if (!window.confirm("전 설비의 예상완료시간을 현재 계산 규칙으로 다시 계산할까요?")) return;
+    setRecalcing(true);
+    try {
+      const res = await fetch("/api/recalc-all", { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      await fetchAll();
+      window.alert(res.ok ? `재계산 완료 (설비 ${data.machines ?? "?"}대)` : "재계산 실패");
+    } finally {
+      setRecalcing(false);
+    }
   };
 
   // 식사시간 추가/수정/삭제. 변경 시 서버가 전 설비 일정을 재계산하므로, 끝나면 fetchAll로 갱신한다.
@@ -1629,6 +1644,16 @@ export default function ScheduleBoard() {
                 title="식사·휴게 시간을 추가/수정하면 예상완료시간이 자동으로 다시 계산됩니다"
               >
                 🍽 식사시간 {breaks.length > 0 && <span className="text-gray-400">({breaks.length})</span>}
+              </button>
+            )}
+            {isAdmin && (
+              <button
+                onClick={recalcAll}
+                disabled={recalcing}
+                className="text-sm border border-gray-300 bg-white px-3 py-1.5 hover:bg-gray-100 text-gray-700 whitespace-nowrap disabled:opacity-50"
+                title="전 설비의 예상완료시간을 현재 계산 규칙으로 다시 계산합니다"
+              >
+                {recalcing ? "⏳ 재계산 중…" : "🔄 전체 재계산"}
               </button>
             )}
           </div>
