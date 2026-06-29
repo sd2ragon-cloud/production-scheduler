@@ -265,6 +265,43 @@ export default function ScheduleBoard() {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
+  // 스케줄 출력의 작업명(pf-job)을 실제 글자폭으로 측정해, 완료시간을 뺀 가용 폭에 맞게
+  // 폰트를 유동적으로 축소(한 줄 유지). 완료시간(pf-eta) 폰트는 건드리지 않는다.
+  // 인쇄 영역은 화면에서 display:none이라 직접 측정이 안 되므로 숨김 span으로 폭을 잰다.
+  // (print effect보다 먼저 선언해 인쇄 전에 폰트가 맞춰지도록 한다)
+  useEffect(() => {
+    if (printView !== "full" || isJechae) return;
+    const root = document.querySelector(".print-area");
+    if (!root) return;
+    const lis = root.querySelectorAll<HTMLElement>(".pf-li");
+    if (!lis.length) return;
+    const PXMM = 96 / 25.4;          // 1mm → px (96dpi)
+    const BASE_PT = 8;               // pf-job 기본 폰트
+    const LIST_W = 90 * PXMM;        // 인쇄 시 박스 내부(작업 목록) 가용 폭 ≈ 90mm 고정
+    const GAP = 2 * PXMM;            // 작업명·완료시간 사이 간격
+    const SAFETY = 2 * PXMM;         // 반올림으로 인한 줄바꿈 방지용 여백
+    const job0 = lis[0].querySelector<HTMLElement>(".pf-job");
+    const cs = getComputedStyle(job0 ?? document.body);
+    const meas = document.createElement("span");
+    meas.style.cssText = "position:absolute;left:-9999px;top:-9999px;visibility:hidden;white-space:nowrap;";
+    meas.style.fontFamily = cs.fontFamily;
+    meas.style.fontWeight = cs.fontWeight;
+    meas.style.fontSize = `${(BASE_PT * 96) / 72}px`;
+    document.body.appendChild(meas);
+    const widthOf = (t: string) => { meas.textContent = t; return meas.getBoundingClientRect().width; };
+    lis.forEach((li) => {
+      const job = li.querySelector<HTMLElement>(".pf-job");
+      const eta = li.querySelector<HTMLElement>(".pf-eta");
+      if (!job) return;
+      const avail = LIST_W - GAP - SAFETY - (eta ? widthOf(eta.textContent || "") : 0);
+      const w = widthOf(job.textContent || "");
+      job.style.fontSize = w > avail && avail > 0
+        ? `${Math.max(5, Math.round((BASE_PT * avail) / w * 10) / 10)}pt`
+        : "";
+    });
+    document.body.removeChild(meas);
+  }, [schedule, machines, printView, isJechae]);
+
   // 인쇄 뷰가 바뀐 뒤(원하는 출력이 렌더된 후) 실제 인쇄 대화상자를 띄운다.
   useEffect(() => {
     if (wantPrint.current) { wantPrint.current = false; window.print(); }
@@ -1450,18 +1487,8 @@ export default function ScheduleBoard() {
       return `${o.product_name}${o.component ? `(${o.component})` : ""}${q}`;
     };
     // 기계 박스(46mm 고정)에 들어가는 만큼만 표시 — 배정이 많아도 출력 크기를 넘지 않게 캡.
+    // (작업명이 길어 한 줄을 넘으면 폰트를 실측해 유동 축소 — 위 useEffect가 담당)
     const PF_ROWS = 10;
-    // 작업명(pf-job)이 한 줄을 넘으면 폰트를 줄여 한 줄에 맞춘다(완료시간 pf-eta 폰트는 유지).
-    //  실측: pf-job 가용 폭 ≈ 68mm, 8pt 기준 한글(전각) ≈ 2.82mm/자, 반각 ≈ 1.4mm/자.
-    const PF_JOB_W = 67; // mm (여유분 두고 살짝 작게)
-    const FULLW = /[ᄀ-ᇿ　-鿿가-힯＀-￯]/;
-    const pfJobStyle = (label: string) => {
-      let w = 0;
-      for (const ch of label) w += FULLW.test(ch) ? 2.82 : 1.4;
-      if (w <= PF_JOB_W) return undefined;
-      const fs = Math.max(5, Math.round((8 * PF_JOB_W / w) * 10) / 10);
-      return { fontSize: `${fs}pt` };
-    };
     return (
       <div className="pf-page">
         <div className="pf-head pf-head-rel">{processLine} 생산 스케줄 — {dateStr}<span className="pf-head-time">출력 {printStamp}</span></div>
@@ -1486,7 +1513,7 @@ export default function ScheduleBoard() {
                       return (
                       <li key={e.id}>
                         <div className="pf-li">
-                          <span className="pf-job" style={pfJobStyle(lbl)}>{lbl}</span>
+                          <span className="pf-job">{lbl}</span>
                           <span className="pf-eta">{formatEndTime(e.end_time)}</span>
                         </div>
                       </li>
