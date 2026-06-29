@@ -1169,31 +1169,35 @@ export default function ScheduleBoard() {
     const ymd = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
     const wb = XLSX.utils.book_new();
     if (isJechae) {
-      // 날짜 × 설비 매트릭스: 한 작업 라인당 한 행, 날짜는 그 날 첫 행에만.
-      const { cell, dates } = buildJechaeMatrix();
-      const aoa: (string | number)[][] = [["날짜", ...machines.map((m) => m.name)]];
-      for (const dk of dates) {
-        const dt = new Date(dk + "T00:00");
-        const perM = machines.map((m) => (cell[dk]?.[m.id] || []).map((j) => [j.label, j.note, j.dur].filter(Boolean).join(" / ")));
+      // 출력물(요일×설비 매트릭스)과 동일: 이번 주(월~토)만, 각 칸에 그 설비의 작업들 + 기타사항(※).
+      // 한 칸에 여러 작업이면 작업당 한 행으로 펼치고 날짜(요일)는 첫 행에만 표기.
+      const { cell } = buildJechaeMatrix();
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      const monday = new Date(today); monday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
+      const week = Array.from({ length: 6 }, (_, i) => { const d = new Date(monday); d.setDate(monday.getDate() + i); return d; });
+      const fmtMD = (d: Date) => `${d.getMonth() + 1}/${d.getDate()}`;
+      const exByMachine: Record<number, Record<string, string>> = {};
+      for (const m of machines) exByMachine[m.id] = parseExtraNotes(machineExtras[m.id] ?? m.extra_notes ?? "");
+      // 한 설비·하루의 칸 내용 라인들: 작업들(제품 · 비고 · 시간) 다음에 기타사항(※).
+      const linesFor = (m: Machine, d: Date): string[] => {
+        const out = (cell[ymd2(d)]?.[m.id] || []).map((j) => [j.label, j.note, j.dur].filter(Boolean).join(" · "));
+        const note = (exByMachine[m.id]?.[WD_KEY[d.getDay()]] || "").trim();
+        if (note) out.push(`※ ${note}`);
+        return out;
+      };
+      const head = `${processLine} 생산 스케줄 — ${fmtMD(week[0])}(${DAY_NAMES[week[0].getDay()]}) ~ ${fmtMD(week[5])}(${DAY_NAMES[week[5].getDay()]})    출력 ${printStamp}`;
+      const aoa: (string | number)[][] = [[head], ["요일", ...machines.map((m) => m.name)]];
+      for (const d of week) {
+        const perM = machines.map((m) => linesFor(m, d));
         const maxL = Math.max(1, ...perM.map((a) => a.length));
         for (let k = 0; k < maxL; k++) {
-          aoa.push([k === 0 ? `${dt.getMonth() + 1}/${dt.getDate()}(${DAY_NAMES[dt.getDay()]})` : "", ...perM.map((a) => a[k] || "")]);
-        }
-      }
-      // 하단: 설비별 기타사항(설비 × 요일)
-      const exRows = machines
-        .map((m) => ({ m, ex: parseExtraNotes(machineExtras[m.id] ?? m.extra_notes ?? "") }))
-        .filter(({ ex }) => EXTRA_DAYS.some(([k]) => (ex[k] || "").trim()));
-      if (exRows.length > 0) {
-        aoa.push([]);
-        aoa.push(["기타사항"]);
-        aoa.push(["설비", ...EXTRA_DAYS.map(([, l]) => l)]);
-        for (const { m, ex } of exRows) {
-          aoa.push([m.name, ...EXTRA_DAYS.map(([k]) => (ex[k] || "").trim())]);
+          aoa.push([k === 0 ? `${DAY_NAMES[d.getDay()]} ${fmtMD(d)}` : "", ...perM.map((a) => a[k] || "")]);
         }
       }
       const ws = XLSX.utils.aoa_to_sheet(aoa);
-      ws["!cols"] = [{ wch: 11 }, ...machines.map(() => ({ wch: 34 }))];
+      const wch = (m: Machine) => (m.name.includes("낙정") || m.name.includes("배접") ? 22 : 30);
+      ws["!cols"] = [{ wch: 11 }, ...machines.map((m) => ({ wch: wch(m) }))];
+      ws["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: machines.length } }]; // 제목 행 가로 병합
       XLSX.utils.book_append_sheet(wb, ws, processLine);
       XLSX.writeFile(wb, `스케줄_${processLine}_${ymd}.xlsx`);
       return;
