@@ -136,7 +136,8 @@ input[type="number"]::-webkit-outer-spin-button {
   /* ── 스케줄 전체 개요 인쇄: 상단 기계별 작업계획 + 하단 1차 배정·배정 대기. A4 한 장에 꽉 차게. ── */
   .pf-page {
     box-sizing: border-box;
-    min-height: 297mm;
+    height: 296mm;          /* 고정 높이 — A4 한 장으로 한정(살짝 작게 잡아 빈 2페이지 방지) */
+    overflow: hidden;       /* 한 장을 넘는 내용은 잘라낸다 */
     padding: 6mm;
     display: flex;
     flex-direction: column;
@@ -228,12 +229,14 @@ input[type="number"]::-webkit-outer-spin-button {
   .jm-extra-ttl { font-size: 9pt; font-weight: bold; margin-bottom: 1mm; }
   .pf-bottom {
     flex: 1 1 auto;
+    min-height: 0;          /* 남은 공간보다 커지지 않게(넘치면 아래에서 클립) */
+    overflow: hidden;
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 2mm;
     margin-top: 3mm;
   }
-  .pf-sect { border: 1px solid #000; display: flex; flex-direction: column; }
+  .pf-sect { border: 1px solid #000; display: flex; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; }
   .pf-secttl {
     display: flex;
     justify-content: space-between;
@@ -246,7 +249,7 @@ input[type="number"]::-webkit-outer-spin-button {
     border-bottom: 1px solid #000;
   }
   .pf-secsum { font-weight: normal; font-size: 8pt; }
-  .pf-secbody { padding: 1mm 1.5mm; }
+  .pf-secbody { padding: 1mm 1.5mm; flex: 1 1 0; min-height: 0; overflow: hidden; }
   /* 배정 대기 칩: 고정 크기(한 줄), 넘치면 말줄임 */
   .pf-row { font-size: 8pt; line-height: 1.6; height: 4.2mm; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
