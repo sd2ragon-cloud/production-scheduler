@@ -343,9 +343,8 @@ export default function ScheduleBoard() {
     const GAP = 1.5 * PXMM;          // 칸 사이 간격
     const SAFETY = 1.5 * PXMM;       // 반올림 줄바꿈 방지 여백
     const usable = LIST_W - 2 * GAP;
-    const JOB_W = usable * 19 / 27 - SAFETY; // 제품명 칸(19/27, 넓게)
-    const NOTE_W = usable * 4 / 27 - SAFETY; // 비고 칸(4/27)
-    const ETA_W = usable * 4 / 27 - SAFETY;  // 완료시간 칸(4/27)
+    const JOB_W = usable * 5 / 9 - SAFETY;  // 제품명 칸(5/9, 넓게)
+    const NOTE_W = usable * 2 / 9 - SAFETY; // 비고 칸(2/9)
     const ref = lis[0].querySelector<HTMLElement>(".pf-job") ?? document.body;
     const cs = getComputedStyle(ref);
     const meas = document.createElement("span");
@@ -365,7 +364,6 @@ export default function ScheduleBoard() {
     lis.forEach((li) => {
       fit(li.querySelector<HTMLElement>(".pf-job"), JOB_W);
       fit(li.querySelector<HTMLElement>(".pf-note"), NOTE_W);
-      fit(li.querySelector<HTMLElement>(".pf-eta"), ETA_W);
     });
     document.body.removeChild(meas);
   }, [schedule, machines, printView, isJechae]);
