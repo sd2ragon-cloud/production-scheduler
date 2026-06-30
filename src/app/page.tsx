@@ -1694,13 +1694,13 @@ export default function ScheduleBoard() {
             const total = entries.reduce((s, e) => s + (e.duration_minutes || 0), 0);
             const shown = entries.slice(0, PF_ROWS);
             const overflowCount = entries.length - shown.length;
+            const memo = (machineMemos[m.id] ?? m.memo ?? "").trim();
             return (
               <div className="pf-mbox" key={m.id}>
                 <div className="pf-mname">
-                  <span>{m.name}{overflowCount > 0 ? <span className="pf-more"> 외 {overflowCount}건</span> : null}</span>
+                  <span className="pf-mname-l">{m.name}{overflowCount > 0 ? <span className="pf-more"> 외 {overflowCount}건</span> : null}{memo ? <span className="pf-memo-inline"> {memo}</span> : null}</span>
                   <span className="pf-mtime">{fmtH(total)}</span>
                 </div>
-                {(() => { const memo = (machineMemos[m.id] ?? m.memo ?? "").trim(); return memo ? <div className="pf-memo">{memo}</div> : null; })()}
                 {entries.length === 0 ? (
                   <div className="pf-empty">-</div>
                 ) : (
