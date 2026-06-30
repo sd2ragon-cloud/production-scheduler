@@ -244,6 +244,10 @@ input[type="number"]::-webkit-outer-spin-button {
     overflow: hidden;
     display: grid;
     grid-template-columns: 1fr 1fr;
+    /* 행 높이를 내용과 무관하게 80mm로 고정. minmax(0,1fr)이 없으면 행이 min-content(배정 대기
+       목록이 길면 112mm 등)로 커지고, 옆 1차 배정 4칸도 같이 늘어나 HDP(4번째)가 페이지 밖으로
+       밀려 잘렸음. 0 최소치가 핵심 — 내용보다 작게 눌러 overflow:hidden으로 클립한다. */
+    grid-template-rows: minmax(0, 1fr);
     gap: 2mm;
     margin-top: 3mm;
   }
@@ -267,7 +271,10 @@ input[type="number"]::-webkit-outer-spin-button {
 
   /* 1차 배정: 1열·4행으로 구역을 고정 분할, 박스끼리 여백 없이 붙임 */
   .pf-bk-grid {
-    flex: 1 1 auto;
+    /* flex-basis 0 + min-height 0 이 핵심: 이게 없으면 그리드가 내용(예: HDP칸 6줄)만큼
+       커져 부모(pf-sect 80mm)를 뚫고, 4번째 칸(HDP)이 페이지 밖으로 밀려 잘렸음. */
+    flex: 1 1 0;
+    min-height: 0;
     display: grid;
     grid-template-columns: 1fr;
     grid-template-rows: repeat(4, 1fr);
