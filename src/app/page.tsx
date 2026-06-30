@@ -242,7 +242,22 @@ export default function ScheduleBoard() {
     setDowntimes(Array.isArray(dtData) ? dtData : []);
     const activeMachines = machData.filter((m: Machine) => m.is_active);
     setMachines(activeMachines);
-    setOrders(orderData.filter((o: Order) => o.status === "pending"));
+    // 배정 대기 풀: pending 주문 + 이미 배정됐어도(scheduled) '미배정으로 남은 구성'이 있는 다중구성 주문.
+    // (예: MB10에 배정된 주문에 구성을 추가하면 그 새 구성이 대기에 떠야 한다)
+    const orderHasRemaining = (o: Order): boolean => {
+      const parts = parseParts(o.component);
+      if (parts.length < 2) return false; // 구성 없는/단일 주문은 status로만 판단
+      const totals = partTotals(o.component, o.part_durations, o.duration_minutes);
+      const present = new Set<string>();
+      const alloc: Record<string, number> = {};
+      for (const s of (schedData as ScheduleEntry[])) {
+        if (s.order_id !== o.id) continue;
+        parseParts(s.component_part).forEach((p) => present.add(p));
+        for (const [p, m] of Object.entries(parsePartDurations(s.part_durations))) alloc[p] = (alloc[p] || 0) + (Number(m) || 0);
+      }
+      return parts.some((p) => { const t = Number(totals[p]) || 0; return t > 0 ? (alloc[p] || 0) < t : !present.has(p); });
+    };
+    setOrders(orderData.filter((o: Order) => o.status === "pending" || orderHasRemaining(o)));
     setAllOrders(Array.isArray(orderData) ? orderData : []);
     setSchedule(schedData);
     setBuckets(Array.isArray(bucketData) ? bucketData : []);
