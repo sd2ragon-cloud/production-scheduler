@@ -1700,6 +1700,7 @@ export default function ScheduleBoard() {
                   <span>{m.name}{overflowCount > 0 ? <span className="pf-more"> 외 {overflowCount}건</span> : null}</span>
                   <span className="pf-mtime">{fmtH(total)}</span>
                 </div>
+                {(() => { const memo = (machineMemos[m.id] ?? m.memo ?? "").trim(); return memo ? <div className="pf-memo">{memo}</div> : null; })()}
                 {entries.length === 0 ? (
                   <div className="pf-empty">-</div>
                 ) : (

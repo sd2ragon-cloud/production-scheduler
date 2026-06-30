@@ -184,6 +184,17 @@ input[type="number"]::-webkit-outer-spin-button {
   .pf-mtime { font-weight: normal; font-size: 8pt; }
   /* 박스 용량을 초과한 배정 건수 (설비명 옆 작게) */
   .pf-more { font-weight: normal; font-size: 7pt; }
+  /* 설비 메모(헤더 메모란 입력값) — 설비명 아래에 표기 */
+  .pf-memo {
+    font-size: 7.5pt;
+    padding: 0.4mm 1.5mm;
+    border-bottom: 1px solid #999;
+    white-space: pre-wrap;
+    word-break: break-all;
+    background: #f7f7f7;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
   .pf-list { margin: 0; padding: 1mm 4mm 1mm 3mm; overflow: hidden; }
   .pf-list li { font-size: 8pt; line-height: 1.25; }
   .pf-li { display: flex; justify-content: space-between; gap: 2mm; }
