@@ -336,7 +336,8 @@ export default function ScheduleBoard() {
     const root = document.querySelector(".print-area");
     if (!root) return;
     const lis = root.querySelectorAll<HTMLElement>(".pf-li");
-    if (!lis.length) return;
+    const rows = root.querySelectorAll<HTMLElement>(".pf-row"); // 배정 대기 항목(2열)
+    if (!lis.length && !rows.length) return;
     const PXMM = 96 / 25.4;          // 1mm → px (96dpi)
     const BASE_PT = 7;               // 배정 내역 기본 폰트(축소)
     const LIST_W = 90 * PXMM;        // 인쇄 시 박스 내부(작업 목록) 가용 폭 ≈ 90mm 고정
@@ -345,7 +346,8 @@ export default function ScheduleBoard() {
     const usable = LIST_W - 2 * GAP;
     const JOB_W = usable * 5 / 9 - SAFETY;  // 제품명 칸(5/9, 넓게)
     const NOTE_W = usable * 2 / 9 - SAFETY; // 비고 칸(2/9)
-    const ref = lis[0].querySelector<HTMLElement>(".pf-job") ?? document.body;
+    const WAIT_W = 44 * PXMM;               // 배정 대기 2열 한 칸 폭 ≈ 44mm
+    const ref = lis[0]?.querySelector<HTMLElement>(".pf-job") ?? rows[0] ?? document.body;
     const cs = getComputedStyle(ref);
     const meas = document.createElement("span");
     meas.style.cssText = "position:absolute;left:-9999px;top:-9999px;visibility:hidden;white-space:nowrap;";
@@ -365,6 +367,7 @@ export default function ScheduleBoard() {
       fit(li.querySelector<HTMLElement>(".pf-job"), JOB_W);
       fit(li.querySelector<HTMLElement>(".pf-note"), NOTE_W);
     });
+    rows.forEach((el) => fit(el, WAIT_W));
     document.body.removeChild(meas);
   }, [schedule, machines, printView, isJechae]);
 
@@ -1732,14 +1735,19 @@ export default function ScheduleBoard() {
           <div className="pf-sect">
             <div className="pf-secttl">1차 배정 <span className="pf-secsum">{fmtH(buckets.reduce((s, b) => s + locationMinutes(orders.filter((o) => showsAt(o, b.id)), b.id), 0))}</span></div>
             <div className="pf-bk-grid">
-              {buckets.map((b) => {
-                const bo = orders.filter((o) => showsAt(o, b.id));
+              {Array.from({ length: 4 }).map((_, i) => {
+                const b = buckets[i];
+                const bo = b ? orders.filter((o) => showsAt(o, b.id)) : [];
                 return (
-                  <div key={b.id} className="pf-bk">
-                    <div className="pf-bk-ttl">{b.name}<span className="pf-bk-sum">{fmtH(locationMinutes(bo, b.id))}</span></div>
-                    <div className="pf-bk-items">
-                      {bo.length ? bo.map((o) => <div key={o.id} className="pf-bk-item">{ov(o)}</div>) : <span className="pf-dim">-</span>}
-                    </div>
+                  <div key={i} className="pf-bk">
+                    {b && (
+                      <>
+                        <div className="pf-bk-ttl">{b.name}<span className="pf-bk-sum">{fmtH(locationMinutes(bo, b.id))}</span></div>
+                        <div className="pf-bk-items">
+                          {bo.length ? bo.map((o) => <div key={o.id} className="pf-bk-item">{ov(o)}</div>) : <span className="pf-dim">-</span>}
+                        </div>
+                      </>
+                    )}
                   </div>
                 );
               })}
