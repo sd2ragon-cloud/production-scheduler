@@ -207,6 +207,9 @@ export default function ScheduleBoard() {
   const [editingOrderId, setEditingOrderId] = useState<number | null>(null);
   // 설비 행에서 수정을 시작한 경우 그 설비 id(저장 시 추가된 구성을 이 설비에 바로 배정). 대기에서 수정하면 null.
   const [editMachineId, setEditMachineId] = useState<number | null>(null);
+  // 설비 행(엔트리)에서 다구성 주문을 수정할 때, 그 행만 편집(별도 건)하기 위한 엔트리 정보.
+  const [editEntryId, setEditEntryId] = useState<number | null>(null);
+  const [editEntryParts, setEditEntryParts] = useState<string[]>([]);
   const [newOrder, setNewOrder] = useState({
     order_code: "", product_name: "", component: "", quantity_sheets: 0,
     deadline: "", special_process: "일반", priority: 5, notes: "", extra_notes: "", duration_hours: 0,
@@ -880,14 +883,18 @@ export default function ScheduleBoard() {
     setShowAddForm(false);
     setEditingOrderId(null);
     setEditMachineId(null);
+    setEditEntryId(null);
+    setEditEntryParts([]);
   };
 
   // 대기 주문 편집 시작: 폼을 해당 주문 값으로 채운다
   // asCopy=true면 같은 사양으로 '새 주문'을 만든다(값만 채우고 editingOrderId는 비움 → 저장 시 신규 생성).
   // 한 제품을 생산하다 중단·다른 제품 후 이어서 생산하는 계획에서, 다시 입력하지 않고 분량만 고쳐 배정할 수 있다.
-  const startEditOrder = (order: Order, asCopy = false, fromMachineId: number | null = null) => {
-    const parts = parseParts(order.component);
-    const pd = parsePartDurations(order.part_durations);
+  const startEditOrder = (order: Order, asCopy = false, fromMachineId: number | null = null, entry: ScheduleEntry | null = null) => {
+    // 설비 행에서 수정 + 다구성 주문이면 '그 행(엔트리)의 구성만' 편집(별도 건). 그 외엔 주문 전체 편집.
+    const scoped = !asCopy && entry != null && parseParts(order.component).length >= 2 && parseParts(entry.component_part).length >= 1;
+    const parts = scoped ? parseParts(entry!.component_part) : parseParts(order.component);
+    const pd = parsePartDurations(scoped ? entry!.part_durations : order.part_durations);
     const pp = parsePartProcesses(order.part_processes);
     const pq = parsePartDurations(order.part_quantities);
     const partHours: Record<string, number> = {};
@@ -901,14 +908,14 @@ export default function ScheduleBoard() {
     setNewOrder({
       order_code: order.order_code || "",
       product_name: order.product_name,
-      component: order.component || "",
+      component: scoped ? entry!.component_part : (order.component || ""),
       quantity_sheets: order.quantity_sheets || 0,
       deadline: order.deadline || "",
       special_process: order.special_process ?? "일반",
       priority: order.priority || 5,
       notes: order.notes || "",
       extra_notes: order.extra_notes || "",
-      duration_hours: parts.length >= 2 ? 0 : Math.round((order.duration_minutes || 0) / 60),
+      duration_hours: parts.length >= 2 ? 0 : (scoped ? Math.round((Number(pd[parts[0]]) || 0) / 60) : Math.round((order.duration_minutes || 0) / 60)),
       // 생산성은 부수 ÷ 소요시간으로 역산(저장 없이 복원)
       productivity: (() => {
         const durH = (order.duration_minutes || 0) / 60;
@@ -920,6 +927,8 @@ export default function ScheduleBoard() {
     });
     setEditingOrderId(asCopy ? null : order.id);
     setEditMachineId(asCopy ? null : fromMachineId);
+    setEditEntryId(scoped ? entry!.id : null);
+    setEditEntryParts(scoped ? parts : []);
     setShowAddForm(true);
   };
 
@@ -945,7 +954,41 @@ export default function ScheduleBoard() {
       : isJechae
         ? ((JECHAE_CATS as readonly string[]).includes(newOrder.special_process) ? newOrder.special_process : "")
         : newOrder.special_process;
-    if (editingOrderId !== null) {
+    if (editingOrderId !== null && editEntryId !== null) {
+      // 스코프 수정: 같은 주문이 여러 설비에 쪼개져 있어도 '이 설비 행(엔트리)'의 구성만 편집(별도 건).
+      // 주문에는 병합 저장(다른 설비/대기 구성은 그대로), 이 엔트리만 직접 갱신해 바로 반영.
+      const existingStatus = allOrders.find((o) => o.id === editingOrderId)?.status || "pending";
+      const origOrder = allOrders.find((o) => o.id === editingOrderId);
+      const origParts = parseParts(origOrder?.component || "");
+      const origPD = parsePartDurations(origOrder?.part_durations);
+      const origPP = parsePartProcesses(origOrder?.part_processes);
+      const minutesOf = (p: string) => (parts.length >= 2 ? (partDurations[p] || 0) : durationMinutes);
+      const kept = origParts.filter((p) => !editEntryParts.includes(p)); // 다른 설비/대기에 있던 구성
+      const mergedComp = [...kept, ...parts.filter((p) => !kept.includes(p))];
+      const mergedPD: Record<string, number> = {};
+      const mergedPP: Record<string, string> = {};
+      for (const p of kept) { mergedPD[p] = Number(origPD[p]) || 0; mergedPP[p] = origPP[p] || ""; }
+      for (const p of parts) { mergedPD[p] = minutesOf(p); mergedPP[p] = partProcesses[p] ?? ""; }
+      await fetch(`/api/orders/${editingOrderId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...newOrder,
+          component: mergedComp.join(", "),
+          special_process: specialProcess,
+          duration_minutes: Object.values(mergedPD).reduce((a, b) => a + b, 0),
+          part_durations: mergedPD,
+          part_processes: mergedPP,
+          part_quantities: {},
+          status: existingStatus,
+        }),
+      });
+      await fetch("/api/schedule/set-entry-parts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ entry_id: editEntryId, parts: parts.map((p) => ({ name: p, minutes: minutesOf(p) })) }),
+      });
+    } else if (editingOrderId !== null) {
       // 배정 완료된 작업을 설비 화면에서 수정해도 상태가 대기로 바뀌지 않도록 기존 상태 유지
       const existingStatus = allOrders.find((o) => o.id === editingOrderId)?.status || "pending";
       await fetch(`/api/orders/${editingOrderId}`, {
@@ -2184,7 +2227,7 @@ export default function ScheduleBoard() {
                             <div className="flex items-center justify-center gap-1">
                               {isAdmin ? (<>
                               <button
-                                onClick={() => { const o = allOrders.find((x) => x.id === entry.order_id); if (o) startEditOrder(o, false, entry.machine_id); }}
+                                onClick={() => { const o = allOrders.find((x) => x.id === entry.order_id); if (o) startEditOrder(o, false, entry.machine_id, entry); }}
                                 disabled={loading}
                                 className="text-gray-400 hover:text-blue-600 text-sm leading-none px-0.5"
                                 title="작업 사양 수정 (제품명·구성·비고·납기 등) — 추가한 구성은 이 설비에 바로 배정됩니다"
