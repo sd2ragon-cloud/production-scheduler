@@ -1735,10 +1735,15 @@ export default function ScheduleBoard() {
     // 기계 박스(46mm 고정)에 들어가는 만큼만 표시 — 배정이 많아도 출력 크기를 넘지 않게 캡.
     // (작업명이 길어 한 줄을 넘으면 폰트를 실측해 유동 축소 — 위 useEffect가 담당)
     const PF_ROWS = 10;
+    // 설비가 많아 그리드가 길어지면 하단 1차 배정(고정 80mm)이 A4 밖으로 잘린다.
+    // 설비 수에 맞춰 박스 높이를 줄여 '설비 그리드 + 하단 80mm'가 항상 한 장에 들어가게 한다.
+    // (설비 8대 이하면 기존 46mm 그대로, 9대 이상부터 축소)
+    const numMachineRows = Math.max(1, Math.ceil(machines.length / 2));
+    const machineRowH = Math.min(46, Math.max(28, (190 - (numMachineRows - 1) * 2.5) / numMachineRows));
     return (
       <div className="pf-page">
         <div className="pf-head pf-head-rel">{processLine} 생산 스케줄 — {dateStr}<span className="pf-head-time">출력 {printStamp}</span></div>
-        <div className="pf-machines">
+        <div className="pf-machines" style={{ gridAutoRows: `${machineRowH}mm` }}>
           {machines.map((m) => {
             const entries = getEntriesForMachine(m.id);
             const total = entries.reduce((s, e) => s + (e.duration_minutes || 0), 0);
