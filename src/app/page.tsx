@@ -1914,7 +1914,7 @@ export default function ScheduleBoard() {
                     </tr>
                   </thead>
                   <tbody>
-                    {entries.map((entry) => {
+                    {entries.map((entry, idx) => {
                       const isReorderHover = reorderTarget === entry.id;
                       const isMergeHover = mergeHoverId === entry.id;
                       return (
@@ -2004,7 +2004,7 @@ export default function ScheduleBoard() {
                             draggable={false}
                             onClick={(e) => { e.stopPropagation(); cycleMark(entry); }}
                           >
-                            {entry.sequence}
+                            {idx + 1}
                           </td>
                           <td className="px-1.5 py-0">
                             <div className="flex items-center gap-1 overflow-x-auto jobscroll">
