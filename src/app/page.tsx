@@ -1762,20 +1762,20 @@ export default function ScheduleBoard() {
       {/* 좌측: 설비별 배정 현황 */}
       <div className="flex-1 overflow-y-auto space-y-3 pr-2">
         <div className="flex items-center justify-between mb-2 sticky top-0 bg-gray-50 py-2 z-10">
-          <div>
-            <h2 className="text-xl font-bold text-gray-900">기계별 작업 계획</h2>
+          <div className="shrink-0">
+            <h2 className="text-xl font-bold text-gray-900 whitespace-nowrap">기계별 작업 계획</h2>
             <p className="text-xs text-gray-500">{dateStr}</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 flex-wrap justify-end">
             {savedAt && (
-              <span className="text-xs text-gray-500 whitespace-nowrap mr-1" title="마지막으로 '저장'을 누른 시각 (모든 관리자 공유)">
+              <span className="text-xs text-gray-500 whitespace-nowrap mr-0.5" title="마지막으로 '저장'을 누른 시각 (모든 관리자 공유)">
                 마지막 저장 {savedAt}
               </span>
             )}
             {isAdmin && (
               <button
                 onClick={saveStamp}
-                className="text-sm border border-blue-300 bg-blue-50 px-3 py-1.5 hover:bg-blue-100 text-blue-700 whitespace-nowrap"
+                className="text-xs border border-blue-300 bg-blue-50 px-2 py-1 hover:bg-blue-100 text-blue-700 whitespace-nowrap"
                 title="현재 상태를 저장(확정)합니다. 이후 '되돌리기'로 이 시점까지 복원할 수 있습니다."
               >
                 💾 저장
@@ -1784,7 +1784,7 @@ export default function ScheduleBoard() {
             {isAdmin && savedAt && (
               <button
                 onClick={revertToSaved}
-                className="text-sm border border-amber-300 bg-amber-50 px-3 py-1.5 hover:bg-amber-100 text-amber-700 whitespace-nowrap"
+                className="text-xs border border-amber-300 bg-amber-50 px-2 py-1 hover:bg-amber-100 text-amber-700 whitespace-nowrap"
                 title="마지막 저장 이후의 모든 변경(배정·순서·소요시간 등)을 취소하고 저장 시점으로 되돌립니다."
               >
                 ↩ 되돌리기
@@ -1793,7 +1793,7 @@ export default function ScheduleBoard() {
             {!isJechae && (
               <button
                 onClick={() => triggerPrint("order")}
-                className="text-sm border border-gray-300 bg-white px-3 py-1.5 hover:bg-gray-100 text-gray-700 whitespace-nowrap"
+                className="text-xs border border-gray-300 bg-white px-2 py-1 hover:bg-gray-100 text-gray-700 whitespace-nowrap"
                 title="기계별 작업순서를 엑셀 양식으로 인쇄합니다"
               >
                 🖨 작업순서
@@ -1801,14 +1801,14 @@ export default function ScheduleBoard() {
             )}
             <button
               onClick={() => triggerPrint("full")}
-              className="text-sm border border-gray-300 bg-white px-3 py-1.5 hover:bg-gray-100 text-gray-700 whitespace-nowrap"
+              className="text-xs border border-gray-300 bg-white px-2 py-1 hover:bg-gray-100 text-gray-700 whitespace-nowrap"
               title="기계별 작업계획을 A4 한 장에 인쇄합니다"
             >
               🖨 스케줄
             </button>
             <button
               onClick={isJechae ? downloadPpt : downloadExcel}
-              className="text-sm border border-gray-300 bg-white px-3 py-1.5 hover:bg-gray-100 text-gray-700 whitespace-nowrap"
+              className="text-xs border border-gray-300 bg-white px-2 py-1 hover:bg-gray-100 text-gray-700 whitespace-nowrap"
               title={isJechae ? "주간 스케줄을 출력물과 동일한 PPT(.pptx)로 내려받습니다" : "기계별 작업 계획을 엑셀(.xlsx) 파일로 내려받습니다"}
             >
               {isJechae ? "📑 PPT" : "📊 엑셀"}
@@ -1816,7 +1816,7 @@ export default function ScheduleBoard() {
             {isAdmin && (
               <button
                 onClick={() => setShowBreaks(true)}
-                className="text-sm border border-gray-300 bg-white px-3 py-1.5 hover:bg-gray-100 text-gray-700 whitespace-nowrap"
+                className="text-xs border border-gray-300 bg-white px-2 py-1 hover:bg-gray-100 text-gray-700 whitespace-nowrap"
                 title="식사·휴게 시간을 추가/수정하면 예상완료시간이 자동으로 다시 계산됩니다"
               >
                 🍽 식사시간 {breaks.length > 0 && <span className="text-gray-400">({breaks.length})</span>}
