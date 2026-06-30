@@ -1784,8 +1784,8 @@ export default function ScheduleBoard() {
         <div className="pf-bottom">
           <div className="pf-sect">
             <div className="pf-secttl">1차 배정 <span className="pf-secsum">{fmtH(buckets.reduce((s, b) => s + locationMinutes(orders.filter((o) => showsAt(o, b.id)), b.id), 0))}</span></div>
-            <div className="pf-bk-grid">
-              {Array.from({ length: 4 }).map((_, i) => {
+            <div className="pf-bk-grid" style={{ gridTemplateRows: `repeat(${Math.max(4, buckets.length)}, 1fr)` }}>
+              {Array.from({ length: Math.max(4, buckets.length) }).map((_, i) => {
                 const b = buckets[i];
                 const bo = b ? orders.filter((o) => showsAt(o, b.id)) : [];
                 return (
