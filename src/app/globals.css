@@ -190,8 +190,8 @@ input[type="number"]::-webkit-outer-spin-button {
   .pf-memo-inline { font-weight: normal; font-size: 7.5pt; color: #000; }
   .pf-list { margin: 0; padding: 1mm 4mm 1mm 3mm; overflow: hidden; }
   .pf-list li { font-size: 7pt; line-height: 1.25; }
-  /* 배정 내역: 제품명(넓게) · 비고 · 완료시간 = 5:2:2 (각 칸 넘치면 JS가 폰트 유동 축소) */
-  .pf-li { display: grid; grid-template-columns: 5fr 2fr 2fr; gap: 1.5mm; align-items: baseline; }
+  /* 배정 내역: 제품명(넓게) · 비고 · 완료시간 = 19:4:4 (각 칸 넘치면 JS가 폰트 유동 축소) */
+  .pf-li { display: grid; grid-template-columns: 19fr 4fr 4fr; gap: 1.5mm; align-items: baseline; }
   .pf-job { overflow: hidden; word-break: break-all; }
   .pf-note { overflow: hidden; word-break: break-all; color: #000; }
   .pf-eta { white-space: nowrap; color: #000; font-variant-numeric: tabular-nums; text-align: right; }
