@@ -270,27 +270,24 @@ input[type="number"]::-webkit-outer-spin-button {
   /* 배정 대기 칩: 한 줄(넘치면 JS가 너비에 맞춰 폰트 유동 축소) */
   .pf-row { font-size: 7pt; line-height: 1.5; overflow: hidden; white-space: nowrap; break-inside: avoid; }
 
-  /* 1차 배정: 2열 그리드로 분할(배정 대기처럼). 칸 사이 구분선은 gap+검은 배경으로 그린다.
-     행 수(grid-template-rows)는 칸 개수에 맞춰 page.tsx 인라인 스타일이 지정. */
+  /* 1차 배정: 1열로 칸을 세로 분할(행 수는 칸 개수에 맞춰 page.tsx 인라인이 지정).
+     칸 안의 제품명은 .pf-bk-items에서 2열로 흐른다(배정 대기처럼). */
   .pf-bk-grid {
     /* flex-basis 0 + min-height 0 이 핵심: 이게 없으면 그리드가 내용(예: HDP칸 여러 줄)만큼
        커져 부모(pf-sect 80mm)를 뚫고, 마지막 칸(HDP)이 페이지 밖으로 밀려 잘렸음. */
     flex: 1 1 0;
     min-height: 0;
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    grid-template-rows: repeat(2, 1fr);
-    gap: 0.3mm;
-    background: #000;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
+    grid-template-columns: 1fr;
+    grid-template-rows: repeat(4, 1fr);
   }
   .pf-bk {
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    background: #fff;
+    border-bottom: 1px solid #000;
   }
+  .pf-bk:last-child { border-bottom: none; }
   .pf-bk-ttl {
     display: flex;
     justify-content: space-between;
@@ -305,8 +302,8 @@ input[type="number"]::-webkit-outer-spin-button {
     border-bottom: 1px solid #bbb;
   }
   .pf-bk-sum { font-weight: normal; color: #000; white-space: nowrap; }
-  /* 칸 안 칩: 4개가 들어갈 고정 크기. 한 줄 고정, 넘치면 말줄임 */
-  .pf-bk-items { flex: 1 1 auto; overflow: hidden; padding: 0; }
+  /* 칸 안 제품명: 배정 대기처럼 2열로 흐른다. 각 칩 한 줄 고정(넘치면 JS가 너비 맞춰 폰트 축소). */
+  .pf-bk-items { flex: 1 1 auto; overflow: hidden; padding: 0; column-count: 2; column-gap: 2.5mm; }
   .pf-bk-item {
     font-size: 7pt;
     line-height: 1.5;
@@ -315,6 +312,7 @@ input[type="number"]::-webkit-outer-spin-button {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    break-inside: avoid;
   }
   .pf-dim { font-size: 7.5pt; color: #000; padding: 0 1.5mm; }
 }
