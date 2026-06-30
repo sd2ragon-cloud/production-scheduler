@@ -327,8 +327,8 @@ export default function ScheduleBoard() {
     }
   };
 
-  // 스케줄 출력의 작업명(pf-job)을 실제 글자폭으로 측정해, 완료시간을 뺀 가용 폭에 맞게
-  // 폰트를 유동적으로 축소(한 줄 유지). 완료시간(pf-eta) 폰트는 건드리지 않는다.
+  // 스케줄 출력의 배정 내역은 제품명·비고·완료시간 3등분. 제품명/비고가 칸(1/3)을 넘으면
+  // 실제 글자폭을 측정해 폰트를 유동 축소(각 칸 한 줄 유지).
   // 인쇄 영역은 화면에서 display:none이라 직접 측정이 안 되므로 숨김 span으로 폭을 잰다.
   // (print effect보다 먼저 선언해 인쇄 전에 폰트가 맞춰지도록 한다)
   useEffect(() => {
@@ -338,28 +338,30 @@ export default function ScheduleBoard() {
     const lis = root.querySelectorAll<HTMLElement>(".pf-li");
     if (!lis.length) return;
     const PXMM = 96 / 25.4;          // 1mm → px (96dpi)
-    const BASE_PT = 8;               // pf-job 기본 폰트
+    const BASE_PT = 7;               // 배정 내역 기본 폰트(축소)
     const LIST_W = 90 * PXMM;        // 인쇄 시 박스 내부(작업 목록) 가용 폭 ≈ 90mm 고정
-    const GAP = 2 * PXMM;            // 작업명·완료시간 사이 간격
-    const SAFETY = 2 * PXMM;         // 반올림으로 인한 줄바꿈 방지용 여백
-    const job0 = lis[0].querySelector<HTMLElement>(".pf-job");
-    const cs = getComputedStyle(job0 ?? document.body);
+    const GAP = 1.5 * PXMM;          // 칸 사이 간격
+    const SAFETY = 1.5 * PXMM;       // 반올림 줄바꿈 방지 여백
+    const COL_W = (LIST_W - 2 * GAP) / 3 - SAFETY; // 3등분 한 칸의 가용 폭
+    const ref = lis[0].querySelector<HTMLElement>(".pf-job") ?? document.body;
+    const cs = getComputedStyle(ref);
     const meas = document.createElement("span");
     meas.style.cssText = "position:absolute;left:-9999px;top:-9999px;visibility:hidden;white-space:nowrap;";
     meas.style.fontFamily = cs.fontFamily;
     meas.style.fontWeight = cs.fontWeight;
     meas.style.fontSize = `${(BASE_PT * 96) / 72}px`;
     document.body.appendChild(meas);
-    const widthOf = (t: string) => { meas.textContent = t; return meas.getBoundingClientRect().width; };
-    lis.forEach((li) => {
-      const job = li.querySelector<HTMLElement>(".pf-job");
-      const eta = li.querySelector<HTMLElement>(".pf-eta");
-      if (!job) return;
-      const avail = LIST_W - GAP - SAFETY - (eta ? widthOf(eta.textContent || "") : 0);
-      const w = widthOf(job.textContent || "");
-      job.style.fontSize = w > avail && avail > 0
-        ? `${Math.max(5, Math.round((BASE_PT * avail) / w * 10) / 10)}pt`
+    const fit = (el: HTMLElement | null) => {
+      if (!el) return;
+      meas.textContent = el.textContent || "";
+      const w = meas.getBoundingClientRect().width;
+      el.style.fontSize = w > COL_W && COL_W > 0
+        ? `${Math.max(3, Math.round((BASE_PT * COL_W) / w * 10) / 10)}pt`
         : "";
+    };
+    lis.forEach((li) => {
+      fit(li.querySelector<HTMLElement>(".pf-job"));
+      fit(li.querySelector<HTMLElement>(".pf-note"));
     });
     document.body.removeChild(meas);
   }, [schedule, machines, printView, isJechae]);
@@ -1711,6 +1713,7 @@ export default function ScheduleBoard() {
                       <li key={e.id}>
                         <div className="pf-li">
                           <span className="pf-job">{lbl}</span>
+                          <span className="pf-note">{(e.order_notes || "").trim()}</span>
                           <span className="pf-eta">{formatEndTime(e.end_time)}</span>
                         </div>
                       </li>

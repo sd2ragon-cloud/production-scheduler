@@ -189,10 +189,12 @@ input[type="number"]::-webkit-outer-spin-button {
   /* 설비 메모(헤더 메모란 입력값) — 설비명 옆에 작게 표기 */
   .pf-memo-inline { font-weight: normal; font-size: 7.5pt; color: #000; }
   .pf-list { margin: 0; padding: 1mm 4mm 1mm 3mm; overflow: hidden; }
-  .pf-list li { font-size: 8pt; line-height: 1.25; }
-  .pf-li { display: flex; justify-content: space-between; gap: 2mm; }
-  .pf-job { word-break: break-all; }
-  .pf-eta { white-space: nowrap; color: #000; font-variant-numeric: tabular-nums; }
+  .pf-list li { font-size: 7pt; line-height: 1.25; }
+  /* 배정 내역: 제품명 · 비고 · 완료시간 3등분(각 칸 넘치면 JS가 폰트 유동 축소) */
+  .pf-li { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1.5mm; align-items: baseline; }
+  .pf-job { overflow: hidden; word-break: break-all; }
+  .pf-note { overflow: hidden; word-break: break-all; color: #000; }
+  .pf-eta { white-space: nowrap; color: #000; font-variant-numeric: tabular-nums; text-align: right; }
   .pf-empty { font-size: 8pt; color: #000; padding: 1mm 1.5mm; }
   /* 제책 일자별 매트릭스 (날짜 × 설비) */
   .jm { width: 100%; border-collapse: collapse; table-layout: fixed; }
