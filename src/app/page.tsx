@@ -97,9 +97,11 @@ interface ScheduleEntry {
 const DAY_NAMES = ["일", "월", "화", "수", "목", "금", "토"];
 
 // #번호 클릭 시 표시 색상 토글(없음 ↔ 노랑). 여러 관리자가 수정 표시를 공유. ''=표시 없음.
+// rose(핑크)는 이동·수정 시 자동으로 칠해진다(관리자가 옮긴 것 식별용).
 const MARK_CYCLE = ["", "amber"];
 const MARK_BG: Record<string, string> = {
-  amber: "#fde68a", // 노랑
+  amber: "#fde68a", // 노랑(# 클릭 수동)
+  rose: "#fbcfe8",  // 핑크(이동·수정 자동)
 };
 
 // 제책 설비 하단 기타사항: 요일별(월~금) + 공통. extra_notes 컬럼에 JSON으로 저장.
@@ -181,7 +183,6 @@ export default function ScheduleBoard() {
   const [buckets, setBuckets] = useState<Bucket[]>([]);
   const [breaks, setBreaks] = useState<Break[]>([]);
   const [showBreaks, setShowBreaks] = useState(false);
-  const [savedAt, setSavedAt] = useState("");
   // 설비별 비가동시간(설비고장·교육훈련 등)
   const [downtimes, setDowntimes] = useState<Downtime[]>([]);
   const [dtModalMachine, setDtModalMachine] = useState<number | null>(null);
@@ -293,42 +294,35 @@ export default function ScheduleBoard() {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  // 라인별 '마지막 저장' 시각을 불러온다(탭 전환 시 갱신). 여러 관리자가 공유.
+  // 드래그 중 화면 위/아래 가장자리에 커서가 가면 설비 목록을 자동 스크롤(맨 아래→맨 위 설비로도 옮길 수 있게).
+  const listScrollRef = useRef<HTMLDivElement>(null);
+  const dragPointerY = useRef<number | null>(null);
   useEffect(() => {
-    fetch(`/api/saved-at?process_line=${encodeURIComponent(processLine)}`)
-      .then((r) => r.json())
-      .then((d) => setSavedAt(d.saved_at || ""))
-      .catch(() => {});
-  }, [processLine]);
-
-  // '저장' 버튼: 그 라인의 현재 상태를 스냅샷(확정 시점)으로 저장하고 저장 시각 기록 후 새로고침.
-  const saveStamp = async () => {
-    const res = await fetch("/api/save-state", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ process_line: processLine }),
-    });
-    const d = await res.json().catch(() => ({}));
-    if (res.ok && d.saved_at) setSavedAt(d.saved_at);
-    await fetchAll();
-  };
-
-  // '되돌리기' 버튼: 마지막 저장 이후의 모든 변경을 취소하고 저장 시점 상태로 복원.
-  const revertToSaved = async () => {
-    if (!window.confirm("마지막 저장 이후의 변경을 모두 취소하고 저장 시점으로 되돌릴까요?")) return;
-    const res = await fetch("/api/revert-state", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ process_line: processLine }),
-    });
-    if (res.ok) {
-      await fetchAll();
-      window.alert(`마지막 저장(${savedAt}) 상태로 되돌렸습니다.`);
-    } else {
-      const d = await res.json().catch(() => ({}));
-      window.alert(d.error === "no snapshot" ? "저장된 기준이 없습니다. 먼저 '저장'을 눌러주세요." : "되돌리기 실패");
-    }
-  };
+    let raf = 0;
+    const onOver = (e: DragEvent) => { dragPointerY.current = e.clientY; };
+    const onEnd = () => { dragPointerY.current = null; };
+    const loop = () => {
+      const el = listScrollRef.current;
+      const y = dragPointerY.current;
+      if (el && y != null) {
+        const r = el.getBoundingClientRect();
+        const EDGE = 90, MAX = 22;
+        if (y - r.top < EDGE) el.scrollTop -= MAX * Math.max(0.15, 1 - (y - r.top) / EDGE);
+        else if (r.bottom - y < EDGE) el.scrollTop += MAX * Math.max(0.15, 1 - (r.bottom - y) / EDGE);
+      }
+      raf = requestAnimationFrame(loop);
+    };
+    document.addEventListener("dragover", onOver);
+    document.addEventListener("dragend", onEnd);
+    document.addEventListener("drop", onEnd);
+    raf = requestAnimationFrame(loop);
+    return () => {
+      cancelAnimationFrame(raf);
+      document.removeEventListener("dragover", onOver);
+      document.removeEventListener("dragend", onEnd);
+      document.removeEventListener("drop", onEnd);
+    };
+  }, []);
 
   // 스케줄 출력의 배정 내역은 제품명·비고·완료시간 3등분. 제품명/비고가 칸(1/3)을 넘으면
   // 실제 글자폭을 측정해 폰트를 유동 축소(각 칸 한 줄 유지).
@@ -482,6 +476,20 @@ export default function ScheduleBoard() {
     });
   };
 
+  // 이동·수정한 항목을 핑크(rose)로 자동 표시 — 관리자가 옮긴 것 식별용.
+  // 그 주문이 대상 설비에 만든/바뀐 엔트리를 핑크로 칠한다(이동은 새 엔트리가 생기므로 다시 조회해 찾는다).
+  const markMoved = async (orderId: number | null, machineId: number) => {
+    if (!isAdmin || orderId == null) return;
+    try {
+      const sch = await fetch(`/api/schedule?process_line=${encodeURIComponent(processLine)}`).then((r) => r.json());
+      if (!Array.isArray(sch)) return;
+      const ids = (sch as ScheduleEntry[]).filter((e) => e.order_id === orderId && e.machine_id === machineId).map((e) => e.id);
+      if (!ids.length) return;
+      setSchedule((prev) => prev.map((e) => (ids.includes(e.id) ? { ...e, mark_color: "rose" } : e)));
+      await Promise.all(ids.map((id) => fetch("/api/schedule/mark", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ entry_id: id, color: "rose" }) })));
+    } catch { /* 무시 */ }
+  };
+
   // 식사시간 추가/수정/삭제. 변경 시 서버가 전 설비 일정을 재계산하므로, 끝나면 fetchAll로 갱신한다.
   const addBreak = async () => {
     setLoading(true);
@@ -545,6 +553,7 @@ export default function ScheduleBoard() {
       body: JSON.stringify({ order_id: orderId, machine_id: machineId, start_time: startTime, component_part: part, alloc_minutes: allocMinutes, before_entry_id: beforeEntryId, merge, merge_entry_id: mergeEntryId }),
     });
     await fetchAll();
+    await markMoved(orderId, machineId);
     setLoading(false);
   };
 
@@ -594,6 +603,7 @@ export default function ScheduleBoard() {
       }
     }
     await fetchAll();
+    await markMoved(orderId, machineId);
     setLoading(false);
   };
 
@@ -614,6 +624,7 @@ export default function ScheduleBoard() {
 
   const handleMovePart = async (entryId: number, part: string, targetMachineId: number, srcMachineId: number, moveMinutes: number = 0, beforeEntryId: number | null = null, merge: boolean = false, mergeEntryId: number | null = null) => {
     setLoading(true);
+    const movedOid = schedule.find((s) => s.id === entryId)?.order_id ?? null;
     await fetch("/api/schedule/move-part", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -631,6 +642,7 @@ export default function ScheduleBoard() {
       }),
     });
     await fetchAll();
+    await markMoved(movedOid, targetMachineId);
     setLoading(false);
   };
 
@@ -638,6 +650,7 @@ export default function ScheduleBoard() {
   // merge=true면 같은 주문의 기존 행(mergeEntryId)에 합친다(분할된 제품을 하나로).
   const handleMoveEntry = async (entryId: number, targetMachineId: number, srcMachineId: number, moveMinutes: number = 0, beforeEntryId: number | null = null, merge: boolean = false, mergeEntryId: number | null = null) => {
     setLoading(true);
+    const movedOid = schedule.find((s) => s.id === entryId)?.order_id ?? null;
     await fetch("/api/schedule/move-entry", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -653,6 +666,7 @@ export default function ScheduleBoard() {
       }),
     });
     await fetchAll();
+    await markMoved(movedOid, targetMachineId);
     setLoading(false);
   };
 
@@ -806,6 +820,7 @@ export default function ScheduleBoard() {
 
   const handleReorder = async (machineId: number, entryIds: number[]) => {
     // 낙관적 갱신: 순서를 로컬에서 즉시 반영해 부드럽게 움직이고, 예상완료시간은 서버 재계산 후 동기화한다.
+    const movedOid = dragEntryId != null ? (schedule.find((s) => s.id === dragEntryId)?.order_id ?? null) : null;
     const seqMap = new Map(entryIds.map((id, i) => [id, i + 1] as const));
     setSchedule((prev) => prev.map((e) => (seqMap.has(e.id) ? { ...e, sequence: seqMap.get(e.id)! } : e)));
     await fetch("/api/schedule/reorder", {
@@ -814,6 +829,7 @@ export default function ScheduleBoard() {
       body: JSON.stringify({ machine_id: machineId, entry_ids: entryIds }),
     });
     await fetchAll();
+    await markMoved(movedOid, machineId);
   };
 
   const durationTimers = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
@@ -1013,8 +1029,11 @@ export default function ScheduleBoard() {
         }),
       });
     }
+    // 설비 행에서 수정한 경우, 그 주문의 해당 설비 엔트리를 핑크로 표시(어떤 걸 고쳤는지 식별).
+    const markCtx = editingOrderId !== null && editMachineId !== null ? { oid: editingOrderId, mid: editMachineId } : null;
     resetForm();
     await fetchAll();
+    if (markCtx) await markMoved(markCtx.oid, markCtx.mid);
   };
 
   const onDragStartOrder = (orderId: number, part: string = "") => {
@@ -1798,36 +1817,13 @@ export default function ScheduleBoard() {
     {/* 고정 폭(반응형 축소 없음). 화면이 작으면 비율 축소 대신 가로/세로 스크롤로 본다. */}
     <div className="flex gap-4 h-full min-w-[1776px]">
       {/* 좌측: 설비별 배정 현황 */}
-      <div className="flex-1 overflow-y-auto space-y-3 pr-2">
+      <div ref={listScrollRef} className="flex-1 overflow-y-auto space-y-3 pr-2">
         <div className="flex items-center justify-between mb-2 sticky top-0 bg-gray-50 py-2 z-10">
           <div className="shrink-0">
             <h2 className="text-xl font-bold text-gray-900 whitespace-nowrap">기계별 작업 계획</h2>
             <p className="text-xs text-gray-500">{dateStr}</p>
           </div>
           <div className="flex items-center gap-1.5 flex-wrap justify-end">
-            {savedAt && (
-              <span className="text-xs text-gray-500 whitespace-nowrap mr-0.5" title="마지막으로 '저장'을 누른 시각 (모든 관리자 공유)">
-                마지막 저장 {savedAt}
-              </span>
-            )}
-            {isAdmin && (
-              <button
-                onClick={saveStamp}
-                className="text-xs border border-blue-300 bg-blue-50 px-2 py-1 hover:bg-blue-100 text-blue-700 whitespace-nowrap"
-                title="현재 상태를 저장(확정)합니다. 이후 '되돌리기'로 이 시점까지 복원할 수 있습니다."
-              >
-                💾 저장
-              </button>
-            )}
-            {isAdmin && savedAt && (
-              <button
-                onClick={revertToSaved}
-                className="text-xs border border-amber-300 bg-amber-50 px-2 py-1 hover:bg-amber-100 text-amber-700 whitespace-nowrap"
-                title="마지막 저장 이후의 모든 변경(배정·순서·소요시간 등)을 취소하고 저장 시점으로 되돌립니다."
-              >
-                ↩ 되돌리기
-              </button>
-            )}
             {!isJechae && (
               <button
                 onClick={() => triggerPrint("order")}
