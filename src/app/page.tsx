@@ -342,7 +342,9 @@ export default function ScheduleBoard() {
     const LIST_W = 90 * PXMM;        // 인쇄 시 박스 내부(작업 목록) 가용 폭 ≈ 90mm 고정
     const GAP = 1.5 * PXMM;          // 칸 사이 간격
     const SAFETY = 1.5 * PXMM;       // 반올림 줄바꿈 방지 여백
-    const COL_W = (LIST_W - 2 * GAP) / 3 - SAFETY; // 3등분 한 칸의 가용 폭
+    const usable = LIST_W - 2 * GAP;
+    const JOB_W = usable * 5 / 9 - SAFETY;  // 제품명 칸(5/9, 넓게)
+    const NOTE_W = usable * 2 / 9 - SAFETY; // 비고 칸(2/9)
     const ref = lis[0].querySelector<HTMLElement>(".pf-job") ?? document.body;
     const cs = getComputedStyle(ref);
     const meas = document.createElement("span");
@@ -351,17 +353,17 @@ export default function ScheduleBoard() {
     meas.style.fontWeight = cs.fontWeight;
     meas.style.fontSize = `${(BASE_PT * 96) / 72}px`;
     document.body.appendChild(meas);
-    const fit = (el: HTMLElement | null) => {
+    const fit = (el: HTMLElement | null, colW: number) => {
       if (!el) return;
       meas.textContent = el.textContent || "";
       const w = meas.getBoundingClientRect().width;
-      el.style.fontSize = w > COL_W && COL_W > 0
-        ? `${Math.max(3, Math.round((BASE_PT * COL_W) / w * 10) / 10)}pt`
+      el.style.fontSize = w > colW && colW > 0
+        ? `${Math.max(3, Math.round((BASE_PT * colW) / w * 10) / 10)}pt`
         : "";
     };
     lis.forEach((li) => {
-      fit(li.querySelector<HTMLElement>(".pf-job"));
-      fit(li.querySelector<HTMLElement>(".pf-note"));
+      fit(li.querySelector<HTMLElement>(".pf-job"), JOB_W);
+      fit(li.querySelector<HTMLElement>(".pf-note"), NOTE_W);
     });
     document.body.removeChild(meas);
   }, [schedule, machines, printView, isJechae]);
