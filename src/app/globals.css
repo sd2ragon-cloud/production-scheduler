@@ -239,14 +239,15 @@ input[type="number"]::-webkit-outer-spin-button {
   .jm-extra { margin-top: 4mm; break-inside: avoid; }
   .jm-extra-ttl { font-size: 9pt; font-weight: bold; margin-bottom: 1mm; }
   .pf-bottom {
-    flex: 0 0 auto;         /* 남은 공간에 따라 늘지 않게 — 1차 배정 4칸 높이를 고정 */
-    height: 80mm;
+    /* 남은 공간을 모두 채워 1차 배정·배정 대기 입력란을 키운다(상/하단 여백 6mm로 동일).
+       이전엔 height:80mm 고정이라 페이지 하단에 빈 여백이 많이 남았음. */
+    flex: 1 1 auto;
     min-height: 0;
     overflow: hidden;
     display: grid;
     grid-template-columns: 1fr 1fr;
-    /* 행 높이를 내용과 무관하게 80mm로 고정. minmax(0,1fr)이 없으면 행이 min-content(배정 대기
-       목록이 길면 112mm 등)로 커지고, 옆 1차 배정 4칸도 같이 늘어나 HDP(4번째)가 페이지 밖으로
+    /* 행 높이를 내용과 무관하게 영역 높이로 고정(minmax 0~1fr). 없으면 행이 min-content(배정
+       대기 목록이 길면 큼)로 커지고, 옆 1차 배정 칸도 같이 늘어나 HDP(마지막)가 페이지 밖으로
        밀려 잘렸음. 0 최소치가 핵심 — 내용보다 작게 눌러 overflow:hidden으로 클립한다. */
     grid-template-rows: minmax(0, 1fr);
     gap: 2mm;
