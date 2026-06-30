@@ -154,11 +154,10 @@ input[type="number"]::-webkit-outer-spin-button {
   /* 스케줄 출력 헤더: 제목은 가운데, 출력 시각은 우측 상단에 */
   .pf-head-rel { position: relative; }
   .pf-head-time { position: absolute; right: 0; top: 0; font-size: 8pt; font-weight: normal; white-space: nowrap; }
-  /* 기계 박스: 2열. 남은 공간을 차지하되 하단(1차 배정 80mm)은 항상 보이도록,
-     넘치면 설비 그리드 쪽이 잘린다(flex: 1 1 auto + overflow hidden). 행 높이는 인라인으로 동적 지정. */
+  /* 기계 박스: 2열. 박스 높이(grid-auto-rows)를 인라인으로 동적 지정해, 설비 그리드 + 하단
+     1차 배정(80mm)이 충분한 여백을 두고 한 장에 들어가게 한다(실제 인쇄에서 가장자리 잘림 방지). */
   .pf-machines {
-    flex: 1 1 auto;
-    min-height: 0;
+    flex: 0 0 auto;
     overflow: hidden;
     display: grid;
     grid-template-columns: repeat(2, 1fr);

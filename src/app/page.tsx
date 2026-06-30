@@ -1738,8 +1738,10 @@ export default function ScheduleBoard() {
     // 설비가 많아 그리드가 길어지면 하단 1차 배정(고정 80mm)이 A4 밖으로 잘린다.
     // 설비 수에 맞춰 박스 높이를 줄여 '설비 그리드 + 하단 80mm'가 항상 한 장에 들어가게 한다.
     // (설비 8대 이하면 기존 46mm 그대로, 9대 이상부터 축소)
+    // 설비 그리드 가용 높이를 172mm로 잡아(머리글·하단 80mm·여백 제외) 한 장에 여유 있게 들어가게.
+    // 설비가 많으면 박스 높이를 줄여 하단 1차 배정 4칸(HDP 포함)이 항상 보이게 한다.
     const numMachineRows = Math.max(1, Math.ceil(machines.length / 2));
-    const machineRowH = Math.min(46, Math.max(28, (190 - (numMachineRows - 1) * 2.5) / numMachineRows));
+    const machineRowH = Math.min(46, Math.max(26, (172 - (numMachineRows - 1) * 2.5) / numMachineRows));
     return (
       <div className="pf-page">
         <div className="pf-head pf-head-rel">{processLine} 생산 스케줄 — {dateStr}<span className="pf-head-time">출력 {printStamp}</span></div>
