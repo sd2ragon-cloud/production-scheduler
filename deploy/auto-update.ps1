@@ -63,13 +63,21 @@ while ($true) {
         & cmd /c "npm install"
       }
       & cmd /c "npm run build"
+      $buildOk = ($LASTEXITCODE -eq 0)
 
-      $conns = Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue
-      foreach ($c in $conns) { Stop-Process -Id $c.OwningProcess -Force -ErrorAction SilentlyContinue }
+      if (-not $buildOk) {
+        # Build failed: keep the current (old) build and server running, do NOT advance .last_sha,
+        # so the next loop retries the same commit. Previously the SHA was advanced regardless,
+        # leaving a stale build serving while /api/version falsely reported the new SHA.
+        Write-Host "[$(Get-Date -Format HH:mm:ss)] BUILD FAILED (exit $LASTEXITCODE) for $short - keeping old build, will retry"
+      } else {
+        $conns = Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue
+        foreach ($c in $conns) { Stop-Process -Id $c.OwningProcess -Force -ErrorAction SilentlyContinue }
 
-      Set-Content -Path $shaFile -Value $sha -Encoding ascii
-      $lastSha = $sha
-      Write-Host "[$(Get-Date -Format HH:mm:ss)] done - server restarted ($short)"
+        Set-Content -Path $shaFile -Value $sha -Encoding ascii
+        $lastSha = $sha
+        Write-Host "[$(Get-Date -Format HH:mm:ss)] done - server restarted ($short)"
+      }
     }
   } catch {
     Write-Host "[$(Get-Date -Format HH:mm:ss)] check error: $($_.Exception.Message)"
