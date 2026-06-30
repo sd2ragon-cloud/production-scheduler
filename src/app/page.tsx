@@ -205,6 +205,8 @@ export default function ScheduleBoard() {
   const [loading, setLoading] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingOrderId, setEditingOrderId] = useState<number | null>(null);
+  // 설비 행에서 수정을 시작한 경우 그 설비 id(저장 시 추가된 구성을 이 설비에 바로 배정). 대기에서 수정하면 null.
+  const [editMachineId, setEditMachineId] = useState<number | null>(null);
   const [newOrder, setNewOrder] = useState({
     order_code: "", product_name: "", component: "", quantity_sheets: 0,
     deadline: "", special_process: "일반", priority: 5, notes: "", extra_notes: "", duration_hours: 0,
@@ -852,12 +854,13 @@ export default function ScheduleBoard() {
     });
     setShowAddForm(false);
     setEditingOrderId(null);
+    setEditMachineId(null);
   };
 
   // 대기 주문 편집 시작: 폼을 해당 주문 값으로 채운다
   // asCopy=true면 같은 사양으로 '새 주문'을 만든다(값만 채우고 editingOrderId는 비움 → 저장 시 신규 생성).
   // 한 제품을 생산하다 중단·다른 제품 후 이어서 생산하는 계획에서, 다시 입력하지 않고 분량만 고쳐 배정할 수 있다.
-  const startEditOrder = (order: Order, asCopy = false) => {
+  const startEditOrder = (order: Order, asCopy = false, fromMachineId: number | null = null) => {
     const parts = parseParts(order.component);
     const pd = parsePartDurations(order.part_durations);
     const pp = parsePartProcesses(order.part_processes);
@@ -891,6 +894,7 @@ export default function ScheduleBoard() {
       partQuantities,
     });
     setEditingOrderId(asCopy ? null : order.id);
+    setEditMachineId(asCopy ? null : fromMachineId);
     setShowAddForm(true);
   };
 
@@ -932,6 +936,19 @@ export default function ScheduleBoard() {
           status: existingStatus,
         }),
       });
+      // 설비 행에서 수정한 경우: 새로 추가된 구성(아직 어느 설비에도 배정 안 됨)을 그 설비에 바로 병합 배정.
+      if (editMachineId !== null && parts.length >= 2) {
+        const assigned = new Set<string>();
+        for (const s of schedule) if (s.order_id === editingOrderId) parseParts(s.component_part).forEach((p) => assigned.add(p));
+        const newParts = parts.filter((p) => !assigned.has(p));
+        for (const p of newParts) {
+          await fetch("/api/schedule/assign", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ order_id: editingOrderId, machine_id: editMachineId, start_time: machineStartTimes[editMachineId] || "08:00", component_part: p, merge: true }),
+          });
+        }
+      }
     } else {
       await fetch("/api/orders", {
         method: "POST",
@@ -2126,10 +2143,10 @@ export default function ScheduleBoard() {
                             <div className="flex items-center justify-center gap-1">
                               {isAdmin ? (<>
                               <button
-                                onClick={() => { const o = allOrders.find((x) => x.id === entry.order_id); if (o) startEditOrder(o); }}
+                                onClick={() => { const o = allOrders.find((x) => x.id === entry.order_id); if (o) startEditOrder(o, false, entry.machine_id); }}
                                 disabled={loading}
                                 className="text-gray-400 hover:text-blue-600 text-sm leading-none px-0.5"
-                                title="작업 사양 수정 (제품명·구성·비고·납기 등)"
+                                title="작업 사양 수정 (제품명·구성·비고·납기 등) — 추가한 구성은 이 설비에 바로 배정됩니다"
                               >
                                 ✎
                               </button>
