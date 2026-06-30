@@ -298,15 +298,33 @@ export default function ScheduleBoard() {
       .catch(() => {});
   }, [processLine]);
 
-  // '저장' 버튼: 현재 시각을 그 라인의 마지막 저장(수정) 시각으로 서버에 기록.
+  // '저장' 버튼: 그 라인의 현재 상태를 스냅샷(확정 시점)으로 저장하고 저장 시각 기록 후 새로고침.
   const saveStamp = async () => {
-    const res = await fetch("/api/saved-at", {
+    const res = await fetch("/api/save-state", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ process_line: processLine }),
     });
     const d = await res.json().catch(() => ({}));
     if (res.ok && d.saved_at) setSavedAt(d.saved_at);
+    await fetchAll();
+  };
+
+  // '되돌리기' 버튼: 마지막 저장 이후의 모든 변경을 취소하고 저장 시점 상태로 복원.
+  const revertToSaved = async () => {
+    if (!window.confirm("마지막 저장 이후의 변경을 모두 취소하고 저장 시점으로 되돌릴까요?")) return;
+    const res = await fetch("/api/revert-state", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ process_line: processLine }),
+    });
+    if (res.ok) {
+      await fetchAll();
+      window.alert(`마지막 저장(${savedAt}) 상태로 되돌렸습니다.`);
+    } else {
+      const d = await res.json().catch(() => ({}));
+      window.alert(d.error === "no snapshot" ? "저장된 기준이 없습니다. 먼저 '저장'을 눌러주세요." : "되돌리기 실패");
+    }
   };
 
   // 스케줄 출력의 작업명(pf-job)을 실제 글자폭으로 측정해, 완료시간을 뺀 가용 폭에 맞게
@@ -1758,9 +1776,18 @@ export default function ScheduleBoard() {
               <button
                 onClick={saveStamp}
                 className="text-sm border border-blue-300 bg-blue-50 px-3 py-1.5 hover:bg-blue-100 text-blue-700 whitespace-nowrap"
-                title="현재 시각을 '마지막 저장'으로 기록합니다 (모든 관리자에게 표시)"
+                title="현재 상태를 저장(확정)합니다. 이후 '되돌리기'로 이 시점까지 복원할 수 있습니다."
               >
                 💾 저장
+              </button>
+            )}
+            {isAdmin && savedAt && (
+              <button
+                onClick={revertToSaved}
+                className="text-sm border border-amber-300 bg-amber-50 px-3 py-1.5 hover:bg-amber-100 text-amber-700 whitespace-nowrap"
+                title="마지막 저장 이후의 모든 변경(배정·순서·소요시간 등)을 취소하고 저장 시점으로 되돌립니다."
+              >
+                ↩ 되돌리기
               </button>
             )}
             {!isJechae && (
