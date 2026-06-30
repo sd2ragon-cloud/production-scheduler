@@ -11,6 +11,7 @@
   "dependencies": {
     "@libsql/client": "^0.17.3",
     "date-fns": "^4.3.0",
+    "exceljs": "^4.4.0",
     "next": "16.2.6",
     "pptxgenjs": "^4.0.1",
     "react": "19.2.4",

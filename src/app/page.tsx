@@ -1308,12 +1308,12 @@ export default function ScheduleBoard() {
   };
 
   const downloadExcel = async () => {
-    const mod = await import("xlsx");
-    const XLSX = "utils" in mod ? mod : (mod as unknown as { default: typeof mod }).default;
     const d = new Date();
     const ymd = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
-    const wb = XLSX.utils.book_new();
     if (isJechae) {
+      const mod = await import("xlsx");
+      const XLSX = "utils" in mod ? mod : (mod as unknown as { default: typeof mod }).default;
+      const wb = XLSX.utils.book_new();
       // 출력물(요일×설비 매트릭스)과 동일: 이번 주(월~토)만, 각 칸에 그 설비의 작업들 + 기타사항(※).
       // 한 칸에 여러 작업이면 작업당 한 행으로 펼치고 날짜(요일)는 첫 행에만 표기.
       const { cell } = buildJechaeMatrix();
@@ -1347,28 +1347,133 @@ export default function ScheduleBoard() {
       XLSX.writeFile(wb, `스케줄_${processLine}_${ymd}.xlsx`);
       return;
     }
-    const rows: Record<string, string | number>[] = [];
-    for (const m of machines) {
-      getEntriesForMachine(m.id).forEach((e, i) => {
-        rows.push({
-          설비: m.name,
-          순서: i + 1,
-          제품명: e.product_name,
-          구성: e.component_part || e.component || "",
-          공정: e.special_process || "",
-          [qtyLabel]: e.quantity_sheets || "",
-          "소요(시간)": e.duration_minutes ? Math.round((e.duration_minutes / 60) * 10) / 10 : "",
-          // 화면 표기와 동일하게: 예상완료를 "요일 HH:MM"(자정은 전일 24:00)으로
-          예상완료: e.end_time ? formatEndTime(e.end_time) : "",
-          납기: e.deadline || "",
-          비고: e.order_notes || "",
-        });
+    // 매엽·윤전: 스케줄 출력화면(renderFullPrint)과 동일한 레이아웃으로 변환.
+    // 설비 박스 2열 그리드(설비명+시간 회색 헤더 → 번호·제품명·비고·완료시간) + 하단 1차배정/배정대기.
+    // 색·테두리·병합이 필요해 xlsx(커뮤니티판) 대신 exceljs 사용.
+    const xlmod = await import("exceljs");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const ExcelJS: any = (xlmod as any).default ?? xlmod;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const wb: any = new ExcelJS.Workbook();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const ws: any = wb.addWorksheet(processLine, { views: [{ showGridLines: false }] });
+    ws.columns = [
+      { width: 4.5 }, { width: 30 }, { width: 13 }, { width: 16 },
+      { width: 2.5 },
+      { width: 4.5 }, { width: 30 }, { width: 13 }, { width: 16 },
+    ];
+    const GRAY = "FFE5E7EB", LGRAY = "FFF2F2F2";
+    const thin = { style: "thin", color: { argb: "FFCCCCCC" } };
+    const allThin = { top: thin, left: thin, bottom: thin, right: thin };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const cset = (r: number, c: number, value: string | number, opts: any = {}) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const cl: any = ws.getCell(r, c);
+      cl.value = value;
+      if (opts.border !== null) cl.border = allThin;
+      if (opts.fill) cl.fill = { type: "pattern", pattern: "solid", fgColor: { argb: opts.fill } };
+      if (opts.font) cl.font = opts.font;
+      cl.alignment = opts.align ?? { vertical: "middle" };
+      return cl;
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const box = (r1: number, c1: number, r2: number, c2: number, value: string | number, opts: any = {}) => {
+      ws.mergeCells(r1, c1, r2, c2);
+      for (let rr = r1; rr <= r2; rr++) for (let cc = c1; cc <= c2; cc++) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const cl: any = ws.getCell(rr, cc);
+        if (opts.border !== null) cl.border = allThin;
+        if (opts.fill) cl.fill = { type: "pattern", pattern: "solid", fgColor: { argb: opts.fill } };
+      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const m: any = ws.getCell(r1, c1);
+      m.value = value;
+      if (opts.font) m.font = opts.font;
+      m.alignment = opts.align ?? { vertical: "middle" };
+      return m;
+    };
+    const ovL = (o: Order) => {
+      const q = isRoll && o.quantity_sheets ? ` ${o.quantity_sheets.toLocaleString()}부` : "";
+      return `${o.product_name}${o.component ? `(${o.component})` : ""}${q}`;
+    };
+
+    box(1, 1, 1, 9, `${processLine} 생산 스케줄 — ${dateStr}    출력 ${printStamp}`,
+      { font: { bold: true, size: 14 }, align: { horizontal: "center", vertical: "middle" }, border: null });
+    ws.getRow(1).height = 22;
+
+    let r = 3;
+    // 설비 박스 2열 그리드 (좌: A~D, 우: F~I)
+    for (let i = 0; i < machines.length; i += 2) {
+      const sides = [machines[i], machines[i + 1]];
+      const meta = sides.map((m) => {
+        if (!m) return null;
+        const entries = getEntriesForMachine(m.id);
+        const total = entries.reduce((s, e) => s + (e.duration_minutes || 0), 0);
+        const memo = (machineMemos[m.id] ?? m.memo ?? "").trim();
+        return { m, entries, total, memo };
       });
+      sides.forEach((m, si) => {
+        const base = si === 0 ? 1 : 6;
+        const md = meta[si];
+        if (!md) { box(r, base, r, base + 3, "", {}); return; }
+        box(r, base, r, base + 2, `${md.m.name}${md.memo ? `   ${md.memo}` : ""}`,
+          { fill: GRAY, font: { bold: true, size: 10 }, align: { vertical: "middle", horizontal: "left" } });
+        cset(r, base + 3, fmtH(md.total), { fill: GRAY, font: { bold: true, size: 9 }, align: { vertical: "middle", horizontal: "right" } });
+      });
+      ws.getRow(r).height = 16;
+      r++;
+      const maxRows = Math.max(1, ...meta.map((x) => (x ? x.entries.length : 0)));
+      for (let k = 0; k < maxRows; k++) {
+        sides.forEach((m, si) => {
+          const base = si === 0 ? 1 : 6;
+          const e = meta[si]?.entries[k];
+          if (e) {
+            cset(r, base, k + 1, { font: { size: 9 }, align: { vertical: "middle", horizontal: "center" } });
+            cset(r, base + 1, jobLabel(e), { font: { size: 9 }, align: { vertical: "middle", horizontal: "left" } });
+            cset(r, base + 2, (e.order_notes || "").trim(), { font: { size: 9 }, align: { vertical: "middle", horizontal: "left" } });
+            cset(r, base + 3, formatEndTime(e.end_time), { font: { size: 9 }, align: { vertical: "middle", horizontal: "center" } });
+          } else {
+            for (let cc = base; cc < base + 4; cc++) cset(r, cc, "", {});
+          }
+        });
+        r++;
+      }
+      r++; // 밴드 사이 간격
     }
-    if (rows.length === 0) rows.push({ 설비: "(배정된 작업 없음)" });
-    const ws = XLSX.utils.json_to_sheet(rows);
-    XLSX.utils.book_append_sheet(wb, ws, processLine);
-    XLSX.writeFile(wb, `스케줄_${processLine}_${ymd}.xlsx`);
+
+    // 하단: 1차 배정(좌) | 배정 대기(우)
+    r++;
+    const totalBuckets = buckets.reduce((s, b) => s + locationMinutes(orders.filter((o) => showsAt(o, b.id)), b.id), 0);
+    box(r, 1, r, 4, `1차 배정   ${fmtH(totalBuckets)}`, { fill: GRAY, font: { bold: true, size: 10 } });
+    box(r, 6, r, 9, `배정 대기   ${fmtH(locationMinutes(waitingOrders, undefined))}`, { fill: GRAY, font: { bold: true, size: 10 } });
+    r++;
+    type Line = { kind: "head" | "item" | "dim"; text: string };
+    const leftLines: Line[] = [];
+    for (const b of buckets) {
+      const bo = orders.filter((o) => showsAt(o, b.id));
+      leftLines.push({ kind: "head", text: `${b.name}   ${fmtH(locationMinutes(bo, b.id))}` });
+      if (bo.length) bo.forEach((o) => leftLines.push({ kind: "item", text: ovL(o) }));
+      else leftLines.push({ kind: "dim", text: "-" });
+    }
+    const rightLines = waitingOrders.map((o) => ovL(o));
+    const bottomRows = Math.max(leftLines.length, rightLines.length, 1);
+    for (let j = 0; j < bottomRows; j++) {
+      const L = leftLines[j];
+      if (!L) box(r, 1, r, 4, "", {});
+      else if (L.kind === "head") box(r, 1, r, 4, L.text, { fill: LGRAY, font: { bold: true, size: 9 } });
+      else box(r, 1, r, 4, L.text, { font: { size: 9, color: L.kind === "dim" ? { argb: "FF999999" } : undefined }, align: { vertical: "middle", horizontal: "left", indent: 1 } });
+      box(r, 6, r, 9, rightLines[j] ?? "", { font: { size: 9 }, align: { vertical: "middle", horizontal: "left" } });
+      r++;
+    }
+
+    const buf = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `스케줄_${processLine}_${ymd}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   // 제책 스케줄을 PPT(.pptx)로 — 출력물(요일×설비 주간 매트릭스)을 슬라이드 2장(월화수/목금토)으로 재현.
