@@ -411,25 +411,6 @@ export default function ScheduleBoard() {
     else { wantPrint.current = true; setPrintView(view); }
   };
 
-  const startTimeTimers = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
-
-  const handleStartTimeChange = (machineId: number, value: string) => {
-    setMachineStartTimes((prev) => ({ ...prev, [machineId]: value }));
-    const existing = startTimeTimers.current.get(machineId);
-    if (existing) clearTimeout(existing);
-    startTimeTimers.current.set(
-      machineId,
-      setTimeout(async () => {
-        await fetch("/api/schedule/recalc", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ machine_id: machineId, start_time: value }),
-        });
-        await fetchAll();
-        startTimeTimers.current.delete(machineId);
-      }, 600)
-    );
-  };
 
   const memoTimers = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
 
@@ -1907,17 +1888,7 @@ export default function ScheduleBoard() {
                   disabled={!isAdmin}
                 />
                 <div className="flex items-center gap-3 shrink-0 ml-8">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs text-gray-400">시작</span>
-                    <input
-                      type="time"
-                      className="bg-gray-700 text-white text-xs px-2 py-0.5 border border-gray-500 focus:border-blue-400 outline-none disabled:opacity-60"
-                      style={{ width: "7rem", colorScheme: "dark" }}
-                      value={machineStartTimes[machine.id] || "08:00"}
-                      onChange={(e) => handleStartTimeChange(machine.id, e.target.value)}
-                      disabled={!isAdmin}
-                    />
-                  </div>
+                  <span className="text-xs text-gray-400 whitespace-nowrap">시작 08:30 고정</span>
                   <button
                     onClick={() => { setDtModalMachine(machine.id); setDtForm({ start: "", end: "", reason: "" }); }}
                     className="text-xs px-2 py-0.5 border border-gray-500 bg-gray-700 text-gray-200 hover:bg-gray-600 whitespace-nowrap shrink-0"

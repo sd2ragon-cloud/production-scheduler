@@ -100,7 +100,7 @@ function formatDateTimeMin(date: Date, totalMin: number): string {
   return formatDateTime(d, Math.floor(minOfDay / 60), minOfDay % 60);
 }
 
-export async function recalcMachine(machineId: number, baseDate?: string, startTimeStr?: string) {
+export async function recalcMachine(machineId: number, baseDate?: string, _startTimeStr?: string) {
   const db = await getDb();
 
   const machineResult = await db.execute({ sql: 'SELECT * FROM machines WHERE id = ?', args: [machineId] });
@@ -156,13 +156,8 @@ export async function recalcMachine(machineId: number, baseDate?: string, startT
     return [[start, end]];
   };
 
-  // 시작 시각(분, 자정 기준): 명시 인자 > 저장값 > 08:00.
-  const startStr = startTimeStr || machine.schedule_start_time || '08:00';
-  let startMin = 8 * 60;
-  {
-    const [h, m] = String(startStr).split(':').map(Number);
-    if (!isNaN(h)) startMin = h * 60 + (isNaN(m) ? 0 : m);
-  }
+  // 시작 시각: 설정 없이 무조건 해당 일 08:30(자정 기준 분)에 시작.
+  const startMin = 8 * 60 + 30;
 
   // 총 소요시간에 맞춰 충분한 일수의 '근무 가능 구간'을 절대 타임라인(startDate 자정 기준 분)으로 만든다.
   const totalDur = entries.reduce((s, e) => s + (Number(e.duration_minutes) || 0), 0);
