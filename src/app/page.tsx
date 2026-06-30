@@ -2207,7 +2207,7 @@ export default function ScheduleBoard() {
                                   onClick={() => handlePrintModeToggle(entry)}
                                   disabled={loading}
                                   title="양면/단면 전환 (양면은 소요시간 절반)"
-                                  className={`px-1 py-0 text-[9px] border ${
+                                  className={`px-2 py-0.5 text-[11px] font-medium border whitespace-nowrap ${
                                     entry.print_mode === "single"
                                       ? "bg-amber-100 text-amber-700 border-amber-300"
                                       : "bg-green-100 text-green-700 border-green-300"
@@ -2216,7 +2216,7 @@ export default function ScheduleBoard() {
                                   {entry.print_mode === "single" ? "단면" : "양면"}
                                 </button>
                               ) : (
-                                <span className="text-[9px] text-gray-400">{entry.print_mode === "single" ? "단면" : "양면"}</span>
+                                <span className="px-2 py-0.5 text-[11px] font-medium border border-gray-300 bg-gray-100 text-gray-500 whitespace-nowrap">{entry.print_mode === "single" ? "단면" : "양면"}</span>
                               )}
                             </div>
                           </td>
