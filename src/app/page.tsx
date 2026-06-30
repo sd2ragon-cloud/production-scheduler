@@ -334,16 +334,19 @@ export default function ScheduleBoard() {
     if (!root) return;
     const lis = root.querySelectorAll<HTMLElement>(".pf-li");
     const rows = root.querySelectorAll<HTMLElement>(".pf-row"); // 배정 대기 항목(2열)
-    if (!lis.length && !rows.length) return;
+    const bkItems = root.querySelectorAll<HTMLElement>(".pf-bk-item"); // 1차 배정 칸 항목(2열)
+    if (!lis.length && !rows.length && !bkItems.length) return;
     const PXMM = 96 / 25.4;          // 1mm → px (96dpi)
     const BASE_PT = 7;               // 배정 내역 기본 폰트(축소)
     const LIST_W = 90 * PXMM;        // 인쇄 시 박스 내부(작업 목록) 가용 폭 ≈ 90mm 고정
     const GAP = 1.5 * PXMM;          // 칸 사이 간격
     const SAFETY = 1.5 * PXMM;       // 반올림 줄바꿈 방지 여백
-    const usable = LIST_W - 2 * GAP;
+    const NUM_W = 5 * PXMM;          // 맨 앞 번호 칸(≈5mm)
+    const usable = LIST_W - NUM_W - 3 * GAP; // 번호+제품명+비고+완료 4칸·3간격
     const JOB_W = usable * 5 / 9 - SAFETY;  // 제품명 칸(5/9, 넓게)
     const NOTE_W = usable * 2 / 9 - SAFETY; // 비고 칸(2/9)
     const WAIT_W = 44 * PXMM;               // 배정 대기 2열 한 칸 폭 ≈ 44mm
+    const BK_W = 44 * PXMM;                 // 1차 배정 2열 한 칸 내부 폭 ≈ 44mm
     const ref = lis[0]?.querySelector<HTMLElement>(".pf-job") ?? rows[0] ?? document.body;
     const cs = getComputedStyle(ref);
     const meas = document.createElement("span");
@@ -365,8 +368,9 @@ export default function ScheduleBoard() {
       fit(li.querySelector<HTMLElement>(".pf-note"), NOTE_W);
     });
     rows.forEach((el) => fit(el, WAIT_W));
+    bkItems.forEach((el) => fit(el, BK_W));
     document.body.removeChild(meas);
-  }, [schedule, machines, printView, isJechae]);
+  }, [schedule, machines, buckets, orders, printView, isJechae]);
 
   // 작업순서 출력의 작업명(print-name-main)도 한 줄을 넘으면 폰트를 실측해 유동 축소.
   //  단, 비고(print-note)는 별도 줄이므로 측정/축소 대상에서 제외(작업명 길이만 본다).
@@ -1762,11 +1766,12 @@ export default function ScheduleBoard() {
                   <div className="pf-empty">-</div>
                 ) : (
                   <ol className="pf-list">
-                    {shown.map((e) => {
+                    {shown.map((e, i) => {
                       const lbl = jobLabel(e);
                       return (
                       <li key={e.id}>
                         <div className="pf-li">
+                          <span className="pf-num">{i + 1}</span>
                           <span className="pf-job">{lbl}</span>
                           <span className="pf-note">{(e.order_notes || "").trim()}</span>
                           <span className="pf-eta">{formatEndTime(e.end_time)}</span>
@@ -1784,7 +1789,7 @@ export default function ScheduleBoard() {
         <div className="pf-bottom">
           <div className="pf-sect">
             <div className="pf-secttl">1차 배정 <span className="pf-secsum">{fmtH(buckets.reduce((s, b) => s + locationMinutes(orders.filter((o) => showsAt(o, b.id)), b.id), 0))}</span></div>
-            <div className="pf-bk-grid" style={{ gridTemplateRows: `repeat(${Math.max(4, buckets.length)}, 1fr)` }}>
+            <div className="pf-bk-grid" style={{ gridTemplateRows: `repeat(${Math.max(2, Math.ceil(Math.max(4, buckets.length) / 2))}, 1fr)` }}>
               {Array.from({ length: Math.max(4, buckets.length) }).map((_, i) => {
                 const b = buckets[i];
                 const bo = b ? orders.filter((o) => showsAt(o, b.id)) : [];
