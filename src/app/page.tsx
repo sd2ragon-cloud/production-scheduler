@@ -160,6 +160,27 @@ function formatEndTime(endTimeStr: string): string {
   return `${head(dt)} ${p2(dt.getHours())}:${p2(dt.getMinutes())}`;
 }
 
+// 예상완료 시간 칸: 한 줄 유지. 칸을 넘치면(줄바꿈 대신) 폰트를 줄여 맞춘다. 스크롤은 쓰지 않음.
+function FitEndTime({ text, className }: { text: string; className?: string }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const MAX = 12, MIN = 8;
+    let size = MAX;
+    el.style.fontSize = size + "px";
+    while (el.scrollWidth > el.clientWidth && size > MIN) {
+      size -= 0.5;
+      el.style.fontSize = size + "px";
+    }
+  }, [text]);
+  return (
+    <span ref={ref} className={className} style={{ display: "block", whiteSpace: "nowrap", overflow: "hidden", fontSize: "12px" }}>
+      {text}
+    </span>
+  );
+}
+
 export default function ScheduleBoard() {
   const { processLine } = useProcess();
   const { role } = useAuth();
@@ -1916,7 +1937,7 @@ export default function ScheduleBoard() {
                 <div className="px-3 pb-2">
                 <table className="w-full table-fixed">
                   <thead>
-                    <tr className={`text-gray-500 border-b h-7 ${isJechae ? "text-[13px]" : "text-[10px]"}`}>
+                    <tr className={`text-gray-500 border-b border-gray-200 h-7 ${isJechae ? "text-[13px]" : "text-[10px]"}`}>
                       <th className="px-1.5 py-0 text-left w-6">#</th>
                       <th className="px-1.5 py-0 text-center">작업명</th>
                       <th className={`px-1.5 py-0 text-center ${isJechae ? "" : "w-44"}`}>비고</th>
@@ -1941,7 +1962,7 @@ export default function ScheduleBoard() {
                           }}
                           onDragEnd={() => { setDragEntryId(null); setReorderTarget(null); setMergeHoverId(null); }}
                           style={isMergeHover ? undefined : { background: MARK_BG[entry.mark_color || ""] || undefined }}
-                          className={`border-t cursor-grab active:cursor-grabbing h-7 hover:bg-gray-50 ${dragEntryId === entry.id ? "opacity-40" : ""} ${
+                          className={`border-t border-gray-200 cursor-grab active:cursor-grabbing h-8 hover:bg-gray-50 ${dragEntryId === entry.id ? "opacity-40" : ""} ${
                             isReorderHover ? (reorderAfter ? "border-b-2 border-b-blue-500" : "border-t-2 border-t-blue-500") : ""
                           } ${isMergeHover ? "ring-2 ring-inset ring-green-500 bg-green-50" : ""}`}
                           onDragOver={(e) => {
@@ -2020,7 +2041,7 @@ export default function ScheduleBoard() {
                           </td>
                           <td className="px-1.5 py-0">
                             <div className="flex items-center gap-1 overflow-x-auto jobscroll">
-                            <span className={`font-medium shrink-0 ${isJechae ? "text-[13px] text-black" : "text-[11px]"}`}>{entry.product_name}</span>
+                            <span className={`font-medium shrink-0 ${isJechae ? "text-[13px] text-black" : "text-[12px]"}`}>{entry.product_name}</span>
                             {(() => {
                               const eparts = parseParts(entry.component_part);
                               if (eparts.length === 0) {
@@ -2028,7 +2049,7 @@ export default function ScheduleBoard() {
                                 return (
                                   <span className="inline-flex items-center gap-0.5 shrink-0">
                                     {entry.special_process ? (
-                                      <span className={`px-1.5 py-0 text-[10px] font-medium border whitespace-nowrap ${PROCESS_COLORS[entry.special_process] || "bg-gray-100 text-gray-600 border-gray-200"}`}>
+                                      <span className={`px-2 py-0.5 text-[11px] font-medium border whitespace-nowrap ${PROCESS_COLORS[entry.special_process] || "bg-gray-100 text-gray-600 border-gray-200"}`}>
                                         {entry.special_process}
                                       </span>
                                     ) : null}
@@ -2044,7 +2065,7 @@ export default function ScheduleBoard() {
                                           setDragSplit(null);
                                         }}
                                         onDragEnd={() => setDragEntryId(null)}
-                                        className={`px-1.5 py-0 border border-gray-300 bg-gray-100 text-gray-700 ${isJechae ? "text-[13px]" : "text-[10px]"} cursor-grab active:cursor-grabbing hover:bg-blue-100 hover:border-blue-300`}
+                                        className={`px-2 py-0.5 border border-gray-300 bg-gray-100 text-gray-700 ${isJechae ? "text-[13px]" : "text-[11px]"} cursor-grab active:cursor-grabbing hover:bg-blue-100 hover:border-blue-300`}
                                         title="다른 설비로 드래그하여 이동"
                                       >
                                         {entry.component}
@@ -2120,7 +2141,7 @@ export default function ScheduleBoard() {
                                   {procGroups.map((g, gi) => (
                                     <span key={`${g.proc}-${gi}`} className="inline-flex items-center gap-0.5 shrink-0">
                                       {g.proc ? (
-                                        <span className={`px-1.5 py-0 text-[10px] font-medium border whitespace-nowrap ${PROCESS_COLORS[g.proc] || "bg-gray-100 text-gray-600 border-gray-200"}`}>
+                                        <span className={`px-2 py-0.5 text-[11px] font-medium border whitespace-nowrap ${PROCESS_COLORS[g.proc] || "bg-gray-100 text-gray-600 border-gray-200"}`}>
                                           {g.proc}
                                         </span>
                                       ) : null}
@@ -2141,7 +2162,7 @@ export default function ScheduleBoard() {
                                               setDragPart("");
                                             }}
                                             onDragEnd={() => { setDragSplit(null); setPartReorderTarget(null); }}
-                                            className={`px-1.5 py-0 border ${isJechae ? "text-[13px]" : "text-[10px]"} cursor-grab active:cursor-grabbing ${
+                                            className={`px-2 py-0.5 border ${isJechae ? "text-[13px]" : "text-[11px]"} cursor-grab active:cursor-grabbing ${
                                               isTarget
                                                 ? `bg-blue-50 text-blue-700 border-blue-500 ${partReorderTarget?.after ? "border-r-4" : "border-l-4"}`
                                                 : "border-gray-300 bg-gray-100 text-gray-700 hover:bg-blue-100 hover:border-blue-300"
@@ -2158,12 +2179,12 @@ export default function ScheduleBoard() {
                               );
                             })()}
                             {usesQuantity && entry.quantity_sheets ? (
-                              <span className={`font-medium text-gray-600 shrink-0 whitespace-nowrap ${isJechae ? "text-[13px]" : "text-[11px]"}`}>{entry.quantity_sheets.toLocaleString()}부</span>
+                              <span className={`font-medium text-gray-600 shrink-0 whitespace-nowrap ${isJechae ? "text-[13px]" : "text-[12px]"}`}>{entry.quantity_sheets.toLocaleString()}부</span>
                             ) : null}
                             </div>
                           </td>
-                          <td className={`px-1.5 py-0 text-center truncate ${isJechae ? "text-[13px] text-black" : "text-[10px] text-gray-500"}`} title={entry.order_notes}>
-                            {entry.order_notes}
+                          <td className={`px-1.5 py-0 ${isJechae ? "text-[13px] text-black" : "text-[11px] text-gray-500"}`} title={entry.order_notes}>
+                            <div className="overflow-x-auto whitespace-nowrap jobscroll text-center">{entry.order_notes}</div>
                           </td>
                           <td className="px-1.5 py-0 text-center">
                             <div className="flex items-center justify-center gap-1">
@@ -2199,8 +2220,10 @@ export default function ScheduleBoard() {
                               )}
                             </div>
                           </td>
-                          <td className={`px-1.5 py-0 font-mono whitespace-nowrap text-gray-700 ${isJechae ? "text-[13px] text-center" : "text-[11px] text-left"}`}>
-                            {formatEndTime(entry.end_time)}
+                          <td className={`px-1.5 py-0 font-mono text-gray-700 ${isJechae ? "text-[13px] text-center whitespace-nowrap" : "text-left"}`}>
+                            {isJechae
+                              ? formatEndTime(entry.end_time)
+                              : <FitEndTime text={formatEndTime(entry.end_time)} />}
                           </td>
                           <td className="px-1.5 py-0 text-center">
                             <div className="flex items-center justify-center gap-1">
