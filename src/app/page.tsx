@@ -1612,8 +1612,14 @@ export default function ScheduleBoard() {
         pair.forEach((b, si) => {
           const base = si === 0 ? 1 : 5;
           const o = bmeta[si]?.bo[k];
-          if (o) box(r, base, r, base + 2, waitLabel(o, b.id), { font: { size: 9 }, align: { vertical: "middle", horizontal: "left", shrinkToFit: true }, borderObj: rowBd });
-          else box(r, base, r, base + 2, "", { borderObj: rowBd });
+          if (o) {
+            // 설비 배정과 동일하게: 번호 | 제품명 | 소요시간
+            cset(r, base, k + 1, { font: { size: 9 }, align: { vertical: "middle", horizontal: "center" }, borderObj: rowBd });
+            cset(r, base + 1, waitLabel(o, b.id), { font: { size: 9 }, align: { vertical: "middle", horizontal: "left", shrinkToFit: true }, borderObj: rowBd });
+            cset(r, base + 2, fmtH(locationMinutes([o], b.id)), { font: { size: 9 }, align: { vertical: "middle", horizontal: "center", shrinkToFit: true }, borderObj: rowBd });
+          } else {
+            for (let cc = base; cc < base + 3; cc++) cset(r, cc, "", { borderObj: rowBd });
+          }
         });
         r++;
       }
@@ -1629,22 +1635,22 @@ export default function ScheduleBoard() {
       box(r, 1, r, 7, "-", { font: { size: 9 }, align: { vertical: "middle", horizontal: "left" }, borderObj: { left: thin, right: thin, bottom: thin } });
       r++;
     } else {
-      // 좌:제품명(1~2)·시간(3) / 우:제품명(5~6)·시간(7). 설비 배정 제품처럼 소요시간 표기.
+      // 설비 배정과 동일하게: 번호 | 제품명 | 소요시간. 좌(1~3)/우(5~7) 2열, 번호는 연속.
       for (let j = 0; j < waitingOrders.length; j += 2) {
         const lastRow = j + 2 >= waitingOrders.length;
         const wbd = { left: thin, right: thin, ...(lastRow ? { bottom: thin } : {}) };
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const put = (base: number, o: any) => {
+        const put = (base: number, o: any, num: number) => {
           if (o) {
-            box(r, base, r, base + 1, waitLabel(o), { font: { size: 9 }, align: { vertical: "middle", horizontal: "left", shrinkToFit: true }, borderObj: wbd });
+            cset(r, base, num, { font: { size: 9 }, align: { vertical: "middle", horizontal: "center" }, borderObj: wbd });
+            cset(r, base + 1, waitLabel(o), { font: { size: 9 }, align: { vertical: "middle", horizontal: "left", shrinkToFit: true }, borderObj: wbd });
             cset(r, base + 2, fmtH(locationMinutes([o], undefined)), { font: { size: 9 }, align: { vertical: "middle", horizontal: "center", shrinkToFit: true }, borderObj: wbd });
           } else {
-            box(r, base, r, base + 1, "", { borderObj: wbd });
-            cset(r, base + 2, "", { borderObj: wbd });
+            for (let cc = base; cc < base + 3; cc++) cset(r, cc, "", { borderObj: wbd });
           }
         };
-        put(1, waitingOrders[j]);
-        put(5, waitingOrders[j + 1]);
+        put(1, waitingOrders[j], j + 1);
+        put(5, waitingOrders[j + 1], j + 2);
         r++;
       }
     }
