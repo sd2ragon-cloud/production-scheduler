@@ -1502,7 +1502,7 @@ export default function ScheduleBoard() {
     };
     // 상단: 제목(좌) "{라인} 계획" + 출력일시(우) — 제책 엑셀과 동일.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const tL: any = ws.getCell(1, 1); tL.value = `${processLine} 계획`; tL.font = { bold: true, size: 12 }; tL.alignment = { vertical: "middle" };
+    const tL: any = ws.getCell(1, 1); tL.value = `${processLine} 작업 계획`; tL.font = { bold: true, size: 12 }; tL.alignment = { vertical: "middle" };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const tR: any = ws.getCell(1, 7); tR.value = `출력 ${printStamp}`; tR.font = { size: 10 }; tR.alignment = { vertical: "middle", horizontal: "right" };
     ws.getRow(1).height = 22;
