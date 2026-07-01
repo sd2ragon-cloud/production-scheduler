@@ -391,38 +391,32 @@ export default function ScheduleBoard() {
     document.body.removeChild(meas);
   }, [schedule, machines, buckets, orders, printView, isJechae]);
 
-  // 제책 양식 인쇄: 작업명·비고가 칸 폭을 넘으면 줄바꿈 대신 폰트를 실측해 유동 축소(한 줄 유지).
+  // 제책 양식 인쇄: 작업명이 칸 폭을 넘으면 줄바꿈 대신 폰트를 실측해 유동 축소(한 줄 유지).
+  // (비고는 줄바꿈 허용 — 축소하지 않음)
   useEffect(() => {
     if (printView !== "full" || !isJechae) return;
     const root = document.querySelector(".print-area");
     if (!root) return;
     const jobs = root.querySelectorAll<HTMLElement>(".jml-job");
-    const notes = root.querySelectorAll<HTMLElement>(".jml-note");
-    if (!jobs.length && !notes.length) return;
+    if (!jobs.length) return;
     const PXMM = 96 / 25.4;
     const BASE_PT = 10;
     const LAND_W = 281;            // 가로 A4 가용 폭(mm, 여백 8mm 제외)
     const PAD = 3 * PXMM;          // 셀 좌우 패딩(1.5mm×2)
     const JOB_W = LAND_W * 0.352 * PXMM - PAD;  // 작업명 칸(35.2%)
-    const NOTE_W = LAND_W * 0.377 * PXMM - PAD; // 비고 칸(37.7%)
-    const ref = jobs[0] ?? notes[0] ?? document.body;
-    const cs = getComputedStyle(ref);
+    const cs = getComputedStyle(jobs[0]);
     const meas = document.createElement("span");
     meas.style.cssText = "position:absolute;left:-9999px;top:-9999px;visibility:hidden;white-space:nowrap;";
     meas.style.fontFamily = cs.fontFamily;
     meas.style.fontWeight = cs.fontWeight;
     meas.style.fontSize = `${(BASE_PT * 96) / 72}px`;
     document.body.appendChild(meas);
-    const fit = (el: HTMLElement, colW: number) => {
+    jobs.forEach((el) => {
       el.style.fontSize = "";
       meas.textContent = el.textContent || "";
       const w = meas.getBoundingClientRect().width;
-      el.style.fontSize = w > colW && colW > 0
-        ? `${Math.max(4, Math.round((BASE_PT * colW) / w * 10) / 10)}pt`
-        : "";
-    };
-    jobs.forEach((el) => fit(el, JOB_W));
-    notes.forEach((el) => fit(el, NOTE_W));
+      el.style.fontSize = w > JOB_W && JOB_W > 0 ? `${Math.max(4, Math.round((BASE_PT * JOB_W) / w * 10) / 10)}pt` : "";
+    });
     document.body.removeChild(meas);
   }, [schedule, machines, printView, isJechae]);
 
@@ -1428,8 +1422,8 @@ export default function ScheduleBoard() {
           setc(r, 3, row ? row.job : "", { align: { vertical: "middle", horizontal: "left", shrinkToFit: true }, font: { size: 10 }, borderObj: bd });
           setc(r, 4, row ? row.hours : "", { align: { vertical: "middle", horizontal: "center" }, font: { size: 10 }, borderObj: bd });
           setc(r, 5, row ? row.eta : "", { align: { vertical: "middle", horizontal: "center" }, font: { size: 10 }, borderObj: bd });
-          setc(r, 6, row ? row.note : "", { align: { vertical: "middle", horizontal: "left", shrinkToFit: true }, font: { size: 10 }, borderObj: bd });
-          ws.getRow(r).height = 20;
+          setc(r, 6, row ? row.note : "", { align: { vertical: "middle", horizontal: "left", wrapText: true }, font: { size: 10 }, borderObj: bd });
+          // 행 높이 자동: 비고가 여러 줄이면 그만큼 늘어난다(고정하지 않음).
           r++;
         });
         if (r - 1 > start) ws.mergeCells(start, 1, r - 1, 1); // 설비명 세로 병합
@@ -2655,12 +2649,22 @@ export default function ScheduleBoard() {
                     </>
                   );
                 })()}
-                <input
-                  type="text" placeholder="비고"
-                  className="border px-2 py-1.5 text-xs w-full col-span-2"
-                  value={newOrder.notes}
-                  onChange={(e) => setNewOrder({ ...newOrder, notes: e.target.value })}
-                />
+                {isJechae ? (
+                  <textarea
+                    placeholder="비고 (Enter로 줄바꿈 — 출력물에 그대로 여러 줄로 나옵니다)"
+                    className="border px-2 py-1.5 text-xs w-full col-span-2 resize-y"
+                    rows={2}
+                    value={newOrder.notes}
+                    onChange={(e) => setNewOrder({ ...newOrder, notes: e.target.value })}
+                  />
+                ) : (
+                  <input
+                    type="text" placeholder="비고"
+                    className="border px-2 py-1.5 text-xs w-full col-span-2"
+                    value={newOrder.notes}
+                    onChange={(e) => setNewOrder({ ...newOrder, notes: e.target.value })}
+                  />
+                )}
               </div>
               <button type="submit" className="w-full py-1.5 bg-blue-600 text-white text-xs font-medium">
                 {editingOrderId !== null ? "수정 저장" : "등록"}
