@@ -106,8 +106,6 @@ const MARK_BG: Record<string, string> = {
 
 // 제책 설비 하단 기타사항: 요일별(월~금) + 공통. extra_notes 컬럼에 JSON으로 저장.
 const EXTRA_DAYS: [string, string][] = [["mon", "월"], ["tue", "화"], ["wed", "수"], ["thu", "목"], ["fri", "금"], ["sat", "토"], ["sun", "일"]];
-// getDay()(0=일~6=토) → 기타사항 키
-const WD_KEY = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
 // 저장값을 {mon,tue,...,general} 형태로 파싱. 구버전 단일 텍스트는 공통(general)으로 본다.
 function parseExtraNotes(raw: string): Record<string, string> {
   if (!raw) return {};
@@ -1315,80 +1313,94 @@ export default function ScheduleBoard() {
   // 분 → "N.Nh" (소요시간 합계 표기)
   const fmtH = (min: number) => `${Math.round(min / 6) / 10}h`;
 
-  // 스케줄을 엑셀(.xlsx)로 내려받기. 설비별 작업을 순서대로 한 행씩. 클릭 시에만 라이브러리를 동적 로드.
-  // 제책용 '날짜 × 설비' 매트릭스 데이터. 각 작업을 시작~완료 날짜마다 해당 설비 칸에 넣는다.
-  // (여러 날 걸치는 작업은 그 날짜들마다 반복 표기 — 업로드 엑셀과 동일한 일자별 계획)
-  const ymd2 = (dt: Date) => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
-  const offDaysOf = (m: Machine): Set<number> => {
-    try { const a = JSON.parse(m.off_days || "[]"); return new Set(Array.isArray(a) ? a.map(Number) : []); } catch { return new Set(); }
-  };
-  const buildJechaeMatrix = () => {
-    const cell: Record<string, Record<number, { label: string; note: string; dur: string }[]>> = {};
-    for (const m of machines) {
-      const off = offDaysOf(m);
-      for (const e of getEntriesForMachine(m.id)) {
-        if (!e.start_time || !e.end_time) continue;
-        const start = new Date(e.start_time.slice(0, 10) + "T00:00");
-        // 완료가 정확히 00:00이면 전날 24:00에 끝난 것 → 마지막 작업일은 전날
-        const end = new Date(e.end_time.slice(0, 10) + "T00:00");
-        if (/00:00$/.test(e.end_time.replace("T", " "))) end.setDate(end.getDate() - 1);
-        if (isNaN(start.getTime()) || isNaN(end.getTime()) || end < start) continue;
+  // 제책 '설비별 작업 목록'(첨부 양식용). 각 설비의 배정 순서대로 작업명·소요(시간)·예상완료·비고 행.
+  // 배정이 없으면 rows는 빈 배열(양식에선 빈 줄 1개로 설비명만 표시).
+  type JmRow = { job: string; hours: number | ""; eta: string; note: string };
+  const jechaeMachineRows = (): { machine: Machine; rows: JmRow[] }[] =>
+    machines.map((m) => ({
+      machine: m,
+      rows: getEntriesForMachine(m.id).map((e) => {
         const comp = e.component_part || e.component || "";
         const qty = e.quantity_sheets ? ` = ${e.quantity_sheets.toLocaleString()}부` : "";
-        const label = `${e.product_name}${comp ? `(${comp})` : ""}${qty}`;
-        const note = (e.order_notes || "").trim();
-        const h = e.duration_minutes ? Math.round((e.duration_minutes / 60) * 10) / 10 : 0;
-        const dur = h ? `${h}H` : "";
-        const job = { label, note, dur };
-        for (let cur = new Date(start), g = 0; cur <= end && g < 400; cur.setDate(cur.getDate() + 1), g++) {
-          if (off.has(cur.getDay())) continue; // 휴무 요일은 제외
-          const dk = ymd2(cur);
-          (cell[dk] ??= {});
-          (cell[dk][m.id] ??= []).push(job);
-        }
-      }
-    }
-    return { cell, dates: Object.keys(cell).sort() };
-  };
+        return {
+          job: `${e.product_name}${comp ? `(${comp})` : ""}${qty}`,
+          hours: e.duration_minutes ? Math.round((e.duration_minutes / 60) * 10) / 10 : "",
+          eta: e.end_time ? formatEndTime(e.end_time) : "",
+          note: (e.order_notes || "").trim(),
+        } as JmRow;
+      }),
+    }));
 
   const downloadExcel = async () => {
     const d = new Date();
     const ymd = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
     if (isJechae) {
-      const mod = await import("xlsx");
-      const XLSX = "utils" in mod ? mod : (mod as unknown as { default: typeof mod }).default;
-      const wb = XLSX.utils.book_new();
-      // 출력물(요일×설비 매트릭스)과 동일: 이번 주(월~토)만, 각 칸에 그 설비의 작업들 + 기타사항(※).
-      // 한 칸에 여러 작업이면 작업당 한 행으로 펼치고 날짜(요일)는 첫 행에만 표기.
-      const { cell } = buildJechaeMatrix();
-      const today = new Date(); today.setHours(0, 0, 0, 0);
-      const monday = new Date(today); monday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
-      const week = Array.from({ length: 6 }, (_, i) => { const d = new Date(monday); d.setDate(monday.getDate() + i); return d; });
-      const fmtMD = (d: Date) => `${d.getMonth() + 1}/${d.getDate()}`;
-      const exByMachine: Record<number, Record<string, string>> = {};
-      for (const m of machines) exByMachine[m.id] = parseExtraNotes(machineExtras[m.id] ?? m.extra_notes ?? "");
-      // 한 설비·하루의 칸 내용 라인들: 작업들(제품 · 비고 · 시간) 다음에 기타사항(※).
-      const linesFor = (m: Machine, d: Date): string[] => {
-        const out = (cell[ymd2(d)]?.[m.id] || []).map((j) => [j.label, j.note, j.dur].filter(Boolean).join(" · "));
-        const note = (exByMachine[m.id]?.[WD_KEY[d.getDay()]] || "").trim();
-        if (note) out.push(`※ ${note}`);
-        return out;
+      // 제책 양식: 설비명 | no. | 작업명 | 소요시간 | 예상완료 | 비고. 설비마다 배정 개수만큼 줄(유동 높이),
+      // 내용 길면 다음 장으로(1·2행 제목·헤더는 페이지마다 반복). 가로 용지.
+      const xlmod = await import("exceljs");
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const ExcelJS: any = (xlmod as any).default ?? xlmod;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const wb: any = new ExcelJS.Workbook();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const ws: any = wb.addWorksheet(processLine, { views: [{ showGridLines: false }] });
+      ws.columns = [
+        { width: 10.6 }, { width: 5.6 }, { width: 50.6 }, { width: 10.6 }, { width: 15.6 }, { width: 50.6 },
+      ];
+      ws.pageSetup = {
+        orientation: "landscape", paperSize: 9,
+        margins: { left: 0, right: 0, top: 0, bottom: 0, header: 0, footer: 0 },
+        horizontalCentered: true, printTitlesRow: "1:2",
       };
-      const head = `${processLine} 생산 스케줄 — ${fmtMD(week[0])}(${DAY_NAMES[week[0].getDay()]}) ~ ${fmtMD(week[5])}(${DAY_NAMES[week[5].getDay()]})    출력 ${printStamp}`;
-      const aoa: (string | number)[][] = [[head], ["요일", ...machines.map((m) => m.name)]];
-      for (const d of week) {
-        const perM = machines.map((m) => linesFor(m, d));
-        const maxL = Math.max(1, ...perM.map((a) => a.length));
-        for (let k = 0; k < maxL; k++) {
-          aoa.push([k === 0 ? `${DAY_NAMES[d.getDay()]} ${fmtMD(d)}` : "", ...perM.map((a) => a[k] || "")]);
-        }
+      const NAVY = "FF002060";
+      const thin = { style: "thin", color: { argb: "FF000000" } };
+      const allThin = { top: thin, left: thin, bottom: thin, right: thin };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const setc = (r: number, c: number, value: string | number, opts: any = {}) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const cl: any = ws.getCell(r, c);
+        cl.value = value;
+        if (opts.border !== false) cl.border = allThin;
+        if (opts.fill) cl.fill = { type: "pattern", pattern: "solid", fgColor: { argb: opts.fill } };
+        if (opts.font) cl.font = opts.font;
+        cl.alignment = opts.align ?? { vertical: "middle" };
+        return cl;
+      };
+      // 1행: 제목 + 출력시각 (테두리 없음)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const t1: any = ws.getCell(1, 1); t1.value = `${processLine} 작업 계획`; t1.font = { bold: true, size: 12 }; t1.alignment = { vertical: "middle" };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const t2: any = ws.getCell(1, 6); t2.value = `출력 ${printStamp}`; t2.font = { size: 10 }; t2.alignment = { vertical: "middle", horizontal: "right" };
+      ws.getRow(1).height = 22;
+      // 2행: 헤더 (남색 배경 흰 글씨)
+      ["설비명", "no.", "작업명", "소요시간", "예상완료", "비고"].forEach((h, i) =>
+        setc(2, i + 1, h, { fill: NAVY, font: { bold: true, size: 10, color: { argb: "FFFFFFFF" } }, align: { vertical: "middle", horizontal: "center" } }));
+      ws.getRow(2).height = 20;
+      // 설비별 블록: 배정 개수만큼 줄, 없으면 빈 줄 1개(설비명만).
+      let r = 3;
+      for (const { machine, rows } of jechaeMachineRows()) {
+        const rr: (JmRow | null)[] = rows.length ? rows : [null];
+        const start = r;
+        rr.forEach((row, i) => {
+          setc(r, 1, i === 0 ? machine.name : "", { align: { vertical: "middle", horizontal: "center" }, font: { size: 10 } });
+          setc(r, 2, row ? i + 1 : "", { align: { vertical: "middle", horizontal: "center" }, font: { size: 10 } });
+          setc(r, 3, row ? row.job : "", { align: { vertical: "middle", horizontal: "left", shrinkToFit: true }, font: { size: 10 } });
+          setc(r, 4, row ? row.hours : "", { align: { vertical: "middle", horizontal: "center" }, font: { size: 10 } });
+          setc(r, 5, row ? row.eta : "", { align: { vertical: "middle", horizontal: "center" }, font: { size: 10 } });
+          setc(r, 6, row ? row.note : "", { align: { vertical: "middle", horizontal: "left", shrinkToFit: true }, font: { size: 10 } });
+          ws.getRow(r).height = 20;
+          r++;
+        });
+        if (r - 1 > start) ws.mergeCells(start, 1, r - 1, 1); // 설비명 세로 병합
       }
-      const ws = XLSX.utils.aoa_to_sheet(aoa);
-      const wch = (m: Machine) => (m.name.includes("낙정") || m.name.includes("배접") ? 22 : 30);
-      ws["!cols"] = [{ wch: 11 }, ...machines.map((m) => ({ wch: wch(m) }))];
-      ws["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: machines.length } }]; // 제목 행 가로 병합
-      XLSX.utils.book_append_sheet(wb, ws, processLine);
-      XLSX.writeFile(wb, `스케줄_${processLine}_${ymd}.xlsx`);
+      const buf = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `제책작업계획_${ymd}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
       return;
     }
     // 매엽·윤전: 스케줄 출력화면(renderFullPrint)과 동일한 레이아웃으로 변환.
@@ -1496,79 +1508,6 @@ export default function ScheduleBoard() {
   };
 
   // 제책 스케줄을 PPT(.pptx)로 — 출력물(요일×설비 주간 매트릭스)을 슬라이드 2장(월화수/목금토)으로 재현.
-  // 엑셀과 달리 셀 안 줄바꿈·배경색·정렬이 자유로워 출력물과 동일하게 표현된다.
-  const downloadPpt = async () => {
-    const PptxGenJS = (await import("pptxgenjs")).default;
-    const pptx = new PptxGenJS();
-    pptx.defineLayout({ name: "A4L", width: 11.69, height: 8.27 }); // A4 가로
-    pptx.layout = "A4L";
-    const FONT = "Malgun Gothic";
-    const d0 = new Date();
-    const ymd = `${d0.getFullYear()}${String(d0.getMonth() + 1).padStart(2, "0")}${String(d0.getDate()).padStart(2, "0")}`;
-
-    const { cell } = buildJechaeMatrix();
-    const today = new Date(); today.setHours(0, 0, 0, 0);
-    const monday = new Date(today); monday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
-    const week = Array.from({ length: 6 }, (_, i) => { const d = new Date(monday); d.setDate(monday.getDate() + i); return d; });
-    const chunks = [week.slice(0, 3), week.slice(3, 6)]; // 월화수 / 목금토 (한 슬라이드씩)
-    const fmtMD = (d: Date) => `${d.getMonth() + 1}/${d.getDate()}`;
-    const exByMachine: Record<number, Record<string, string>> = {};
-    for (const m of machines) exByMachine[m.id] = parseExtraNotes(machineExtras[m.id] ?? m.extra_notes ?? "");
-
-    // 열 너비: 낙정·배접은 20%만 축소(=80%), 그만큼 무선 열로 — 출력물과 동일.
-    const isMuseon = (m: Machine) => m.name.includes("무선");
-    const isNakBae = (m: Machine) => m.name.includes("낙정") || m.name.includes("배접");
-    const numMuseon = machines.filter(isMuseon).length;
-    const numNakBae = machines.filter(isNakBae).length;
-    const museonExtra = numMuseon > 0 ? (0.2 * numNakBae) / numMuseon : 0;
-    const weightOf = (m: Machine) => (isNakBae(m) ? 0.8 : isMuseon(m) ? 1 + museonExtra : 1);
-    const totalW = machines.reduce((s, m) => s + weightOf(m), 0) || 1;
-    const TABLE_W = 11.2, DATE_W = 0.85;
-    const colW = [DATE_W, ...machines.map((m) => ((TABLE_W - DATE_W) * weightOf(m)) / totalW)];
-
-    // 한 설비·하루 칸: 작업들(제품 굵게 + 비고·시간 회색) 다음에 기타사항(※).
-    type Run = { text: string; options?: Record<string, unknown> };
-    const cellFor = (m: Machine, d: Date) => {
-      const jobs = cell[ymd2(d)]?.[m.id] || [];
-      const note = (exByMachine[m.id]?.[WD_KEY[d.getDay()]] || "").trim();
-      const runs: Run[] = [];
-      for (const j of jobs) {
-        const sub = [j.note, j.dur].filter(Boolean).join(" · ");
-        runs.push({ text: j.label, options: { bold: true, breakLine: !sub } });
-        if (sub) runs.push({ text: sub, options: { fontSize: 8, color: "555555", breakLine: true } });
-      }
-      if (note) runs.push({ text: `※ ${note}`, options: { fontSize: 8, italic: true, color: "1F4E79", breakLine: true } });
-      if (runs.length === 0) runs.push({ text: "" });
-      return { text: runs, options: { valign: "top", align: "left", fontSize: 10 } };
-    };
-
-    for (const days of chunks) {
-      const slide = pptx.addSlide();
-      slide.addText(
-        `${processLine} 생산 스케줄 — ${fmtMD(days[0])}(${DAY_NAMES[days[0].getDay()]}) ~ ${fmtMD(days[days.length - 1])}(${DAY_NAMES[days[days.length - 1].getDay()]})`,
-        { x: 0.25, y: 0.18, w: 8.5, h: 0.45, fontSize: 16, bold: true, color: "1F4E79", fontFace: FONT },
-      );
-      slide.addText(`출력 ${printStamp}`, { x: 8.4, y: 0.28, w: 3, h: 0.3, align: "right", fontSize: 9, color: "666666", fontFace: FONT });
-
-      const headFill = "2E75B6";
-      const header = [
-        { text: "요일", options: { fill: headFill, color: "FFFFFF", bold: true, align: "center", valign: "middle" } },
-        ...machines.map((m) => ({ text: m.name, options: { fill: headFill, color: "FFFFFF", bold: true, align: "center", valign: "middle" } })),
-      ];
-      const body = days.map((d) => [
-        { text: [{ text: DAY_NAMES[d.getDay()], options: { bold: true, breakLine: true } }, { text: fmtMD(d), options: { fontSize: 9, color: "333333" } }], options: { align: "center", valign: "middle", fill: "F2F2F2", bold: true } },
-        ...machines.map((m) => cellFor(m, d)),
-      ]);
-      const rowH = [0.32, ...days.map(() => (8.27 - 0.75 - 0.32 - 0.2) / days.length)];
-      slide.addTable([header, ...body] as never, {
-        x: 0.25, y: 0.72, w: TABLE_W, colW, rowH,
-        border: { type: "solid", pt: 0.5, color: "888888" },
-        fontFace: FONT, fontSize: 10, valign: "top", autoPage: false,
-      });
-    }
-    await pptx.writeFile({ fileName: `스케줄_${processLine}_${ymd}.pptx` });
-  };
-
   // 특정 위치(대기=undefined / 칸=bucketId)에 표시되는 주문들의 '남은 구성' 소요시간 합계(분)
   const locationMinutes = (orderList: Order[], bucketId?: number) =>
     orderList.reduce((sum, o) => {
@@ -1786,92 +1725,49 @@ export default function ScheduleBoard() {
   // 제책 스케줄 인쇄: '요일(월~일) × 설비' 매트릭스. 이번 주 한 주만(고정 높이 7행).
   // 일요일 이후 작업은 표시하지 않는다(다음 주에 출력하면 그 주에 나옴).
   const renderJechaeMatrix = () => {
-    const { cell } = buildJechaeMatrix();
-    const today = new Date(); today.setHours(0, 0, 0, 0);
-    const monday = new Date(today); monday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
-    const week = Array.from({ length: 6 }, (_, i) => { const d = new Date(monday); d.setDate(monday.getDate() + i); return d; });
-    const chunks = [week.slice(0, 3), week.slice(3, 6)]; // 월화수 / 목금토 (한 페이지씩)
-    const fmtMD = (d: Date) => `${d.getMonth() + 1}/${d.getDate()}`;
-    // 열 너비: 낙정·배접은 20%만 축소(=원래의 80%), 그만큼 무선 열에 더해 확대.
-    const isMuseon = (m: Machine) => m.name.includes("무선");
-    const isNakBae = (m: Machine) => m.name.includes("낙정") || m.name.includes("배접");
-    const numMuseon = machines.filter(isMuseon).length;
-    const numNakBae = machines.filter(isNakBae).length;
-    const museonExtra = numMuseon > 0 ? (0.2 * numNakBae) / numMuseon : 0;
-    const weightOf = (m: Machine) => (isNakBae(m) ? 0.8 : isMuseon(m) ? 1 + museonExtra : 1);
-    const totalW = machines.reduce((s, m) => s + weightOf(m), 0) || 1;
-    const DATE_PCT = 5;
-    const colPct = (m: Machine) => `${((100 - DATE_PCT) * weightOf(m)) / totalW}%`;
-    const LAND_W = 281; // 가로 A4 가용 폭(mm, 여백 8mm 제외)
-    const colMm = (m: Machine) => (LAND_W * (100 - DATE_PCT) / 100 * weightOf(m)) / totalW;
-    // 한 페이지(가로 A4, 가용 ~194mm)에 3행이 꽉 차도록 높이를 크게.
-    const PAGE_H = 190;
-    const rowH = Math.max(20, Math.min(75, (PAGE_H - 16) / 3 - 2));
-    const fitLines = Math.max(3, Math.floor(rowH / 3.6));
-    const fsFor = (jobs: { label: string; note: string; dur: string }[], mm: number): string | undefined => {
-      const cpl = Math.max(6, Math.floor(mm / 1.7));
-      const lines = jobs.reduce((s, j) => s + Math.max(1, Math.ceil(j.label.length / cpl)) + (j.note || j.dur ? 1 : 0) + 0.6, 0);
-      if (lines <= fitLines) return undefined;
-      return `${Math.max(4, Math.round(7 * Math.sqrt(fitLines / lines) * 10) / 10)}pt`;
-    };
-    const cellH = `${rowH}mm`;
-    // 설비별 기타사항(요일 키별)을 미리 파싱
-    const exByMachine: Record<number, Record<string, string>> = {};
-    for (const m of machines) exByMachine[m.id] = parseExtraNotes(machineExtras[m.id] ?? m.extra_notes ?? "");
+    const data = jechaeMachineRows();
     return (
-      <>
-        {chunks.map((days, ci) => (
-          <div key={ci} className="pf-page pf-land" style={{ breakAfter: ci < chunks.length - 1 ? "page" : undefined }}>
-            <div className="jm-week">
-              <div className="pf-head jm-head">
-                <span>{processLine} 생산 스케줄 — {fmtMD(days[0])}({DAY_NAMES[days[0].getDay()]}) ~ {fmtMD(days[days.length - 1])}({DAY_NAMES[days[days.length - 1].getDay()]})</span>
-                <span className="jm-head-time">출력 {printStamp}</span>
-              </div>
-              <table className="jm">
-                <thead>
-                  <tr>
-                    <th className="jm-dh" style={{ width: `${DATE_PCT}%` }}>요일</th>
-                    {machines.map((m) => <th key={m.id} style={{ width: colPct(m) }}>{m.name}</th>)}
-                  </tr>
-                </thead>
-                <tbody>
-                  {days.map((d, di) => {
-                    const dk = ymd2(d);
-                    return (
-                      <tr key={di}>
-                        <td className="jm-date">
-                          <div className="jm-daycell jm-datecell" style={{ height: cellH }}>
-                            <div className="jm-jobs">{DAY_NAMES[d.getDay()]}<br /><span className="jm-wd">{fmtMD(d)}</span></div>
-                            <div className="jm-note" />
-                          </div>
-                        </td>
-                        {machines.map((m) => {
-                          const jobs = cell[dk]?.[m.id] || [];
-                          return (
-                            <td key={m.id} className="jm-cell">
-                              <div className="jm-daycell" style={{ height: cellH }}>
-                                <div className="jm-jobs" style={{ fontSize: fsFor(jobs, colMm(m)) }}>
-                                  {jobs.map((j, i) => (
-                                    <div key={i} className="jm-job">
-                                      <div className="jm-job-name">{j.label}</div>
-                                      {(j.note || j.dur) && <div className="jm-job-sub">{[j.note, j.dur].filter(Boolean).join(" · ")}</div>}
-                                    </div>
-                                  ))}
-                                </div>
-                                <div className="jm-note">{exByMachine[m.id]?.[WD_KEY[d.getDay()]] || ""}</div>
-                              </div>
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        ))}
-      </>
+      <div className="jml-print">
+        <table className="jml">
+          <colgroup>
+            <col style={{ width: "7.4%" }} />
+            <col style={{ width: "3.9%" }} />
+            <col style={{ width: "35.2%" }} />
+            <col style={{ width: "7.4%" }} />
+            <col style={{ width: "10.9%" }} />
+            <col style={{ width: "35.2%" }} />
+          </colgroup>
+          <thead>
+            <tr className="jml-title">
+              <td className="jml-title-name" colSpan={5}>{processLine} 작업 계획</td>
+              <td className="jml-title-date">출력 {printStamp}</td>
+            </tr>
+            <tr>
+              <th className="jml-mc">설비명</th>
+              <th className="jml-no">no.</th>
+              <th className="jml-job">작업명</th>
+              <th className="jml-dur">소요시간</th>
+              <th className="jml-eta">예상완료</th>
+              <th className="jml-note">비고</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.map(({ machine, rows }) => {
+              const rr: (JmRow | null)[] = rows.length ? rows : [null];
+              return rr.map((row, i) => (
+                <tr key={`${machine.id}-${i}`}>
+                  {i === 0 && <td className="jml-mc" rowSpan={rr.length}>{machine.name}</td>}
+                  <td className="jml-no">{row ? i + 1 : ""}</td>
+                  <td className="jml-job">{row ? row.job : ""}</td>
+                  <td className="jml-dur">{row ? row.hours : ""}</td>
+                  <td className="jml-eta">{row ? row.eta : ""}</td>
+                  <td className="jml-note">{row ? row.note : ""}</td>
+                </tr>
+              ));
+            })}
+          </tbody>
+        </table>
+      </div>
     );
   };
 
@@ -1998,11 +1894,11 @@ export default function ScheduleBoard() {
               🖨 스케줄
             </button>
             <button
-              onClick={isJechae ? downloadPpt : downloadExcel}
+              onClick={downloadExcel}
               className="text-xs border border-gray-300 bg-white px-2 py-1 hover:bg-gray-100 text-gray-700 whitespace-nowrap"
-              title={isJechae ? "주간 스케줄을 출력물과 동일한 PPT(.pptx)로 내려받습니다" : "기계별 작업 계획을 엑셀(.xlsx) 파일로 내려받습니다"}
+              title="기계별 작업 계획을 엑셀(.xlsx) 파일로 내려받습니다"
             >
-              {isJechae ? "📑 PPT" : "📊 엑셀"}
+              📊 엑셀
             </button>
             {isAdmin && (
               <button
