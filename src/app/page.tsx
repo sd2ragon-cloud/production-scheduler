@@ -1613,22 +1613,36 @@ export default function ScheduleBoard() {
         });
         r++;
       }
-      r++; // 밴드 사이 간격
+      // 1차 배정 칸(밴드)끼리는 붙여서 표기 — 밴드 사이 공백 없음.
     }
 
     // 배정 대기: 페이지 브레이크로 새 페이지 상단에서 시작 → 헤드글이 항상 제품명 위에 보인다. 2열.
     if (r > 2) ws.getRow(r - 1).addPageBreak();
-    const mwaits = waitingOrders.map(waitLabel);
     const mwaitMin = locationMinutes(waitingOrders, undefined);
-    box(r, 1, r, 7, `배정 대기   (${mwaits.length}건)   합계 ${fmtH(mwaitMin)}`, { fill: GRAY, font: { bold: true, size: 10 }, align: { vertical: "middle", horizontal: "left" } });
+    box(r, 1, r, 7, `배정 대기   (${waitingOrders.length}건)   합계 ${fmtH(mwaitMin)}`, { fill: GRAY, font: { bold: true, size: 10 }, align: { vertical: "middle", horizontal: "left" } });
     r++;
-    const mlist = mwaits.length ? mwaits : ["-"];
-    for (let j = 0; j < mlist.length; j += 2) {
-      const lastRow = j + 2 >= mlist.length;
-      const wbd = { left: thin, right: thin, ...(lastRow ? { bottom: thin } : {}) };
-      box(r, 1, r, 3, mlist[j], { font: { size: 9 }, align: { vertical: "middle", horizontal: "left", shrinkToFit: true }, borderObj: wbd });
-      box(r, 5, r, 7, mlist[j + 1] ?? "", { font: { size: 9 }, align: { vertical: "middle", horizontal: "left", shrinkToFit: true }, borderObj: wbd });
+    if (!waitingOrders.length) {
+      box(r, 1, r, 7, "-", { font: { size: 9 }, align: { vertical: "middle", horizontal: "left" }, borderObj: { left: thin, right: thin, bottom: thin } });
       r++;
+    } else {
+      // 좌:제품명(1~2)·시간(3) / 우:제품명(5~6)·시간(7). 설비 배정 제품처럼 소요시간 표기.
+      for (let j = 0; j < waitingOrders.length; j += 2) {
+        const lastRow = j + 2 >= waitingOrders.length;
+        const wbd = { left: thin, right: thin, ...(lastRow ? { bottom: thin } : {}) };
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const put = (base: number, o: any) => {
+          if (o) {
+            box(r, base, r, base + 1, waitLabel(o), { font: { size: 9 }, align: { vertical: "middle", horizontal: "left", shrinkToFit: true }, borderObj: wbd });
+            cset(r, base + 2, fmtH(locationMinutes([o], undefined)), { font: { size: 9 }, align: { vertical: "middle", horizontal: "center", shrinkToFit: true }, borderObj: wbd });
+          } else {
+            box(r, base, r, base + 1, "", { borderObj: wbd });
+            cset(r, base + 2, "", { borderObj: wbd });
+          }
+        };
+        put(1, waitingOrders[j]);
+        put(5, waitingOrders[j + 1]);
+        r++;
+      }
     }
 
     const buf = await wb.xlsx.writeBuffer();
