@@ -1499,9 +1499,15 @@ export default function ScheduleBoard() {
       m.alignment = opts.align ?? { vertical: "middle" };
       return m;
     };
-    // 제목·하단(1차배정/배정대기) 없이 설비 박스 2열 그리드만. 각 줄: 번호 | 제품명 | 완료시간.
+    // 상단: 제목(좌) "{라인} 계획" + 출력일시(우) — 제책 엑셀과 동일.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const tL: any = ws.getCell(1, 1); tL.value = `${processLine} 계획`; tL.font = { bold: true, size: 12 }; tL.alignment = { vertical: "middle" };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const tR: any = ws.getCell(1, 7); tR.value = `출력 ${printStamp}`; tR.font = { size: 10 }; tR.alignment = { vertical: "middle", horizontal: "right" };
+    ws.getRow(1).height = 22;
+    // 하단(1차배정/배정대기) 없이 설비 박스 2열 그리드만. 각 줄: 번호 | 제품명 | 완료시간.
     // 제품명(47)·완료(15)는 너비를 넘치면 '셀에 맞춤'(shrinkToFit)으로 자동 축소. 좌:1~3열 / 우:5~7열.
-    let r = 1;
+    let r = 2;
     for (let i = 0; i < machines.length; i += 2) {
       const sides = [machines[i], machines[i + 1]];
       const meta = sides.map((m) => {
