@@ -740,12 +740,20 @@ export default function ScheduleBoard() {
 
   // 배정 대기 카드 삭제: 미배정(대기) 구성만 제거하고 설비에 배정된 구성은 유지한다.
   // (다중구성 주문에서 일부만 배정된 경우, 대기 카드를 지워도 배정분이 함께 삭제되지 않게)
+  const deleteWholeOrder = async (orderId: number) => {
+    setLoading(true);
+    await fetch(`/api/orders/${orderId}`, { method: "DELETE" });
+    await fetchAll();
+    setLoading(false);
+  };
   const handleDeleteWaiting = async (order: Order) => {
     const parts = parseParts(order.component);
     const hasEntries = schedule.some((s) => s.order_id === order.id);
-    // 단일/무구성 주문이거나 배정된 게 전혀 없으면 → 주문 전체 삭제(기존 동작).
+    // 배정된 게 전혀 없으면(단일/무구성이거나 전부 대기) → 이 대기 물량(주문)만 삭제.
+    // 설비 배정 내역이 없으므로 겁주는 문구 없이 안내한다.
     if (parts.length < 2 || !hasEntries) {
-      return handleDeleteOrder(order.id, order.product_name);
+      if (!window.confirm(`'${order.product_name}' 배정 대기 물량을 삭제할까요?\n(설비에 배정된 내역은 없으며, 되돌릴 수 없습니다.)`)) return;
+      return deleteWholeOrder(order.id);
     }
     // 다중구성: 이 카드에 보이는 '대기(미배정+칸없음)' 구성만 제거. 배정·칸 구성은 유지.
     const waitingCardParts = partsAtLocation(order, undefined);
@@ -765,9 +773,11 @@ export default function ScheduleBoard() {
       }
     }
     if (Object.keys(keep).length === 0) {
-      return handleDeleteOrder(order.id, order.product_name);
+      if (!window.confirm(`'${order.product_name}' 배정 대기 물량을 삭제할까요?\n(되돌릴 수 없습니다.)`)) return;
+      return deleteWholeOrder(order.id);
     }
-    if (!window.confirm(`'${order.product_name}'의 배정 대기 구성만 삭제할까요?\n설비에 배정된 구성은 유지됩니다.`)) return;
+    const dropNames = waitingCardParts.filter((p) => !(p in keep));
+    if (!window.confirm(`'${order.product_name}'의 배정 대기 구성${dropNames.length ? `(${dropNames.join(", ")})` : ""}만 삭제할까요?\n설비에 배정된 구성은 그대로 유지됩니다.`)) return;
     setLoading(true);
     await fetch(`/api/orders/${order.id}/drop-waiting`, {
       method: "POST",
