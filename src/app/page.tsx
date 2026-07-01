@@ -103,6 +103,8 @@ const MARK_BG: Record<string, string> = {
   amber: "#fde68a", // 노랑(# 클릭 수동)
   rose: "#fbcfe8",  // 핑크(이동·수정 자동)
 };
+// 표시색을 엑셀 fill용 ARGB로 (#fde68a → FFFDE68A). 없으면 undefined.
+const markArgb = (c?: string): string | undefined => (c && MARK_BG[c] ? "FF" + MARK_BG[c].slice(1).toUpperCase() : undefined);
 
 // 제책 설비 하단 기타사항: 요일별(월~금) + 공통. extra_notes 컬럼에 JSON으로 저장.
 const EXTRA_DAYS: [string, string][] = [["mon", "월"], ["tue", "화"], ["wed", "수"], ["thu", "목"], ["fri", "금"], ["sat", "토"], ["sun", "일"]];
@@ -1344,7 +1346,7 @@ export default function ScheduleBoard() {
 
   // 제책 '설비별 작업 목록'(첨부 양식용). 각 설비의 배정 순서대로 작업명·소요(시간)·예상완료·비고 행.
   // 배정이 없으면 rows는 빈 배열(양식에선 빈 줄 1개로 설비명만 표시).
-  type JmRow = { job: string; hours: number | ""; eta: string; note: string };
+  type JmRow = { job: string; hours: number | ""; eta: string; note: string; mark: string };
   const jechaeMachineRows = (): { machine: Machine; rows: JmRow[] }[] =>
     machines.map((m) => ({
       machine: m,
@@ -1356,6 +1358,7 @@ export default function ScheduleBoard() {
           hours: e.duration_minutes ? Math.round((e.duration_minutes / 60) * 10) / 10 : "",
           eta: e.end_time ? formatEndTime(e.end_time) : "",
           note: (e.order_notes || "").trim(),
+          mark: e.mark_color || "",
         } as JmRow;
       }),
     }));
@@ -1420,12 +1423,13 @@ export default function ScheduleBoard() {
           const bd = { left: thin, right: thin, ...(isFirst ? { top: thin } : {}), ...(isLast ? { bottom: thin } : {}) };
           // 설비명(col1)은 세로 병합되며, 병합 후엔 master(첫 줄) 테두리만 유효 → master에 전체 박스.
           const mcBd = isFirst ? { left: thin, right: thin, top: thin, bottom: thin } : { left: thin, right: thin };
+          const mf = row ? markArgb(row.mark) : undefined; // 표시색(있으면 제품 행 배경 채움)
           setc(r, 1, isFirst ? machine.name : "", { align: { vertical: "middle", horizontal: "center" }, font: { size: 10 }, borderObj: mcBd });
-          setc(r, 2, row ? i + 1 : "", { align: { vertical: "middle", horizontal: "center" }, font: { size: 10 }, borderObj: bd });
-          setc(r, 3, row ? row.job : "", { align: { vertical: "middle", horizontal: "left", shrinkToFit: true }, font: { size: 10 }, borderObj: bd });
-          setc(r, 4, row ? row.hours : "", { align: { vertical: "middle", horizontal: "center" }, font: { size: 10 }, borderObj: bd });
-          setc(r, 5, row ? row.eta : "", { align: { vertical: "middle", horizontal: "center" }, font: { size: 10 }, borderObj: bd });
-          setc(r, 6, row ? row.note : "", { align: { vertical: "middle", horizontal: "left", wrapText: true }, font: { size: 10 }, borderObj: bd });
+          setc(r, 2, row ? i + 1 : "", { align: { vertical: "middle", horizontal: "center" }, font: { size: 10 }, borderObj: bd, fill: mf });
+          setc(r, 3, row ? row.job : "", { align: { vertical: "middle", horizontal: "left", shrinkToFit: true }, font: { size: 10 }, borderObj: bd, fill: mf });
+          setc(r, 4, row ? row.hours : "", { align: { vertical: "middle", horizontal: "center" }, font: { size: 10 }, borderObj: bd, fill: mf });
+          setc(r, 5, row ? row.eta : "", { align: { vertical: "middle", horizontal: "center" }, font: { size: 10 }, borderObj: bd, fill: mf });
+          setc(r, 6, row ? row.note : "", { align: { vertical: "middle", horizontal: "left", wrapText: true }, font: { size: 10 }, borderObj: bd, fill: mf });
           // 행 높이 자동: 비고가 여러 줄이면 그만큼 늘어난다(고정하지 않음).
           r++;
         });
@@ -1523,9 +1527,10 @@ export default function ScheduleBoard() {
           const base = si === 0 ? 1 : 5;
           const e = meta[si]?.entries[k];
           if (e) {
-            cset(r, base, k + 1, { font: { size: 9 }, align: { vertical: "middle", horizontal: "center" } });
-            cset(r, base + 1, jobLabel(e), { font: { size: 9 }, align: { vertical: "middle", horizontal: "left", shrinkToFit: true } });
-            cset(r, base + 2, formatEndTime(e.end_time), { font: { size: 9 }, align: { vertical: "middle", horizontal: "center", shrinkToFit: true } });
+            const mf = markArgb(e.mark_color); // 표시색(있으면 배경 채움)
+            cset(r, base, k + 1, { font: { size: 9 }, align: { vertical: "middle", horizontal: "center" }, fill: mf });
+            cset(r, base + 1, jobLabel(e), { font: { size: 9 }, align: { vertical: "middle", horizontal: "left", shrinkToFit: true }, fill: mf });
+            cset(r, base + 2, formatEndTime(e.end_time), { font: { size: 9 }, align: { vertical: "middle", horizontal: "center", shrinkToFit: true }, fill: mf });
           } else {
             for (let cc = base; cc < base + 3; cc++) cset(r, cc, "", {});
           }
@@ -1793,7 +1798,8 @@ export default function ScheduleBoard() {
             {data.map(({ machine, rows }) => {
               const rr: (JmRow | null)[] = rows.length ? rows : [null];
               return rr.map((row, i) => (
-                <tr key={`${machine.id}-${i}`} className={i === rr.length - 1 ? "jml-row-end" : undefined}>
+                <tr key={`${machine.id}-${i}`} className={i === rr.length - 1 ? "jml-row-end" : undefined}
+                  style={row && row.mark ? { background: MARK_BG[row.mark] } : undefined}>
                   {i === 0 && <td className="jml-mc" rowSpan={rr.length}>{machine.name}</td>}
                   <td className="jml-no">{row ? i + 1 : ""}</td>
                   <td className="jml-job">{row ? row.job : ""}</td>
@@ -1848,7 +1854,7 @@ export default function ScheduleBoard() {
                     {shown.map((e, i) => {
                       const lbl = jobLabel(e);
                       return (
-                      <li key={e.id}>
+                      <li key={e.id} style={e.mark_color ? { background: MARK_BG[e.mark_color] } : undefined}>
                         <div className="pf-li">
                           <span className="pf-num">{i + 1}</span>
                           <span className="pf-job">{lbl}</span>
