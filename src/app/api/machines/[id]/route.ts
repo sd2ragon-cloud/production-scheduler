@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { todayLocal } from '@/lib/date';
 import { getDb } from '@/lib/db';
 import { guardMachine } from '@/lib/permits';
 import { recalcMachine } from '@/lib/calc';
@@ -95,7 +96,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     recalcNeeded = true;
   }
   if (recalcNeeded) {
-    await recalcMachine(Number(id), new Date().toISOString().split('T')[0]);
+    await recalcMachine(Number(id), todayLocal());
   }
 
   return NextResponse.json({ success: true });

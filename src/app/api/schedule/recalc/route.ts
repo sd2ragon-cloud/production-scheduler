@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { todayLocal } from '@/lib/date';
 import { recalcMachine } from '@/lib/calc';
 import { getDb } from '@/lib/db';
 import { guardMachine } from '@/lib/permits';
@@ -14,7 +15,7 @@ export async function POST(req: NextRequest) {
     await db.execute({ sql: 'UPDATE machines SET schedule_start_time = ? WHERE id = ?', args: [start_time, machine_id] });
   }
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = todayLocal();
   await recalcMachine(machine_id, today, start_time);
 
   return NextResponse.json({ success: true });

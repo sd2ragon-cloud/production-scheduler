@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { todayLocal } from '@/lib/date';
 import { getDb } from '@/lib/db';
 import { recalcMachine } from '@/lib/calc';
 import { guardMachine } from '@/lib/permits';
@@ -16,7 +17,7 @@ export async function POST(req: NextRequest) {
 
   await db.batch(stmts, 'write');
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = todayLocal();
   await recalcMachine(machine_id, today);
 
   return NextResponse.json({ success: true });

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { todayLocal } from '@/lib/date';
 import { getDb } from '@/lib/db';
 import { guardEntry } from '@/lib/permits';
 import { recalcMachine } from '@/lib/calc';
@@ -34,6 +35,6 @@ export async function POST(req: NextRequest) {
       args: [names.join(', '), JSON.stringify(durs), base, effectiveMinutes(base, row.print_mode), entry_id],
     });
   }
-  await recalcMachine(Number(row.machine_id), new Date().toISOString().split('T')[0]);
+  await recalcMachine(Number(row.machine_id), todayLocal());
   return NextResponse.json({ success: true });
 }

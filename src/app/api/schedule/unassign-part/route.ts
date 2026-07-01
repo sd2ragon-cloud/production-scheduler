@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { todayLocal } from '@/lib/date';
 import { getDb } from '@/lib/db';
 import { recalcMachine } from '@/lib/calc';
 import { parseParts, parsePartDurations, sumDurations, partTotals } from '@/lib/parts';
@@ -73,7 +74,7 @@ export async function POST(req: NextRequest) {
   }
   await db.execute({ sql: 'UPDATE orders SET status = ? WHERE id = ?', args: [allAssigned ? 'scheduled' : 'pending', orderId] });
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = todayLocal();
   await recalcMachine(srcMachine, today);
 
   return NextResponse.json({ success: true });

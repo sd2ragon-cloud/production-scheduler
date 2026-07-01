@@ -1,4 +1,5 @@
 import { getDb } from './db';
+import { todayLocal } from '@/lib/date';
 import { SHIFTS, parseDayShifts } from './shifts';
 
 interface Machine {
@@ -113,7 +114,9 @@ export async function recalcMachine(machineId: number, baseDate?: string, _start
   });
   const entries = entriesResult.rows as unknown as AssignedEntry[];
 
-  const startDate = baseDate ? new Date(baseDate) : new Date();
+  // baseDate('YYYY-MM-DD')는 로컬 날짜로 해석한다. new Date('2026-07-01')은 UTC 자정으로 파싱돼
+  // 타임존에 따라 하루 어긋날 수 있으므로 'T00:00:00'을 붙여 로컬 자정으로 파싱한다.
+  const startDate = baseDate ? new Date(baseDate + 'T00:00:00') : new Date();
   startDate.setHours(0, 0, 0, 0);
 
   // 해당 날짜(요일)의 근무 구간[분]을 구한다. 요일별 오버라이드(day_hours)가 있으면 그 값을,
@@ -262,7 +265,7 @@ export async function recalcMachine(machineId: number, baseDate?: string, _start
 // 달라지므로 전 설비를 재계산해야 한다. 각 설비는 저장된 schedule_start_time을 그대로 유지한다.
 export async function recalcAllMachines(baseDate?: string) {
   const db = await getDb();
-  const today = baseDate || new Date().toISOString().split('T')[0];
+  const today = baseDate || todayLocal();
   const result = await db.execute('SELECT id FROM machines WHERE is_active = 1');
   for (const row of result.rows) {
     await recalcMachine(Number((row as unknown as { id: number }).id), today);

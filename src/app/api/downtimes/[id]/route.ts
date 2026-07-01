@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { todayLocal } from '@/lib/date';
 import { getDb } from '@/lib/db';
 import { guardMachine } from '@/lib/permits';
 import { recalcMachine } from '@/lib/calc';
@@ -13,6 +14,6 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const deny = await guardMachine(req, machineId);
   if (deny) return deny;
   await db.execute({ sql: 'DELETE FROM downtimes WHERE id = ?', args: [id] });
-  await recalcMachine(machineId, new Date().toISOString().split('T')[0]);
+  await recalcMachine(machineId, todayLocal());
   return NextResponse.json({ success: true });
 }

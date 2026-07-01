@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { todayLocal } from '@/lib/date';
 import { getDb } from '@/lib/db';
 import { recalcMachine } from '@/lib/calc';
 import { parsePartDurations, sumDurations } from '@/lib/parts';
@@ -30,7 +31,7 @@ export async function POST(req: NextRequest) {
     args: [newMode, base, effectiveMinutes(base, newMode), entry_id],
   });
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = todayLocal();
   await recalcMachine(Number(entry.machine_id), today);
 
   return NextResponse.json({ success: true });

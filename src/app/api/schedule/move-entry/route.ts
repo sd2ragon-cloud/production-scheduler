@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { todayLocal } from '@/lib/date';
 import { getDb } from '@/lib/db';
 import { recalcMachine } from '@/lib/calc';
 import { parseParts, parsePartDurations, sumDurations, partTotals } from '@/lib/parts';
@@ -37,7 +38,7 @@ export async function POST(req: NextRequest) {
   // 같은 설비 안에서는 원래 모드 유지, 다른 설비로 가면 대상 설비 기본 모드를 따른다.
   const newRowMode = srcMachine === targetMachine ? srcMode : targetMode;
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = todayLocal();
 
   // 분할량 계산: 실제 소요시간(duration_minutes) 기준으로 받는다.
   // 구성이 있으면 파트별 시간을 같은 비율로 나누고, 없으면 base_minutes만 나눈다.

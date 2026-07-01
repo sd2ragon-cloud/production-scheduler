@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { todayLocal } from '@/lib/date';
 import { getDb } from '@/lib/db';
 import { recalcMachine } from '@/lib/calc';
 import { parseParts, parsePartDurations, sumDurations, partTotals } from '@/lib/parts';
@@ -48,7 +49,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'part not in entry' }, { status: 400 });
   }
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = todayLocal();
   const remaining = srcParts.filter((p) => p !== partStr);
   const srcDurations = parsePartDurations(src.part_durations);
   const srcAlloc = Number(srcDurations[partStr]) || DEFAULT_PART_MINUTES;

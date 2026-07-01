@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { todayLocal } from '@/lib/date';
 import { getDb } from '@/lib/db';
 import { recalcMachine } from '@/lib/calc';
 import { parseParts, parsePartDurations, sumDurations, partTotals } from '@/lib/parts';
@@ -30,7 +31,7 @@ export async function POST(req: NextRequest) {
   const machineMode = machine && !['윤전', '제책'].includes(machine.process_line) && isDoubleSided(machine.name) ? 'double' : 'single';
 
   const incomingParts = parseParts(part);
-  const today = new Date().toISOString().split('T')[0];
+  const today = todayLocal();
 
   // 이 드롭에서 배정할 시간(분). 지정값이 있으면 그 값, 없으면 파트 총량(또는 기본)을 사용.
   const alloc = Number(alloc_minutes);

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { todayLocal } from '@/lib/date';
 import { getDb } from '@/lib/db';
 import { recalcMachine } from '@/lib/calc';
 import { guardEntry } from '@/lib/permits';
@@ -22,7 +23,7 @@ export async function POST(req: NextRequest) {
     { sql: 'UPDATE schedule_entries SET sequence = sequence - 1 WHERE machine_id = ? AND sequence > ?', args: [Number(entry.machine_id), Number(entry.sequence)] },
   ], 'write');
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = todayLocal();
   await recalcMachine(Number(entry.machine_id), today);
 
   return NextResponse.json({ success: true });
