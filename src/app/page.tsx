@@ -1943,6 +1943,8 @@ export default function ScheduleBoard() {
     // 설비가 많으면 박스 높이를 줄여 하단 1차 배정 4칸(HDP 포함)이 항상 보이게 한다.
     const numMachineRows = Math.max(1, Math.ceil(machines.length / 2));
     const machineRowH = Math.min(46, Math.max(26, (172 - (numMachineRows - 1) * 2.5) / numMachineRows));
+    // 하단 1차 배정 칸 수: 매엽은 4칸 고정(HDP 포함 항상 보이게), 윤전은 실제 칸 수만큼(2칸=동일 높이 2분할).
+    const bkCount = isRoll ? Math.max(1, buckets.length) : Math.max(4, buckets.length);
     return (
       <div className="pf-page">
         <div className="pf-head pf-head-rel">{processLine} 생산 스케줄 — {dateStr}<span className="pf-head-time">출력 {printStamp}</span></div>
@@ -1986,8 +1988,8 @@ export default function ScheduleBoard() {
         <div className="pf-bottom">
           <div className="pf-sect">
             <div className="pf-secttl">1차 배정 <span className="pf-secsum">{fmtH(buckets.reduce((s, b) => s + locationMinutes(orders.filter((o) => showsAt(o, b.id)), b.id), 0))}</span></div>
-            <div className="pf-bk-grid" style={{ gridTemplateRows: `repeat(${Math.max(4, buckets.length)}, 1fr)` }}>
-              {Array.from({ length: Math.max(4, buckets.length) }).map((_, i) => {
+            <div className="pf-bk-grid" style={{ gridTemplateRows: `repeat(${bkCount}, 1fr)` }}>
+              {Array.from({ length: bkCount }).map((_, i) => {
                 const b = buckets[i];
                 const bo = b ? orders.filter((o) => showsAt(o, b.id)) : [];
                 return (
