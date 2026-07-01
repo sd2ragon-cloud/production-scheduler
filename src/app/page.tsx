@@ -1415,9 +1415,12 @@ export default function ScheduleBoard() {
         const rr: (JmRow | null)[] = rows.length ? rows : [null];
         const start = r;
         rr.forEach((row, i) => {
-          // 세로선은 항상(left/right), 가로선은 상단(첫 줄)·설비 경계(마지막 줄)에만 → 제품끼리는 선 없음.
-          const bd = { left: thin, right: thin, ...(r === 3 ? { top: thin } : {}), ...(i === rr.length - 1 ? { bottom: thin } : {}) };
-          setc(r, 1, i === 0 ? machine.name : "", { align: { vertical: "middle", horizontal: "center" }, font: { size: 10 }, borderObj: bd });
+          // 세로선(left/right)은 항상. 가로선은 설비 첫 줄 위·마지막 줄 아래에만(제품끼리는 선 없음).
+          const isFirst = i === 0, isLast = i === rr.length - 1;
+          const bd = { left: thin, right: thin, ...(isFirst ? { top: thin } : {}), ...(isLast ? { bottom: thin } : {}) };
+          // 설비명(col1)은 세로 병합되며, 병합 후엔 master(첫 줄) 테두리만 유효 → master에 전체 박스.
+          const mcBd = isFirst ? { left: thin, right: thin, top: thin, bottom: thin } : { left: thin, right: thin };
+          setc(r, 1, isFirst ? machine.name : "", { align: { vertical: "middle", horizontal: "center" }, font: { size: 10 }, borderObj: mcBd });
           setc(r, 2, row ? i + 1 : "", { align: { vertical: "middle", horizontal: "center" }, font: { size: 10 }, borderObj: bd });
           setc(r, 3, row ? row.job : "", { align: { vertical: "middle", horizontal: "left", shrinkToFit: true }, font: { size: 10 }, borderObj: bd });
           setc(r, 4, row ? row.hours : "", { align: { vertical: "middle", horizontal: "center" }, font: { size: 10 }, borderObj: bd });
