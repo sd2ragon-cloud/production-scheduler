@@ -1953,7 +1953,7 @@ export default function ScheduleBoard() {
     const bkCount = isRoll ? Math.max(1, buckets.length) : Math.max(4, buckets.length);
     return (
       <div className="pf-page">
-        <div className="pf-head pf-head-rel">{processLine} 생산 스케줄 — {dateStr}<span className="pf-head-time">출력 {printStamp}</span></div>
+        <div className="pf-head pf-head-rel">{processLine} 작업 계획<span className="pf-head-time">출력 {printStamp}</span></div>
         <div className="pf-machines" style={{ gridAutoRows: `${machineRowH}mm` }}>
           {machines.map((m) => {
             const entries = getEntriesForMachine(m.id);

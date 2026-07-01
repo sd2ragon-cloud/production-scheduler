@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic'; // 빌드 시 캐시 금지, 매 요청�
 // buildTag: .last_sha(파일)와 달리 "실제 빌드된 코드"에 박혀 있는 값.
 // auto-update가 빌드 실패 시에도 .last_sha만 갱신하던 버그 때문에 deployedSha가 거짓일 수 있으므로,
 // 라이브 서버가 정말 이 코드로 빌드됐는지는 이 buildTag로 확인한다. 코드 의미 변경 시마다 올린다.
-const BUILD_TAG = 'excel-stage1-waiting-numbering-2026-07-02';
+const BUILD_TAG = 'print-title-jakop-2026-07-02';
 
 export async function GET() {
   let deployedSha = 'unknown';
