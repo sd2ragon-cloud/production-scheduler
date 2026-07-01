@@ -391,6 +391,41 @@ export default function ScheduleBoard() {
     document.body.removeChild(meas);
   }, [schedule, machines, buckets, orders, printView, isJechae]);
 
+  // 제책 양식 인쇄: 작업명·비고가 칸 폭을 넘으면 줄바꿈 대신 폰트를 실측해 유동 축소(한 줄 유지).
+  useEffect(() => {
+    if (printView !== "full" || !isJechae) return;
+    const root = document.querySelector(".print-area");
+    if (!root) return;
+    const jobs = root.querySelectorAll<HTMLElement>(".jml-job");
+    const notes = root.querySelectorAll<HTMLElement>(".jml-note");
+    if (!jobs.length && !notes.length) return;
+    const PXMM = 96 / 25.4;
+    const BASE_PT = 10;
+    const LAND_W = 281;            // 가로 A4 가용 폭(mm, 여백 8mm 제외)
+    const PAD = 3 * PXMM;          // 셀 좌우 패딩(1.5mm×2)
+    const JOB_W = LAND_W * 0.352 * PXMM - PAD;  // 작업명 칸(35.2%)
+    const NOTE_W = LAND_W * 0.377 * PXMM - PAD; // 비고 칸(37.7%)
+    const ref = jobs[0] ?? notes[0] ?? document.body;
+    const cs = getComputedStyle(ref);
+    const meas = document.createElement("span");
+    meas.style.cssText = "position:absolute;left:-9999px;top:-9999px;visibility:hidden;white-space:nowrap;";
+    meas.style.fontFamily = cs.fontFamily;
+    meas.style.fontWeight = cs.fontWeight;
+    meas.style.fontSize = `${(BASE_PT * 96) / 72}px`;
+    document.body.appendChild(meas);
+    const fit = (el: HTMLElement, colW: number) => {
+      el.style.fontSize = "";
+      meas.textContent = el.textContent || "";
+      const w = meas.getBoundingClientRect().width;
+      el.style.fontSize = w > colW && colW > 0
+        ? `${Math.max(4, Math.round((BASE_PT * colW) / w * 10) / 10)}pt`
+        : "";
+    };
+    jobs.forEach((el) => fit(el, JOB_W));
+    notes.forEach((el) => fit(el, NOTE_W));
+    document.body.removeChild(meas);
+  }, [schedule, machines, printView, isJechae]);
+
   // 작업순서 출력의 작업명(print-name-main)도 한 줄을 넘으면 폰트를 실측해 유동 축소.
   //  단, 비고(print-note)는 별도 줄이므로 측정/축소 대상에서 제외(작업명 길이만 본다).
   useEffect(() => {
@@ -1345,7 +1380,7 @@ export default function ScheduleBoard() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const ws: any = wb.addWorksheet(processLine, { views: [{ showGridLines: false }] });
       ws.columns = [
-        { width: 10.6 }, { width: 5.6 }, { width: 50.6 }, { width: 10.6 }, { width: 15.6 }, { width: 50.6 },
+        { width: 10.6 }, { width: 5.6 }, { width: 50.6 }, { width: 7.1 }, { width: 15.6 }, { width: 54.1 },
       ];
       ws.pageSetup = {
         orientation: "landscape", paperSize: 9,
@@ -1355,12 +1390,15 @@ export default function ScheduleBoard() {
       const NAVY = "FF002060";
       const thin = { style: "thin", color: { argb: "FF000000" } };
       const allThin = { top: thin, left: thin, bottom: thin, right: thin };
+      const wthin = { style: "thin", color: { argb: "FFFFFFFF" } };
+      const allWhite = { top: wthin, left: wthin, bottom: wthin, right: wthin };
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const setc = (r: number, c: number, value: string | number, opts: any = {}) => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const cl: any = ws.getCell(r, c);
         cl.value = value;
-        if (opts.border !== false) cl.border = allThin;
+        if (opts.border === "white") cl.border = allWhite;
+        else if (opts.border !== false) cl.border = allThin;
         if (opts.fill) cl.fill = { type: "pattern", pattern: "solid", fgColor: { argb: opts.fill } };
         if (opts.font) cl.font = opts.font;
         cl.alignment = opts.align ?? { vertical: "middle" };
@@ -1373,8 +1411,8 @@ export default function ScheduleBoard() {
       const t2: any = ws.getCell(1, 6); t2.value = `출력 ${printStamp}`; t2.font = { size: 10 }; t2.alignment = { vertical: "middle", horizontal: "right" };
       ws.getRow(1).height = 22;
       // 2행: 헤더 (남색 배경 흰 글씨)
-      ["설비명", "no.", "작업명", "소요시간", "예상완료", "비고"].forEach((h, i) =>
-        setc(2, i + 1, h, { fill: NAVY, font: { bold: true, size: 10, color: { argb: "FFFFFFFF" } }, align: { vertical: "middle", horizontal: "center" } }));
+      ["설비명", "no.", "작업명", "시간", "예상완료", "비고"].forEach((h, i) =>
+        setc(2, i + 1, h, { fill: NAVY, font: { bold: true, size: 10, color: { argb: "FFFFFFFF" } }, align: { vertical: "middle", horizontal: "center" }, border: "white" }));
       ws.getRow(2).height = 20;
       // 설비별 블록: 배정 개수만큼 줄, 없으면 빈 줄 1개(설비명만).
       let r = 3;
@@ -1733,9 +1771,9 @@ export default function ScheduleBoard() {
             <col style={{ width: "7.4%" }} />
             <col style={{ width: "3.9%" }} />
             <col style={{ width: "35.2%" }} />
-            <col style={{ width: "7.4%" }} />
+            <col style={{ width: "4.9%" }} />
             <col style={{ width: "10.9%" }} />
-            <col style={{ width: "35.2%" }} />
+            <col style={{ width: "37.7%" }} />
           </colgroup>
           <thead>
             <tr className="jml-title">
@@ -1746,7 +1784,7 @@ export default function ScheduleBoard() {
               <th className="jml-mc">설비명</th>
               <th className="jml-no">no.</th>
               <th className="jml-job">작업명</th>
-              <th className="jml-dur">소요시간</th>
+              <th className="jml-dur">시간</th>
               <th className="jml-eta">예상완료</th>
               <th className="jml-note">비고</th>
             </tr>
