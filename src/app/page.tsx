@@ -1401,12 +1401,21 @@ export default function ScheduleBoard() {
     const wb: any = new ExcelJS.Workbook();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const ws: any = wb.addWorksheet(processLine, { views: [{ showGridLines: false }] });
+    // 좌:번호·제품명(47)·완료(15) / 간격 / 우:번호·제품명(47)·완료(15)  (비고 열 삭제)
     ws.columns = [
-      { width: 4.5 }, { width: 30 }, { width: 13 }, { width: 16 },
+      { width: 4.5 }, { width: 47 }, { width: 15 },
       { width: 2.5 },
-      { width: 4.5 }, { width: 30 }, { width: 13 }, { width: 16 },
+      { width: 4.5 }, { width: 47 }, { width: 15 },
     ];
-    const GRAY = "FFE5E7EB", LGRAY = "FFF2F2F2";
+    // 세로(Portrait) + 한 페이지에 맞춰 인쇄(무조건 1장으로 축소).
+    ws.pageSetup = {
+      orientation: "portrait",
+      fitToPage: true,
+      fitToWidth: 1,
+      fitToHeight: 1,
+      margins: { left: 0.2, right: 0.2, top: 0.2, bottom: 0.2, header: 0, footer: 0 },
+    };
+    const GRAY = "FFE5E7EB";
     const thin = { style: "thin", color: { argb: "FFCCCCCC" } };
     const allThin = { top: thin, left: thin, bottom: thin, right: thin };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1436,17 +1445,9 @@ export default function ScheduleBoard() {
       m.alignment = opts.align ?? { vertical: "middle" };
       return m;
     };
-    const ovL = (o: Order) => {
-      const q = isRoll && o.quantity_sheets ? ` ${o.quantity_sheets.toLocaleString()}부` : "";
-      return `${o.product_name}${o.component ? `(${o.component})` : ""}${q}`;
-    };
-
-    box(1, 1, 1, 9, `${processLine} 생산 스케줄 — ${dateStr}    출력 ${printStamp}`,
-      { font: { bold: true, size: 14 }, align: { horizontal: "center", vertical: "middle" }, border: null });
-    ws.getRow(1).height = 22;
-
-    let r = 3;
-    // 설비 박스 2열 그리드 (좌: A~D, 우: F~I)
+    // 제목·하단(1차배정/배정대기) 없이 설비 박스 2열 그리드만. 각 줄: 번호 | 제품명 | 완료시간.
+    // 제품명(47)·완료(15)는 너비를 넘치면 '셀에 맞춤'(shrinkToFit)으로 자동 축소. 좌:1~3열 / 우:5~7열.
+    let r = 1;
     for (let i = 0; i < machines.length; i += 2) {
       const sides = [machines[i], machines[i + 1]];
       const meta = sides.map((m) => {
@@ -1457,57 +1458,31 @@ export default function ScheduleBoard() {
         return { m, entries, total, memo };
       });
       sides.forEach((m, si) => {
-        const base = si === 0 ? 1 : 6;
+        const base = si === 0 ? 1 : 5;
         const md = meta[si];
-        if (!md) { box(r, base, r, base + 3, "", {}); return; }
-        box(r, base, r, base + 2, `${md.m.name}${md.memo ? `   ${md.memo}` : ""}`,
+        if (!md) { box(r, base, r, base + 2, "", {}); return; }
+        box(r, base, r, base + 1, `${md.m.name}${md.memo ? `   ${md.memo}` : ""}`,
           { fill: GRAY, font: { bold: true, size: 10 }, align: { vertical: "middle", horizontal: "left" } });
-        cset(r, base + 3, fmtH(md.total), { fill: GRAY, font: { bold: true, size: 9 }, align: { vertical: "middle", horizontal: "right" } });
+        cset(r, base + 2, fmtH(md.total), { fill: GRAY, font: { bold: true, size: 9 }, align: { vertical: "middle", horizontal: "right" } });
       });
       ws.getRow(r).height = 16;
       r++;
       const maxRows = Math.max(1, ...meta.map((x) => (x ? x.entries.length : 0)));
       for (let k = 0; k < maxRows; k++) {
         sides.forEach((m, si) => {
-          const base = si === 0 ? 1 : 6;
+          const base = si === 0 ? 1 : 5;
           const e = meta[si]?.entries[k];
           if (e) {
             cset(r, base, k + 1, { font: { size: 9 }, align: { vertical: "middle", horizontal: "center" } });
-            cset(r, base + 1, jobLabel(e), { font: { size: 9 }, align: { vertical: "middle", horizontal: "left" } });
-            cset(r, base + 2, (e.order_notes || "").trim(), { font: { size: 9 }, align: { vertical: "middle", horizontal: "left" } });
-            cset(r, base + 3, formatEndTime(e.end_time), { font: { size: 9 }, align: { vertical: "middle", horizontal: "center" } });
+            cset(r, base + 1, jobLabel(e), { font: { size: 9 }, align: { vertical: "middle", horizontal: "left", shrinkToFit: true } });
+            cset(r, base + 2, formatEndTime(e.end_time), { font: { size: 9 }, align: { vertical: "middle", horizontal: "center", shrinkToFit: true } });
           } else {
-            for (let cc = base; cc < base + 4; cc++) cset(r, cc, "", {});
+            for (let cc = base; cc < base + 3; cc++) cset(r, cc, "", {});
           }
         });
         r++;
       }
       r++; // 밴드 사이 간격
-    }
-
-    // 하단: 1차 배정(좌) | 배정 대기(우)
-    r++;
-    const totalBuckets = buckets.reduce((s, b) => s + locationMinutes(orders.filter((o) => showsAt(o, b.id)), b.id), 0);
-    box(r, 1, r, 4, `1차 배정   ${fmtH(totalBuckets)}`, { fill: GRAY, font: { bold: true, size: 10 } });
-    box(r, 6, r, 9, `배정 대기   ${fmtH(locationMinutes(waitingOrders, undefined))}`, { fill: GRAY, font: { bold: true, size: 10 } });
-    r++;
-    type Line = { kind: "head" | "item" | "dim"; text: string };
-    const leftLines: Line[] = [];
-    for (const b of buckets) {
-      const bo = orders.filter((o) => showsAt(o, b.id));
-      leftLines.push({ kind: "head", text: `${b.name}   ${fmtH(locationMinutes(bo, b.id))}` });
-      if (bo.length) bo.forEach((o) => leftLines.push({ kind: "item", text: ovL(o) }));
-      else leftLines.push({ kind: "dim", text: "-" });
-    }
-    const rightLines = waitingOrders.map((o) => ovL(o));
-    const bottomRows = Math.max(leftLines.length, rightLines.length, 1);
-    for (let j = 0; j < bottomRows; j++) {
-      const L = leftLines[j];
-      if (!L) box(r, 1, r, 4, "", {});
-      else if (L.kind === "head") box(r, 1, r, 4, L.text, { fill: LGRAY, font: { bold: true, size: 9 } });
-      else box(r, 1, r, 4, L.text, { font: { size: 9, color: L.kind === "dim" ? { argb: "FF999999" } : undefined }, align: { vertical: "middle", horizontal: "left", indent: 1 } });
-      box(r, 6, r, 9, rightLines[j] ?? "", { font: { size: 9 }, align: { vertical: "middle", horizontal: "left" } });
-      r++;
     }
 
     const buf = await wb.xlsx.writeBuffer();
