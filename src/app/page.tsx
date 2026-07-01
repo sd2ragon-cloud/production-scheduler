@@ -1340,6 +1340,9 @@ export default function ScheduleBoard() {
 
   // 1차 배정 안 된(대기) 구성이 남아 있는 주문
   const waitingOrders = orders.filter((o) => showsAt(o, undefined));
+  // 배정 대기 항목 라벨(엑셀용): 제품명(구성) = 수량부
+  const waitLabel = (o: Order) =>
+    `${o.product_name}${o.component ? `(${o.component})` : ""}${o.quantity_sheets ? ` = ${o.quantity_sheets.toLocaleString()}부` : ""}`;
 
   // 분 → "N.Nh" (소요시간 합계 표기)
   const fmtH = (min: number) => `${Math.round(min / 6) / 10}h`;
@@ -1435,6 +1438,29 @@ export default function ScheduleBoard() {
         });
         if (r - 1 > start) ws.mergeCells(start, 1, r - 1, 1); // 설비명 세로 병합
       }
+      // 배정 대기 (내용 길면 다음 장으로 이어짐 — 상단 제목·헤더는 반복). 6열 전체 병합 한 줄씩.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const jbox = (r1: number, value: string, opts: any = {}) => {
+        ws.mergeCells(r1, 1, r1, 6);
+        for (let cc = 1; cc <= 6; cc++) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const cl: any = ws.getCell(r1, cc);
+          cl.border = allThin;
+          if (opts.fill) cl.fill = { type: "pattern", pattern: "solid", fgColor: { argb: opts.fill } };
+        }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const m: any = ws.getCell(r1, 1);
+        m.value = value; m.font = opts.font ?? { size: 10 };
+        m.alignment = opts.align ?? { vertical: "middle", horizontal: "left" };
+      };
+      r++; // 간격
+      const jwaits = waitingOrders.map(waitLabel);
+      jbox(r, `배정 대기   (${jwaits.length}건)`, { fill: "FFE5E7EB", font: { bold: true, size: 10 } });
+      r++;
+      for (const w of (jwaits.length ? jwaits : ["-"])) {
+        jbox(r, w, { font: { size: 10 }, align: { vertical: "middle", horizontal: "left", shrinkToFit: true } });
+        r++;
+      }
       const buf = await wb.xlsx.writeBuffer();
       const blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
       const url = URL.createObjectURL(blob);
@@ -1461,12 +1487,14 @@ export default function ScheduleBoard() {
       { width: 2.5 },
       { width: 4.5 }, { width: 47 }, { width: 15 },
     ];
-    // 세로(Portrait) + 한 페이지에 맞춰 인쇄(무조건 1장으로 축소).
+    // 세로(Portrait). 폭은 1페이지에 맞추되(fitToHeight:0) 내용이 길면(배정 대기 등) 다음 장으로 이어짐.
+    // 1행(제목·출력일시)은 페이지마다 반복.
     ws.pageSetup = {
       orientation: "portrait",
       fitToPage: true,
       fitToWidth: 1,
-      fitToHeight: 1,
+      fitToHeight: 0,
+      printTitlesRow: "1:1",
       margins: { left: 0.2, right: 0.2, top: 0.2, bottom: 0.2, header: 0, footer: 0 },
     };
     const GRAY = "FFE5E7EB";
@@ -1547,6 +1575,15 @@ export default function ScheduleBoard() {
         r++;
       }
       r++; // 밴드 사이 간격
+    }
+
+    // 배정 대기 (내용 길면 다음 장으로 이어짐 — 1행 제목은 페이지마다 반복). 전체폭 한 줄씩.
+    const mwaits = waitingOrders.map(waitLabel);
+    box(r, 1, r, 7, `배정 대기   (${mwaits.length}건)`, { fill: GRAY, font: { bold: true, size: 10 }, align: { vertical: "middle", horizontal: "left" } });
+    r++;
+    for (const w of (mwaits.length ? mwaits : ["-"])) {
+      box(r, 1, r, 7, w, { font: { size: 9 }, align: { vertical: "middle", horizontal: "left", shrinkToFit: true } });
+      r++;
     }
 
     const buf = await wb.xlsx.writeBuffer();
