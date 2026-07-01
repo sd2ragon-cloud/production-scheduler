@@ -1397,7 +1397,8 @@ export default function ScheduleBoard() {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const cl: any = ws.getCell(r, c);
         cl.value = value;
-        if (opts.border === "white") cl.border = allWhite;
+        if (opts.borderObj) cl.border = opts.borderObj;
+        else if (opts.border === "white") cl.border = allWhite;
         else if (opts.border !== false) cl.border = allThin;
         if (opts.fill) cl.fill = { type: "pattern", pattern: "solid", fgColor: { argb: opts.fill } };
         if (opts.font) cl.font = opts.font;
@@ -1420,12 +1421,14 @@ export default function ScheduleBoard() {
         const rr: (JmRow | null)[] = rows.length ? rows : [null];
         const start = r;
         rr.forEach((row, i) => {
-          setc(r, 1, i === 0 ? machine.name : "", { align: { vertical: "middle", horizontal: "center" }, font: { size: 10 } });
-          setc(r, 2, row ? i + 1 : "", { align: { vertical: "middle", horizontal: "center" }, font: { size: 10 } });
-          setc(r, 3, row ? row.job : "", { align: { vertical: "middle", horizontal: "left", shrinkToFit: true }, font: { size: 10 } });
-          setc(r, 4, row ? row.hours : "", { align: { vertical: "middle", horizontal: "center" }, font: { size: 10 } });
-          setc(r, 5, row ? row.eta : "", { align: { vertical: "middle", horizontal: "center" }, font: { size: 10 } });
-          setc(r, 6, row ? row.note : "", { align: { vertical: "middle", horizontal: "left", shrinkToFit: true }, font: { size: 10 } });
+          // 세로선은 항상(left/right), 가로선은 상단(첫 줄)·설비 경계(마지막 줄)에만 → 제품끼리는 선 없음.
+          const bd = { left: thin, right: thin, ...(r === 3 ? { top: thin } : {}), ...(i === rr.length - 1 ? { bottom: thin } : {}) };
+          setc(r, 1, i === 0 ? machine.name : "", { align: { vertical: "middle", horizontal: "center" }, font: { size: 10 }, borderObj: bd });
+          setc(r, 2, row ? i + 1 : "", { align: { vertical: "middle", horizontal: "center" }, font: { size: 10 }, borderObj: bd });
+          setc(r, 3, row ? row.job : "", { align: { vertical: "middle", horizontal: "left", shrinkToFit: true }, font: { size: 10 }, borderObj: bd });
+          setc(r, 4, row ? row.hours : "", { align: { vertical: "middle", horizontal: "center" }, font: { size: 10 }, borderObj: bd });
+          setc(r, 5, row ? row.eta : "", { align: { vertical: "middle", horizontal: "center" }, font: { size: 10 }, borderObj: bd });
+          setc(r, 6, row ? row.note : "", { align: { vertical: "middle", horizontal: "left", shrinkToFit: true }, font: { size: 10 }, borderObj: bd });
           ws.getRow(r).height = 20;
           r++;
         });
@@ -1793,7 +1796,7 @@ export default function ScheduleBoard() {
             {data.map(({ machine, rows }) => {
               const rr: (JmRow | null)[] = rows.length ? rows : [null];
               return rr.map((row, i) => (
-                <tr key={`${machine.id}-${i}`}>
+                <tr key={`${machine.id}-${i}`} className={i === rr.length - 1 ? "jml-row-end" : undefined}>
                   {i === 0 && <td className="jml-mc" rowSpan={rr.length}>{machine.name}</td>}
                   <td className="jml-no">{row ? i + 1 : ""}</td>
                   <td className="jml-job">{row ? row.job : ""}</td>

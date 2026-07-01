@@ -253,8 +253,11 @@ input[type="number"]::-webkit-outer-spin-button {
     font-weight: bold; text-align: center; border: 0.3mm solid #fff; /* 헤더 구분선은 흰색 */
     padding: 1.2mm 1mm; font-size: 10pt;
   }
-  .jml tbody td { border: 0.3mm solid #000; padding: 1mm 1.5mm; font-size: 10pt; vertical-align: middle; overflow: hidden; word-break: break-all; }
-  .jml-mc { text-align: center; font-weight: bold; }
+  /* 세로 칼럼선만 항상. 가로선은 설비 경계에만(제품끼리는 선 없음) — 가독성. */
+  .jml tbody td { border-left: 0.3mm solid #000; border-right: 0.3mm solid #000; padding: 1mm 1.5mm; font-size: 10pt; vertical-align: middle; overflow: hidden; word-break: break-all; }
+  .jml tbody tr:first-child td { border-top: 0.3mm solid #000; }   /* 표 상단(첫 설비 위) */
+  .jml-row-end td { border-bottom: 0.3mm solid #000; }             /* 설비 마지막 줄 아래 = 설비 경계(작업명~비고) */
+  .jml-mc { text-align: center; font-weight: bold; border-bottom: 0.3mm solid #000; } /* 설비명 칸 아래 = 설비 경계(첫 열) */
   .jml-no { text-align: center; }
   .jml-dur { text-align: center; white-space: nowrap; }
   .jml-eta { text-align: center; white-space: nowrap; }
