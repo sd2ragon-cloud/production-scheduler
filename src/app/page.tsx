@@ -738,6 +738,46 @@ export default function ScheduleBoard() {
     setLoading(false);
   };
 
+  // 배정 대기 카드 삭제: 미배정(대기) 구성만 제거하고 설비에 배정된 구성은 유지한다.
+  // (다중구성 주문에서 일부만 배정된 경우, 대기 카드를 지워도 배정분이 함께 삭제되지 않게)
+  const handleDeleteWaiting = async (order: Order) => {
+    const parts = parseParts(order.component);
+    const hasEntries = schedule.some((s) => s.order_id === order.id);
+    // 단일/무구성 주문이거나 배정된 게 전혀 없으면 → 주문 전체 삭제(기존 동작).
+    if (parts.length < 2 || !hasEntries) {
+      return handleDeleteOrder(order.id, order.product_name);
+    }
+    // 다중구성: 이 카드에 보이는 '대기(미배정+칸없음)' 구성만 제거. 배정·칸 구성은 유지.
+    const waitingCardParts = partsAtLocation(order, undefined);
+    const totals = partTotals(order.component, order.part_durations, order.duration_minutes);
+    const alloc: Record<string, number> = {};
+    for (const s of schedule) {
+      if (s.order_id !== order.id) continue;
+      for (const [p, m] of Object.entries(parsePartDurations(s.part_durations))) alloc[p] = (alloc[p] || 0) + (Number(m) || 0);
+    }
+    const keep: Record<string, number> = {};
+    for (const p of parts) {
+      if (waitingCardParts.includes(p)) {
+        // 대기 구성: 일부라도 배정돼 있으면 배정분만 유지, 전부 대기면 제거.
+        if ((alloc[p] || 0) > 0) keep[p] = alloc[p];
+      } else {
+        keep[p] = Number(totals[p]) || 0; // 배정완료/1차 배정 칸 구성은 그대로 유지.
+      }
+    }
+    if (Object.keys(keep).length === 0) {
+      return handleDeleteOrder(order.id, order.product_name);
+    }
+    if (!window.confirm(`'${order.product_name}'의 배정 대기 구성만 삭제할까요?\n설비에 배정된 구성은 유지됩니다.`)) return;
+    setLoading(true);
+    await fetch(`/api/orders/${order.id}/drop-waiting`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ keep }),
+    });
+    await fetchAll();
+    setLoading(false);
+  };
+
   // 배정 대기 영역에 드롭 = 배정/1차배정 취소
   const onDropOnWaiting = async () => {
     if (dragSplit !== null) {
@@ -1618,11 +1658,11 @@ export default function ScheduleBoard() {
                 ⧉
               </button>
               <button
-                onClick={(e) => { e.stopPropagation(); handleDeleteOrder(order.id, order.product_name); }}
+                onClick={(e) => { e.stopPropagation(); bucketId === undefined ? handleDeleteWaiting(order) : handleDeleteOrder(order.id, order.product_name); }}
                 onMouseDown={(e) => e.stopPropagation()}
                 disabled={loading}
                 className="text-gray-400 hover:text-red-600 text-base leading-none px-1 py-0.5"
-                title="주문 삭제"
+                title={bucketId === undefined ? "배정 대기 구성 삭제 (설비 배정분은 유지)" : "주문 삭제"}
               >
                 🗑
               </button>
