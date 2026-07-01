@@ -1340,9 +1340,13 @@ export default function ScheduleBoard() {
 
   // 1차 배정 안 된(대기) 구성이 남아 있는 주문
   const waitingOrders = orders.filter((o) => showsAt(o, undefined));
-  // 배정 대기 항목 라벨(엑셀용): 제품명(구성) = 수량부
-  const waitLabel = (o: Order) =>
-    `${o.product_name}${o.component ? `(${o.component})` : ""}${o.quantity_sheets ? ` = ${o.quantity_sheets.toLocaleString()}부` : ""}`;
+  // 위치(대기=undefined / 칸=bucketId)에 '실제로 남아 있는 구성'만 표기 — 화면 카드와 일치시킨다.
+  // (전체 component가 아니라, 그 위치에 남은 구성만. 구성 없는 주문은 통째로 표기.)
+  const waitLabel = (o: Order, bucketId?: number) => {
+    const hasParts = parseParts(o.component).length > 0;
+    const comp = hasParts ? partsAtLocation(o, bucketId).join(", ") : o.component;
+    return `${o.product_name}${comp ? `(${comp})` : ""}${o.quantity_sheets ? ` = ${o.quantity_sheets.toLocaleString()}부` : ""}`;
+  };
 
   // 분 → "N.Nh" (소요시간 합계 표기)
   const fmtH = (min: number) => `${Math.round(min / 6) / 10}h`;
@@ -1456,7 +1460,7 @@ export default function ScheduleBoard() {
       // 페이지 브레이크로 새 페이지 상단에서 시작 → 헤드글이 항상 제품명 위에 보인다.
       if (r > 2) ws.getRow(r).addPageBreak();
       r++; // 간격
-      const jwaits = waitingOrders.map(waitLabel);
+      const jwaits = waitingOrders.map((o) => waitLabel(o));
       const jwaitMin = locationMinutes(waitingOrders, undefined);
       jbox(r, `배정 대기   (${jwaits.length}건)   합계 ${fmtH(jwaitMin)}`, { fill: "FFE5E7EB", font: { bold: true, size: 10 } });
       r++;
@@ -1608,7 +1612,7 @@ export default function ScheduleBoard() {
         pair.forEach((b, si) => {
           const base = si === 0 ? 1 : 5;
           const o = bmeta[si]?.bo[k];
-          if (o) box(r, base, r, base + 2, waitLabel(o), { font: { size: 9 }, align: { vertical: "middle", horizontal: "left", shrinkToFit: true }, borderObj: rowBd });
+          if (o) box(r, base, r, base + 2, waitLabel(o, b.id), { font: { size: 9 }, align: { vertical: "middle", horizontal: "left", shrinkToFit: true }, borderObj: rowBd });
           else box(r, base, r, base + 2, "", { borderObj: rowBd });
         });
         r++;
@@ -1922,9 +1926,12 @@ export default function ScheduleBoard() {
 
   // 스케줄 전체 개요 인쇄: 상단 기계별 작업계획 + 하단 1차 배정·배정 대기. A4 한 장에 꽉 차게.
   const renderFullPrint = () => {
-    const ov = (o: Order) => {
+    // 위치(대기=undefined / 칸=bucketId)에 실제로 남은 구성만 표기 — 화면 카드와 일치.
+    const ov = (o: Order, bucketId?: number) => {
+      const hasParts = parseParts(o.component).length > 0;
+      const comp = hasParts ? partsAtLocation(o, bucketId).join(", ") : o.component;
       const q = isRoll && o.quantity_sheets ? ` ${o.quantity_sheets.toLocaleString()}부` : "";
-      return `${o.product_name}${o.component ? `(${o.component})` : ""}${q}`;
+      return `${o.product_name}${comp ? `(${comp})` : ""}${q}`;
     };
     // 기계 박스(46mm 고정)에 들어가는 만큼만 표시 — 배정이 많아도 출력 크기를 넘지 않게 캡.
     // (작업명이 길어 한 줄을 넘으면 폰트를 실측해 유동 축소 — 위 useEffect가 담당)
@@ -1989,7 +1996,7 @@ export default function ScheduleBoard() {
                       <>
                         <div className="pf-bk-ttl">{b.name}<span className="pf-bk-sum">{fmtH(locationMinutes(bo, b.id))}</span></div>
                         <div className="pf-bk-items">
-                          {bo.length ? bo.map((o) => <div key={o.id} className="pf-bk-item">{ov(o)}</div>) : <span className="pf-dim">-</span>}
+                          {bo.length ? bo.map((o) => <div key={o.id} className="pf-bk-item">{ov(o, b.id)}</div>) : <span className="pf-dim">-</span>}
                         </div>
                       </>
                     )}
