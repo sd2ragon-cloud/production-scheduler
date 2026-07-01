@@ -729,34 +729,33 @@ export default function ScheduleBoard() {
     setLoading(false);
   };
 
-  // 주문(물량) 영구 삭제: 설비 배정·1차 배정 내역도 FK CASCADE로 함께 삭제된다.
-  const handleDeleteOrder = async (orderId: number, productName: string) => {
-    if (!window.confirm(`'${productName}' 주문을 영구 삭제할까요?\n설비 배정·1차 배정 내역이 모두 함께 삭제되며 되돌릴 수 없습니다.`)) return;
-    setLoading(true);
-    await fetch(`/api/orders/${orderId}`, { method: "DELETE" });
-    await fetchAll();
-    setLoading(false);
-  };
-
-  // 배정 대기 카드 삭제: 미배정(대기) 구성만 제거하고 설비에 배정된 구성은 유지한다.
-  // (다중구성 주문에서 일부만 배정된 경우, 대기 카드를 지워도 배정분이 함께 삭제되지 않게)
+  // === 위치별 독립 삭제 (확인창 없음) ===
+  // 설비 배정 / 1차 배정 칸 / 배정 대기를 각각 '그 위치의 것'만 제거한다. 한 곳을 지워도 다른 곳은 유지.
   const deleteWholeOrder = async (orderId: number) => {
     setLoading(true);
     await fetch(`/api/orders/${orderId}`, { method: "DELETE" });
     await fetchAll();
     setLoading(false);
   };
-  const handleDeleteWaiting = async (order: Order) => {
+
+  // 설비 배정 항목 삭제: 그 설비의 배정만 제거(다른 설비·1차 배정·대기 구성은 유지).
+  const handleDeleteEntry = async (entry: ScheduleEntry) => {
+    setLoading(true);
+    await fetch("/api/schedule/delete-entry", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ entry_id: entry.id }),
+    });
+    await fetchAll();
+    setLoading(false);
+  };
+
+  // 카드 삭제(배정 대기=bucketId undefined / 1차 배정 칸=bucketId): 그 위치에 보이는 구성만 제거.
+  // 설비에 배정된 구성·다른 위치 구성은 유지. 단일/무구성 주문은 한 곳에만 있으므로 주문 삭제.
+  const handleDeleteCardLocation = async (order: Order, bucketId?: number) => {
     const parts = parseParts(order.component);
-    const hasEntries = schedule.some((s) => s.order_id === order.id);
-    // 배정된 게 전혀 없으면(단일/무구성이거나 전부 대기) → 이 대기 물량(주문)만 삭제.
-    // 설비 배정 내역이 없으므로 겁주는 문구 없이 안내한다.
-    if (parts.length < 2 || !hasEntries) {
-      if (!window.confirm(`'${order.product_name}' 배정 대기 물량을 삭제할까요?\n(설비에 배정된 내역은 없으며, 되돌릴 수 없습니다.)`)) return;
-      return deleteWholeOrder(order.id);
-    }
-    // 다중구성: 이 카드에 보이는 '대기(미배정+칸없음)' 구성만 제거. 배정·칸 구성은 유지.
-    const waitingCardParts = partsAtLocation(order, undefined);
+    if (parts.length < 2) return deleteWholeOrder(order.id);
+    const locParts = partsAtLocation(order, bucketId);
     const totals = partTotals(order.component, order.part_durations, order.duration_minutes);
     const alloc: Record<string, number> = {};
     for (const s of schedule) {
@@ -765,19 +764,14 @@ export default function ScheduleBoard() {
     }
     const keep: Record<string, number> = {};
     for (const p of parts) {
-      if (waitingCardParts.includes(p)) {
-        // 대기 구성: 일부라도 배정돼 있으면 배정분만 유지, 전부 대기면 제거.
+      if (locParts.includes(p)) {
+        // 이 위치 구성: 일부라도 설비 배정돼 있으면 배정분만 유지, 아니면 제거.
         if ((alloc[p] || 0) > 0) keep[p] = alloc[p];
       } else {
-        keep[p] = Number(totals[p]) || 0; // 배정완료/1차 배정 칸 구성은 그대로 유지.
+        keep[p] = Number(totals[p]) || 0; // 다른 위치(설비 배정·다른 칸) 구성은 유지.
       }
     }
-    if (Object.keys(keep).length === 0) {
-      if (!window.confirm(`'${order.product_name}' 배정 대기 물량을 삭제할까요?\n(되돌릴 수 없습니다.)`)) return;
-      return deleteWholeOrder(order.id);
-    }
-    const dropNames = waitingCardParts.filter((p) => !(p in keep));
-    if (!window.confirm(`'${order.product_name}'의 배정 대기 구성${dropNames.length ? `(${dropNames.join(", ")})` : ""}만 삭제할까요?\n설비에 배정된 구성은 그대로 유지됩니다.`)) return;
+    if (Object.keys(keep).length === 0) return deleteWholeOrder(order.id);
     setLoading(true);
     await fetch(`/api/orders/${order.id}/drop-waiting`, {
       method: "POST",
@@ -1668,11 +1662,11 @@ export default function ScheduleBoard() {
                 ⧉
               </button>
               <button
-                onClick={(e) => { e.stopPropagation(); bucketId === undefined ? handleDeleteWaiting(order) : handleDeleteOrder(order.id, order.product_name); }}
+                onClick={(e) => { e.stopPropagation(); handleDeleteCardLocation(order, bucketId); }}
                 onMouseDown={(e) => e.stopPropagation()}
                 disabled={loading}
                 className="text-gray-400 hover:text-red-600 text-base leading-none px-1 py-0.5"
-                title={bucketId === undefined ? "배정 대기 구성 삭제 (설비 배정분은 유지)" : "주문 삭제"}
+                title={bucketId === undefined ? "이 배정 대기 구성만 삭제 (설비 배정·다른 칸은 유지)" : "이 칸 구성만 삭제 (설비 배정·대기는 유지)"}
               >
                 🗑
               </button>
@@ -2400,7 +2394,7 @@ export default function ScheduleBoard() {
                                 ⧉
                               </button>
                               <button
-                                onClick={() => handleDeleteOrder(entry.order_id, entry.product_name)}
+                                onClick={() => handleDeleteEntry(entry)}
                                 onDragOver={(e) => {
                                   // 구성 칩을 끌어다 놓으면 그 구성만 완료·삭제
                                   if (dragSplit !== null) {
@@ -2421,7 +2415,7 @@ export default function ScheduleBoard() {
                                 }}
                                 disabled={loading}
                                 className={`text-sm leading-none px-0.5 transition-transform ${trashOverEntry === entry.id ? "text-red-600 scale-150" : "text-gray-400 hover:text-red-600"}`}
-                                title="클릭: 주문 전체 삭제 / 구성 칩을 끌어다 놓으면 그 구성만 완료·삭제"
+                                title="클릭: 이 설비 배정만 삭제 (1차 배정·대기는 유지) / 구성 칩을 끌어다 놓으면 그 구성만 완료·삭제"
                               >
                                 🗑
                               </button>
