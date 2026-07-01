@@ -1470,14 +1470,15 @@ export default function ScheduleBoard() {
       margins: { left: 0.2, right: 0.2, top: 0.2, bottom: 0.2, header: 0, footer: 0 },
     };
     const GRAY = "FFE5E7EB";
-    const thin = { style: "thin", color: { argb: "FFCCCCCC" } };
+    const thin = { style: "thin", color: { argb: "FF000000" } }; // 검정 테두리
     const allThin = { top: thin, left: thin, bottom: thin, right: thin };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const cset = (r: number, c: number, value: string | number, opts: any = {}) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const cl: any = ws.getCell(r, c);
       cl.value = value;
-      if (opts.border !== null) cl.border = allThin;
+      if (opts.borderObj) cl.border = opts.borderObj;
+      else if (opts.border !== null) cl.border = allThin;
       if (opts.fill) cl.fill = { type: "pattern", pattern: "solid", fgColor: { argb: opts.fill } };
       if (opts.font) cl.font = opts.font;
       cl.alignment = opts.align ?? { vertical: "middle" };
@@ -1529,16 +1530,18 @@ export default function ScheduleBoard() {
       r++;
       const maxRows = Math.max(1, ...meta.map((x) => (x ? x.entries.length : 0)));
       for (let k = 0; k < maxRows; k++) {
+        // 제품 행: 세로선(left/right)만, 제품끼리 가로선 없음. 마지막 줄에만 아래선(박스 하단).
+        const rowBd = { left: thin, right: thin, ...(k === maxRows - 1 ? { bottom: thin } : {}) };
         sides.forEach((m, si) => {
           const base = si === 0 ? 1 : 5;
           const e = meta[si]?.entries[k];
           if (e) {
             const mf = markArgb(e.mark_color); // 표시색(있으면 배경 채움)
-            cset(r, base, k + 1, { font: { size: 9 }, align: { vertical: "middle", horizontal: "center" }, fill: mf });
-            cset(r, base + 1, jobLabel(e), { font: { size: 9 }, align: { vertical: "middle", horizontal: "left", shrinkToFit: true }, fill: mf });
-            cset(r, base + 2, formatEndTime(e.end_time), { font: { size: 9 }, align: { vertical: "middle", horizontal: "center", shrinkToFit: true }, fill: mf });
+            cset(r, base, k + 1, { font: { size: 9 }, align: { vertical: "middle", horizontal: "center" }, fill: mf, borderObj: rowBd });
+            cset(r, base + 1, jobLabel(e), { font: { size: 9 }, align: { vertical: "middle", horizontal: "left", shrinkToFit: true }, fill: mf, borderObj: rowBd });
+            cset(r, base + 2, formatEndTime(e.end_time), { font: { size: 9 }, align: { vertical: "middle", horizontal: "center", shrinkToFit: true }, fill: mf, borderObj: rowBd });
           } else {
-            for (let cc = base; cc < base + 3; cc++) cset(r, cc, "", {});
+            for (let cc = base; cc < base + 3; cc++) cset(r, cc, "", { borderObj: rowBd });
           }
         });
         r++;
