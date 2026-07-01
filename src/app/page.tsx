@@ -1453,9 +1453,12 @@ export default function ScheduleBoard() {
         m.value = value; m.font = opts.font ?? { size: 10 };
         m.alignment = opts.align ?? { vertical: "middle", horizontal: "left" };
       };
+      // 페이지 브레이크로 새 페이지 상단에서 시작 → 헤드글이 항상 제품명 위에 보인다.
+      if (r > 2) ws.getRow(r).addPageBreak();
       r++; // 간격
       const jwaits = waitingOrders.map(waitLabel);
-      jbox(r, `배정 대기   (${jwaits.length}건)`, { fill: "FFE5E7EB", font: { bold: true, size: 10 } });
+      const jwaitMin = locationMinutes(waitingOrders, undefined);
+      jbox(r, `배정 대기   (${jwaits.length}건)   합계 ${fmtH(jwaitMin)}`, { fill: "FFE5E7EB", font: { bold: true, size: 10 } });
       r++;
       for (const w of (jwaits.length ? jwaits : ["-"])) {
         jbox(r, w, { font: { size: 10 }, align: { vertical: "middle", horizontal: "left", shrinkToFit: true } });
@@ -1515,10 +1518,11 @@ export default function ScheduleBoard() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const box = (r1: number, c1: number, r2: number, c2: number, value: string | number, opts: any = {}) => {
       ws.mergeCells(r1, c1, r2, c2);
+      const bd = opts.borderObj ?? (opts.border === null ? null : allThin);
       for (let rr = r1; rr <= r2; rr++) for (let cc = c1; cc <= c2; cc++) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const cl: any = ws.getCell(rr, cc);
-        if (opts.border !== null) cl.border = allThin;
+        if (bd) cl.border = bd;
         if (opts.fill) cl.fill = { type: "pattern", pattern: "solid", fgColor: { argb: opts.fill } };
       }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1526,6 +1530,7 @@ export default function ScheduleBoard() {
       m.value = value;
       if (opts.font) m.font = opts.font;
       m.alignment = opts.align ?? { vertical: "middle" };
+      if (opts.borderObj) m.border = opts.borderObj; // 병합 범위 테두리는 마스터 셀이 정의
       return m;
     };
     // 상단: 제목(좌) "{라인} 계획" + 출력일시(우) — 제책 엑셀과 동일.
@@ -1577,12 +1582,52 @@ export default function ScheduleBoard() {
       r++; // 밴드 사이 간격
     }
 
-    // 배정 대기 (내용 길면 다음 장으로 이어짐 — 1행 제목은 페이지마다 반복). 전체폭 한 줄씩.
-    const mwaits = waitingOrders.map(waitLabel);
-    box(r, 1, r, 7, `배정 대기   (${mwaits.length}건)`, { fill: GRAY, font: { bold: true, size: 10 }, align: { vertical: "middle", horizontal: "left" } });
+    // 1차 배정 (설비 그리드와 동일한 2열 밴드). 칸 제목에 소요시간 합계, 제품끼리 가로선 없음.
+    const bkTotal = buckets.reduce((s, b) => s + locationMinutes(orders.filter((o) => showsAt(o, b.id)), b.id), 0);
+    box(r, 1, r, 7, `1차 배정   합계 ${fmtH(bkTotal)}`, { fill: GRAY, font: { bold: true, size: 10 }, align: { vertical: "middle", horizontal: "left" } });
     r++;
-    for (const w of (mwaits.length ? mwaits : ["-"])) {
-      box(r, 1, r, 7, w, { font: { size: 9 }, align: { vertical: "middle", horizontal: "left", shrinkToFit: true } });
+    for (let i = 0; i < buckets.length; i += 2) {
+      const pair = [buckets[i], buckets[i + 1]];
+      const bmeta = pair.map((b) => {
+        if (!b) return null;
+        const bo = orders.filter((o) => showsAt(o, b.id));
+        return { b, bo, sum: locationMinutes(bo, b.id) };
+      });
+      pair.forEach((b, si) => {
+        const base = si === 0 ? 1 : 5;
+        const bd = bmeta[si];
+        if (!bd) { box(r, base, r, base + 2, "", {}); return; }
+        box(r, base, r, base + 1, bd.b.name, { fill: GRAY, font: { bold: true, size: 10 }, align: { vertical: "middle", horizontal: "left" } });
+        cset(r, base + 2, fmtH(bd.sum), { fill: GRAY, font: { bold: true, size: 9 }, align: { vertical: "middle", horizontal: "right" } });
+      });
+      ws.getRow(r).height = 16;
+      r++;
+      const maxRows = Math.max(1, ...bmeta.map((x) => (x ? x.bo.length : 0)));
+      for (let k = 0; k < maxRows; k++) {
+        const rowBd = { left: thin, right: thin, ...(k === maxRows - 1 ? { bottom: thin } : {}) };
+        pair.forEach((b, si) => {
+          const base = si === 0 ? 1 : 5;
+          const o = bmeta[si]?.bo[k];
+          if (o) box(r, base, r, base + 2, waitLabel(o), { font: { size: 9 }, align: { vertical: "middle", horizontal: "left", shrinkToFit: true }, borderObj: rowBd });
+          else box(r, base, r, base + 2, "", { borderObj: rowBd });
+        });
+        r++;
+      }
+      r++; // 밴드 사이 간격
+    }
+
+    // 배정 대기: 페이지 브레이크로 새 페이지 상단에서 시작 → 헤드글이 항상 제품명 위에 보인다. 2열.
+    if (r > 2) ws.getRow(r - 1).addPageBreak();
+    const mwaits = waitingOrders.map(waitLabel);
+    const mwaitMin = locationMinutes(waitingOrders, undefined);
+    box(r, 1, r, 7, `배정 대기   (${mwaits.length}건)   합계 ${fmtH(mwaitMin)}`, { fill: GRAY, font: { bold: true, size: 10 }, align: { vertical: "middle", horizontal: "left" } });
+    r++;
+    const mlist = mwaits.length ? mwaits : ["-"];
+    for (let j = 0; j < mlist.length; j += 2) {
+      const lastRow = j + 2 >= mlist.length;
+      const wbd = { left: thin, right: thin, ...(lastRow ? { bottom: thin } : {}) };
+      box(r, 1, r, 3, mlist[j], { font: { size: 9 }, align: { vertical: "middle", horizontal: "left", shrinkToFit: true }, borderObj: wbd });
+      box(r, 5, r, 7, mlist[j + 1] ?? "", { font: { size: 9 }, align: { vertical: "middle", horizontal: "left", shrinkToFit: true }, borderObj: wbd });
       r++;
     }
 
