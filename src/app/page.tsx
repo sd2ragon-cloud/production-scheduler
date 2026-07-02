@@ -1931,17 +1931,9 @@ export default function ScheduleBoard() {
             </tr>
           </thead>
           {/* 설비마다 별도 tbody → break-inside:avoid로 페이지가 넘어가도 블록(설비명·테두리)이 통째로 유지된다.
-              무선(4/3/1호)은 최소 8행 확보(적거나 없으면 빈 행으로 채움, 8개 넘으면 늘어남).
-              그 외(낙정·배접)는 패딩 없이 자연 높이 → 비어 있으면 줄어 공간을 양보한다. */}
+              각 설비는 실제 배정 수만큼만 표기하고, 배정이 없으면 1행 공백으로 둔다(빈 행 채움 없음). */}
           {data.map(({ machine, rows }) => {
-            const MIN = 8;
-            const isWireless = machine.name.replace(/\s/g, "").startsWith("무선");
-            let rr: (JmRow | null)[];
-            if (isWireless) {
-              rr = rows.length >= MIN ? rows : [...rows, ...Array(MIN - rows.length).fill(null)];
-            } else {
-              rr = rows.length ? rows : [null];
-            }
+            const rr: (JmRow | null)[] = rows.length ? rows : [null];
             return (
               <tbody key={machine.id} className="jml-mgroup">
                 {rr.map((row, i) => (
