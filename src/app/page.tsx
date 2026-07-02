@@ -92,7 +92,6 @@ interface ScheduleEntry {
   start_time: string;
   end_time: string;
   mark_color?: string; // 관리자가 #번호 클릭으로 칠하는 표시 색상(여러 관리자 공유)
-  done_book?: string; // 완료책명 — 작업 행별 자유 메모(화면 전용)
 }
 
 const DAY_NAMES = ["일", "월", "화", "수", "목", "금", "토"];
@@ -209,8 +208,9 @@ export default function ScheduleBoard() {
   const [downtimes, setDowntimes] = useState<Downtime[]>([]);
   const [dtModalMachine, setDtModalMachine] = useState<number | null>(null);
   const [dtForm, setDtForm] = useState({ start: "", end: "", reason: "" });
-  // 완료책명 모달: 열린 작업 행(id·라벨)과 편집 중 텍스트
-  const [noteEntry, setNoteEntry] = useState<{ id: number; label: string } | null>(null);
+  // 완료책명 메모장(라인 공용, 자유 입력). workNote=저장값, showNote=모달 열림, noteDraft=편집 중 텍스트
+  const [workNote, setWorkNote] = useState("");
+  const [showNote, setShowNote] = useState(false);
   const [noteDraft, setNoteDraft] = useState("");
   const [dragOrderId, setDragOrderId] = useState<number | null>(null);
   const [dragPart, setDragPart] = useState<string>("");
@@ -260,8 +260,8 @@ export default function ScheduleBoard() {
   const fetchAll = useCallback(async () => {
     const qs = `?process_line=${encodeURIComponent(processLine)}`;
     // 식사시간(breaks)은 전 공정 공통이라 process_line 필터 없이 받는다.
-    const [machRes, orderRes, schedRes, bucketRes, breakRes, dtRes] = await Promise.all([
-      fetch(`/api/machines${qs}`), fetch(`/api/orders${qs}`), fetch(`/api/schedule${qs}`), fetch(`/api/buckets${qs}`), fetch(`/api/breaks`), fetch(`/api/downtimes`),
+    const [machRes, orderRes, schedRes, bucketRes, breakRes, dtRes, noteRes] = await Promise.all([
+      fetch(`/api/machines${qs}`), fetch(`/api/orders${qs}`), fetch(`/api/schedule${qs}`), fetch(`/api/buckets${qs}`), fetch(`/api/breaks`), fetch(`/api/downtimes`), fetch(`/api/worknote${qs}`),
     ]);
     const machData = await machRes.json();
     const orderData = await orderRes.json();
@@ -269,8 +269,10 @@ export default function ScheduleBoard() {
     const bucketData = await bucketRes.json();
     const breakData = await breakRes.json();
     const dtData = await dtRes.json().catch(() => []);
+    const noteData = await noteRes.json().catch(() => ({ note: "" }));
     setBreaks(Array.isArray(breakData) ? breakData : []);
     setDowntimes(Array.isArray(dtData) ? dtData : []);
+    setWorkNote(typeof noteData?.note === "string" ? noteData.note : "");
     const activeMachines = machData.filter((m: Machine) => m.is_active);
     setMachines(activeMachines);
     // 배정 대기 풀: pending 주문 + 이미 배정됐어도(scheduled) '미배정으로 남은 구성'이 있는 다중구성 주문.
@@ -534,21 +536,16 @@ export default function ScheduleBoard() {
     });
   };
 
-  // 완료책명(작업 행별 자유 메모) 보기/편집 모달. 관리자는 편집, 그 외는 확인만.
-  const openNote = (entry: ScheduleEntry) => {
-    setNoteEntry({ id: entry.id, label: jobLabel(entry) });
-    setNoteDraft(entry.done_book || "");
-  };
+  // 완료책명 메모장(라인 공용) 열기/저장. 관리자는 편집, 그 외는 확인만.
+  const openNote = () => { setNoteDraft(workNote); setShowNote(true); };
   const saveNote = async () => {
-    if (!noteEntry) return;
-    const id = noteEntry.id;
     const text = noteDraft;
-    setSchedule((prev) => prev.map((e) => (e.id === id ? { ...e, done_book: text } : e)));
-    setNoteEntry(null);
-    await fetch("/api/schedule/entry-note", {
+    setWorkNote(text);
+    setShowNote(false);
+    await fetch("/api/worknote", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ entry_id: id, done_book: text }),
+      body: JSON.stringify({ process_line: processLine, note: text }),
     });
   };
 
@@ -2075,6 +2072,13 @@ export default function ScheduleBoard() {
               </button>
             )}
             <button
+              onClick={openNote}
+              className={`text-xs border px-2 py-1 whitespace-nowrap ${workNote.trim() ? "border-green-400 bg-green-50 text-green-700 font-medium" : "border-gray-300 bg-white text-gray-700 hover:bg-gray-100"}`}
+              title={isAdmin ? "완료책명 메모장 (자유롭게 입력)" : "완료책명 보기 (관리자만 편집)"}
+            >
+              📖 완료책명
+            </button>
+            <button
               onClick={() => triggerPrint("full")}
               className="text-xs border border-gray-300 bg-white px-2 py-1 hover:bg-gray-100 text-gray-700 whitespace-nowrap"
               title="기계별 작업계획을 A4 한 장에 인쇄합니다"
@@ -2146,7 +2150,7 @@ export default function ScheduleBoard() {
                 <table className="w-full table-fixed">
                   <thead>
                     <tr className={`text-gray-500 border-b border-gray-200 h-7 ${isJechae ? "text-[13px]" : "text-[10px]"}`}>
-                      <th className="px-1.5 py-0 text-left w-14">#</th>
+                      <th className="px-1.5 py-0 text-left w-6">#</th>
                       <th className="px-1.5 py-0 text-center">작업명</th>
                       <th className={`px-1.5 py-0 text-center ${isJechae ? "" : "w-44"}`}>비고</th>
                       <th className="px-1.5 py-0 text-center w-28">소요(시간)</th>
@@ -2239,26 +2243,13 @@ export default function ScheduleBoard() {
                             }
                           }}
                         >
-                          <td className="px-1.5 py-0 select-none" draggable={false}>
-                            <div className="flex items-center gap-1">
-                              <span
-                                className={`text-[10px] px-0.5 ${entry.mark_color ? "text-gray-700 font-bold" : "text-gray-400"} ${isAdmin ? "cursor-pointer hover:bg-black/10" : ""}`}
-                                title={isAdmin ? "클릭: 표시 색상 변경 (수정 표시 — 모든 관리자 공유)" : ""}
-                                onClick={(e) => { e.stopPropagation(); cycleMark(entry); }}
-                              >
-                                {idx + 1}
-                              </span>
-                              <button
-                                type="button"
-                                draggable={false}
-                                onMouseDown={(e) => e.stopPropagation()}
-                                onClick={(e) => { e.stopPropagation(); openNote(entry); }}
-                                title={`완료책명${isAdmin ? " (누르면 편집)" : " (누르면 보기)"}`}
-                                className={`text-[10px] leading-none px-1 py-0.5 border ${entry.done_book ? "bg-green-100 text-green-700 border-green-300 font-medium" : "bg-white text-gray-400 border-gray-200 hover:bg-gray-100"}`}
-                              >
-                                📖
-                              </button>
-                            </div>
+                          <td
+                            className={`px-1.5 py-0 text-[10px] select-none ${entry.mark_color ? "text-gray-700 font-bold" : "text-gray-400"} ${isAdmin ? "cursor-pointer hover:bg-black/10" : ""}`}
+                            title={isAdmin ? "클릭: 표시 색상 변경 (수정 표시 — 모든 관리자 공유)" : ""}
+                            draggable={false}
+                            onClick={(e) => { e.stopPropagation(); cycleMark(entry); }}
+                          >
+                            {idx + 1}
                           </td>
                           <td className="px-1.5 py-0">
                             <div className="flex items-center gap-1 overflow-x-auto jobscroll">
@@ -2919,28 +2910,27 @@ export default function ScheduleBoard() {
       </div>
     )}
 
-    {/* 완료책명 보기/편집 — 관리자는 편집, 그 외는 확인만(읽기 전용) */}
-    {noteEntry && (
-      <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center" onClick={() => setNoteEntry(null)}>
-        <div className="bg-white shadow-xl w-[440px] max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+    {/* 완료책명 메모장 — 관리자는 자유 편집, 그 외는 확인만(읽기 전용) */}
+    {showNote && (
+      <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center" onClick={() => setShowNote(false)}>
+        <div className="bg-white shadow-xl w-[560px] max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
           <div className="px-4 py-3 border-b flex items-center justify-between bg-gray-50">
-            <h3 className="font-bold text-gray-900">📖 완료책명</h3>
-            <button onClick={() => setNoteEntry(null)} className="text-gray-400 hover:text-gray-700 text-lg leading-none">✕</button>
+            <h3 className="font-bold text-gray-900">📖 완료책명 <span className="text-xs font-normal text-gray-400">— {processLine}</span></h3>
+            <button onClick={() => setShowNote(false)} className="text-gray-400 hover:text-gray-700 text-lg leading-none">✕</button>
           </div>
-          <div className="p-3 space-y-2">
-            <p className="text-xs text-gray-500 break-all">{noteEntry.label}</p>
+          <div className="p-3">
             <textarea
               autoFocus={isAdmin}
               readOnly={!isAdmin}
               value={noteDraft}
               onChange={(e) => setNoteDraft(e.target.value)}
               placeholder={isAdmin ? "완료책명을 자유롭게 입력하세요 (메모장)" : "입력된 내용이 없습니다"}
-              className={`w-full border px-2 py-1.5 text-sm h-40 resize-none ${isAdmin ? "" : "bg-gray-50 text-gray-700"}`}
+              className={`w-full border px-2 py-2 text-sm h-72 resize-none ${isAdmin ? "" : "bg-gray-50 text-gray-700"}`}
             />
-            {!isAdmin && <p className="text-[11px] text-gray-400">보기 전용입니다. 편집은 관리자 모드에서 가능합니다.</p>}
+            {!isAdmin && <p className="text-[11px] text-gray-400 mt-1">보기 전용입니다. 편집은 관리자 모드에서 가능합니다.</p>}
           </div>
           <div className="px-4 py-3 border-t flex justify-end gap-2 bg-gray-50">
-            <button onClick={() => setNoteEntry(null)} className="px-3 py-1.5 text-sm border bg-white hover:bg-gray-100">닫기</button>
+            <button onClick={() => setShowNote(false)} className="px-3 py-1.5 text-sm border bg-white hover:bg-gray-100">닫기</button>
             {isAdmin && <button onClick={saveNote} className="px-3 py-1.5 text-sm bg-blue-600 text-white hover:bg-blue-700">저장</button>}
           </div>
         </div>
