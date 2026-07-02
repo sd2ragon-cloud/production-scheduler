@@ -19,6 +19,9 @@ interface Machine {
 }
 
 const DAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
+// 달력 셀에 짧게 표기할 근무체제 약칭
+const SHIFT_ABBR: Record<string, string> = { "정상(주)": "주", "정상(야)": "야", "정시(주)": "정주", "정시(야)": "정야", "단부정시": "단부" };
+const abbrShifts = (names: string[]): string => (names.length ? names.map((n) => SHIFT_ABBR[n] ?? n).join("+") : "휴무");
 function parseOff(json: string | undefined): number[] {
   try { const a = JSON.parse(json || "[]"); return Array.isArray(a) ? a.map(Number).filter((n) => n >= 0 && n <= 6) : []; } catch { return []; }
 }
@@ -90,9 +93,11 @@ function MachineColumn({ processLine, isAdmin }: { processLine: string; isAdmin:
   const [editShifts, setEditShifts] = useState<string[][]>([]);
   // 일괄 적용용 근무체제 선택
   const [editBulkShifts, setEditBulkShifts] = useState<string[]>([]);
-  // 일자별 예외(특정 날짜의 근무체제). shifts 빈 배열 = 그 날 휴무. 날짜 오름차순 유지.
+  // 날짜별 근무체제 지정(요일 기본값과 다른 날만 저장). shifts 빈 배열 = 그 날 휴무.
   const [editDateEx, setEditDateEx] = useState<{ date: string; shifts: string[] }[]>([]);
-  const [newExDate, setNewExDate] = useState("");
+  // 달력에서 보고 있는 연/월(0=1월) + 선택한 날짜('YYYY-MM-DD')
+  const [calYM, setCalYM] = useState<{ y: number; m: number }>(() => { const t = new Date(); return { y: t.getFullYear(), m: t.getMonth() }; });
+  const [selDate, setSelDate] = useState<string | null>(null);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   // 삽입 슬롯: 0=맨 위, n=맨 아래 (행 i 앞 = i)
   const [overSlot, setOverSlot] = useState<number | null>(null);
@@ -143,19 +148,29 @@ function MachineColumn({ processLine, isAdmin }: { processLine: string; isAdmin:
     setEditShifts(shiftsFromMachine(m));
     setEditBulkShifts([]);
     setEditDateEx(dateExFromMachine(m));
-    setNewExDate("");
+    const t = new Date();
+    setCalYM({ y: t.getFullYear(), m: t.getMonth() });
+    setSelDate(null);
   };
 
-  // 일자별 예외 추가/토글/삭제
-  const addDateEx = () => {
-    if (!newExDate || editDateEx.some((x) => x.date === newExDate)) return;
-    setEditDateEx((prev) => [...prev, { date: newExDate, shifts: [] }].sort((a, b) => a.date.localeCompare(b.date)));
-    setNewExDate("");
+  // ── 날짜별 근무체제(달력) 헬퍼 ──
+  // 그 날짜에 직접 지정한 값이 있으면 그것, 없으면 요일 기본값(editShifts)을 따른다.
+  const overrideOf = (date: string) => editDateEx.find((x) => x.date === date);
+  const effShiftsOf = (date: string, weekday: number): string[] => {
+    const o = overrideOf(date);
+    return o ? o.shifts : (editShifts[weekday] || []);
   };
-  const toggleExShift = (date: string, name: string) => {
-    setEditDateEx((prev) => prev.map((x) => (x.date === date ? { ...x, shifts: x.shifts.includes(name) ? x.shifts.filter((s) => s !== name) : [...x.shifts, name] } : x)));
+  // 그 날짜의 근무체제를 직접 지정(요일 기본값과 달라짐).
+  const setDateShiftsFor = (date: string, shifts: string[]) =>
+    setEditDateEx((prev) => [...prev.filter((x) => x.date !== date), { date, shifts }].sort((a, b) => a.date.localeCompare(b.date)));
+  // 선택한 날짜에서 근무체제 칩 토글(요일 기본값에서 출발해도 그 날짜 지정으로 전환).
+  const toggleDateShift = (date: string, weekday: number, name: string) => {
+    const cur = effShiftsOf(date, weekday);
+    setDateShiftsFor(date, cur.includes(name) ? cur.filter((s) => s !== name) : [...cur, name]);
   };
-  const removeDateEx = (date: string) => setEditDateEx((prev) => prev.filter((x) => x.date !== date));
+  // 그 날짜를 요일 기본값으로 되돌린다(직접 지정 삭제).
+  const resetDateToDefault = (date: string) => setEditDateEx((prev) => prev.filter((x) => x.date !== date));
+  const changeMonth = (delta: number) => setCalYM(({ y, m }) => { const d = new Date(y, m + delta, 1); return { y: d.getFullYear(), m: d.getMonth() }; });
 
   // 요일별 근무체제 토글(다중)
   const toggleShift = (day: number, name: string) => {
@@ -331,7 +346,7 @@ function MachineColumn({ processLine, isAdmin }: { processLine: string; isAdmin:
                       </select>
                     )}
                   </div>
-                  <div className="text-[11px] text-gray-500">요일별 근무체제 (칩 클릭=선택/해제, 미선택=휴무)</div>
+                  <div className="text-[11px] text-gray-500">① 평소 근무체제 (요일별 · 아래 달력의 기본값이 됩니다 · 미선택=휴무)</div>
                   <div className="flex flex-col gap-1">
                     {DAY_LABELS.map((d, i) => {
                       const sel = editShifts[i] || [];
@@ -349,28 +364,88 @@ function MachineColumn({ processLine, isAdmin }: { processLine: string; isAdmin:
                     })}
                   </div>
                   <div className="text-[10px] text-gray-400">여러 개 선택 가능(예: 정상(주)+정상(야)=24시간). 미선택 요일=휴무.</div>
-                  {/* 일자별 예외: 특정 날짜만 요일 템플릿 대신 지정 근무체제(미선택=그 날 휴무) */}
-                  <div className="text-[11px] text-gray-500 mt-1 pt-1.5 border-t">일자별 예외 <span className="text-gray-400">(그 날짜만 근무체제 변경 · 미선택=휴무 · 요일 설정보다 우선)</span></div>
-                  <div className="flex items-center gap-1">
-                    <input type="date" value={newExDate} min={todayLocal()} onChange={(e) => setNewExDate(e.target.value)} className="h-7 border text-xs px-1" />
-                    <button type="button" onClick={addDateEx} disabled={!newExDate} className="h-7 px-2 text-xs border bg-gray-100 hover:bg-gray-200 disabled:opacity-50">+ 예외 추가</button>
-                  </div>
-                  {editDateEx.length > 0 && (
-                    <div className="flex flex-col gap-1">
-                      {editDateEx.map((x) => (
-                        <div key={x.date} className="flex items-center gap-1 flex-wrap">
-                          <span className="text-[11px] font-medium text-purple-700 border border-purple-300 bg-purple-50 px-1.5 h-7 inline-flex items-center whitespace-nowrap">{x.date}</span>
-                          {SHIFT_NAMES.map((s) => (
-                            <button key={s} type="button" onClick={() => toggleExShift(x.date, s)}
-                              className={`h-7 px-1.5 text-[11px] border ${x.shifts.includes(s) ? "bg-blue-600 text-white border-blue-600 font-medium" : "bg-white text-gray-600 hover:bg-gray-100"}`}
-                              title={`${x.date} ${s}`}>{s}</button>
-                          ))}
-                          {x.shifts.length === 0 && <span className="text-[11px] text-red-500 ml-0.5">휴무</span>}
-                          <button type="button" onClick={() => removeDateEx(x.date)} className="h-7 px-1 text-sm text-gray-400 hover:text-red-600" title="예외 삭제">✕</button>
+
+                  {/* ② 날짜별 근무 달력: 날짜를 눌러 그 날의 근무체제를 직접 바꾼다. 안 바꾼 날은 위 요일 기본값 그대로. */}
+                  <div className="text-[11px] text-gray-500 mt-1 pt-1.5 border-t">② 날짜별 근무 달력 <span className="text-gray-400">(바꿀 날짜를 누르세요)</span></div>
+                  {(() => {
+                    const today = todayLocal();
+                    const { y, m } = calYM;
+                    const daysInMonth = new Date(y, m + 1, 0).getDate();
+                    const startWd = new Date(y, m, 1).getDay();
+                    const cells: (number | null)[] = [];
+                    for (let i = 0; i < startWd; i++) cells.push(null);
+                    for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+                    const dstr = (d: number) => `${y}-${pad2(m + 1)}-${pad2(d)}`;
+                    return (
+                      <div className="border bg-white">
+                        {/* 월 이동 */}
+                        <div className="flex items-center justify-between px-2 py-1 bg-gray-50 border-b">
+                          <button type="button" onClick={() => changeMonth(-1)} className="h-7 w-7 border bg-white hover:bg-gray-100 text-sm">◀</button>
+                          <span className="text-sm font-bold text-gray-800">{y}년 {m + 1}월</span>
+                          <button type="button" onClick={() => changeMonth(1)} className="h-7 w-7 border bg-white hover:bg-gray-100 text-sm">▶</button>
                         </div>
-                      ))}
-                    </div>
-                  )}
+                        {/* 요일 헤더 */}
+                        <div className="grid grid-cols-7 text-center text-[10px] text-gray-400 border-b">
+                          {DAY_LABELS.map((d, i) => <div key={i} className={`py-0.5 ${i === 0 ? "text-red-400" : ""}`}>{d}</div>)}
+                        </div>
+                        {/* 날짜 셀 */}
+                        <div className="grid grid-cols-7">
+                          {cells.map((d, idx) => {
+                            if (d === null) return <div key={idx} className="border-r border-b bg-gray-50/40" />;
+                            const ds = dstr(d);
+                            const wd = new Date(y, m, d).getDay();
+                            const past = ds < today;
+                            const eff = effShiftsOf(ds, wd);
+                            const custom = !!overrideOf(ds);
+                            const off = eff.length === 0;
+                            return (
+                              <button
+                                key={idx}
+                                type="button"
+                                disabled={past}
+                                onClick={() => setSelDate(ds)}
+                                title={past ? "지난 날짜" : ds}
+                                className={`h-12 border-r border-b p-0.5 flex flex-col items-center justify-start text-center leading-tight
+                                  ${past ? "bg-gray-100 text-gray-300 cursor-not-allowed" : off ? "bg-gray-50 hover:bg-gray-100" : "bg-white hover:bg-blue-50"}
+                                  ${selDate === ds ? "ring-2 ring-blue-500 ring-inset" : ""}
+                                  ${ds === today && !past ? "outline outline-1 outline-blue-300" : ""}`}
+                              >
+                                <span className={`text-[11px] ${wd === 0 ? "text-red-400" : "text-gray-500"} ${custom ? "font-bold" : ""}`}>{d}{custom ? " •" : ""}</span>
+                                <span className={`text-[10px] mt-0.5 ${off ? "text-gray-400" : "text-blue-700 font-medium"}`}>{abbrShifts(eff)}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                  {/* 선택한 날짜의 근무체제 편집 */}
+                  {selDate && (() => {
+                    const wd = new Date(selDate + "T00:00:00").getDay();
+                    const eff = effShiftsOf(selDate, wd);
+                    const custom = !!overrideOf(selDate);
+                    return (
+                      <div className="border bg-blue-50/60 p-2 flex flex-col gap-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-gray-800">{selDate} ({DAY_LABELS[wd]}) 근무체제</span>
+                          <button type="button" onClick={() => setSelDate(null)} className="text-gray-400 hover:text-gray-700 text-sm px-1">✕</button>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-1">
+                          {SHIFT_NAMES.map((s) => (
+                            <button key={s} type="button" onClick={() => toggleDateShift(selDate, wd, s)}
+                              className={`h-8 px-2 text-xs border ${eff.includes(s) ? "bg-blue-600 text-white border-blue-600 font-medium" : "bg-white text-gray-600 hover:bg-gray-100"}`}>{s}</button>
+                          ))}
+                          {eff.length === 0 && <span className="text-xs text-red-500 ml-0.5 font-medium">휴무</span>}
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] text-gray-500">{custom ? "이 날짜는 직접 지정됨" : "요일 기본값 그대로"}</span>
+                          {custom && (
+                            <button type="button" onClick={() => resetDateToDefault(selDate)} className="text-[11px] text-blue-600 hover:text-blue-800 underline">요일 기본값으로 되돌리기</button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               ) : (
                 <span className={`flex-1 min-w-0 text-sm font-medium ${m.is_active ? "text-gray-900" : "text-gray-400"}`}>
@@ -387,7 +462,7 @@ function MachineColumn({ processLine, isAdmin }: { processLine: string; isAdmin:
                   {(() => {
                     const today = todayLocal();
                     const n = Object.keys(parseDateShifts(m.date_shifts)).filter((d) => d >= today).length;
-                    return n > 0 ? <span className="ml-1 text-[11px] font-normal text-purple-600">· 예외 {n}일</span> : null;
+                    return n > 0 ? <span className="ml-1 text-[11px] font-normal text-purple-600">· 날짜지정 {n}일</span> : null;
                   })()}
                 </span>
               )}
