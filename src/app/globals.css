@@ -341,7 +341,7 @@ input[type="number"]::-webkit-outer-spin-button {
     padding: 0.3mm 1.5mm;
     border-bottom: 1px solid #bbb;
   }
-  .pf-bk-sum { font-weight: normal; color: #000; white-space: nowrap; }
+  .pf-bk-sum { font-weight: normal; color: #fff; white-space: nowrap; }
   /* 칸 안 제품명: 배정 대기처럼 2열로 흐른다. 각 칩 한 줄 고정(넘치면 JS가 너비 맞춰 폰트 축소). */
   .pf-bk-items { flex: 1 1 auto; overflow: hidden; padding: 0; column-count: 2; column-gap: 2.5mm; }
   .pf-bk-item {
