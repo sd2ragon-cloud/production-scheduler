@@ -2159,7 +2159,7 @@ export default function ScheduleBoard() {
                       <th className={`px-1.5 py-0 text-center ${isJechae ? "" : "w-44"}`}>비고</th>
                       <th className="px-1.5 py-0 text-center w-28">소요(시간)</th>
                       <th className={`px-1.5 py-0 whitespace-nowrap ${isJechae ? "text-center w-40" : "text-left w-32"}`}>예상완료</th>
-                      <th className="px-1.5 py-0 text-center w-12"></th>
+                      <th className="px-1.5 py-0 text-center w-16"></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -2170,7 +2170,10 @@ export default function ScheduleBoard() {
                         <tr
                           key={entry.id}
                           draggable={isAdmin}
-                          onDragStart={() => {
+                          onDragStart={(e) => {
+                            // 수정/복사/삭제 버튼 영역에서 시작한 드래그는 취소 → 버튼 누르다 실수로
+                            // 순서변경·1차배정 이동되는 것을 방지.
+                            if ((e.target as HTMLElement).closest(".no-drag")) { e.preventDefault(); return; }
                             setDragEntryId(entry.id);
                             setDragOrderId(null);
                             setDragPart("");
@@ -2442,7 +2445,7 @@ export default function ScheduleBoard() {
                               : <FitEndTime text={formatEndTime(entry.end_time)} />}
                           </td>
                           <td className="px-1.5 py-0 text-center">
-                            <div className="flex items-center justify-center gap-1">
+                            <div className="flex items-center justify-center gap-1 no-drag">
                               {isAdmin ? (<>
                               <button
                                 onClick={() => { const o = allOrders.find((x) => x.id === entry.order_id); if (o) startEditOrder(o, false, entry.machine_id, entry); }}
@@ -2481,7 +2484,7 @@ export default function ScheduleBoard() {
                                   }
                                 }}
                                 disabled={loading}
-                                className={`text-sm leading-none px-0.5 transition-transform ${trashOverEntry === entry.id ? "text-red-600 scale-150" : "text-gray-400 hover:text-red-600"}`}
+                                className={`text-xl leading-none px-1.5 py-1 -my-0.5 transition-transform ${trashOverEntry === entry.id ? "text-red-600 scale-150" : "text-gray-400 hover:text-red-600 hover:bg-red-50"}`}
                                 title="클릭: 이 설비 배정만 삭제 (1차 배정·대기는 유지) / 구성 칩을 끌어다 놓으면 그 구성만 완료·삭제"
                               >
                                 🗑
