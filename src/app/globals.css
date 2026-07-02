@@ -95,7 +95,12 @@ input[type="number"]::-webkit-outer-spin-button {
   .print-block td {
     border: 1px solid #000;
     vertical-align: middle;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    background: inherit; /* 행(tr)에 지정된 표시색(mark)이 셀에도 인쇄되도록 */
   }
+  /* 표시색이 칠해진 작업 행: 인쇄 시 배경색 강제 출력 */
+  .print-block tr { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 
   .print-title {
     height: 18mm;

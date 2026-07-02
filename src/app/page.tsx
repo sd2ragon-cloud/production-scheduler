@@ -1877,7 +1877,7 @@ export default function ScheduleBoard() {
                   {Array.from({ length: rowCount }).map((_, i) => {
                     const e = entries[i];
                     return (
-                      <tr key={i}>
+                      <tr key={i} style={e && e.mark_color ? { background: MARK_BG[e.mark_color] } : undefined}>
                         <td className="print-num">{e ? i + 1 : ""}</td>
                         <td className="print-name">
                           {e ? (
@@ -2062,6 +2062,13 @@ export default function ScheduleBoard() {
             <p className="text-xs text-gray-500">{dateStr}</p>
           </div>
           <div className="flex items-center gap-1.5 flex-wrap justify-end">
+            <button
+              onClick={openNote}
+              className={`text-xs border px-2 py-1 whitespace-nowrap ${workNote.trim() ? "border-green-400 bg-green-50 text-green-700 font-medium" : "border-gray-300 bg-white text-gray-700 hover:bg-gray-100"}`}
+              title={isAdmin ? "완료책명 메모장 (자유롭게 입력)" : "완료책명 보기 (관리자만 편집)"}
+            >
+              📖 완료책명
+            </button>
             {!isJechae && (
               <button
                 onClick={() => triggerPrint("order")}
@@ -2071,13 +2078,6 @@ export default function ScheduleBoard() {
                 🖨 작업순서
               </button>
             )}
-            <button
-              onClick={openNote}
-              className={`text-xs border px-2 py-1 whitespace-nowrap ${workNote.trim() ? "border-green-400 bg-green-50 text-green-700 font-medium" : "border-gray-300 bg-white text-gray-700 hover:bg-gray-100"}`}
-              title={isAdmin ? "완료책명 메모장 (자유롭게 입력)" : "완료책명 보기 (관리자만 편집)"}
-            >
-              📖 완료책명
-            </button>
             <button
               onClick={() => triggerPrint("full")}
               className="text-xs border border-gray-300 bg-white px-2 py-1 hover:bg-gray-100 text-gray-700 whitespace-nowrap"
