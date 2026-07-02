@@ -1350,6 +1350,8 @@ export default function ScheduleBoard() {
 
   // 분 → "N.Nh" (소요시간 합계 표기)
   const fmtH = (min: number) => `${Math.round(min / 6) / 10}h`;
+  // 분 → "N.N일" (일수 = 총 배정시간 ÷ 10개조 ÷ 10시간 = 분/6000, 소수점 1자리)
+  const fmtDays = (min: number) => `${Math.round(min / 600) / 10}일`;
 
   // 제책 '설비별 작업 목록'(첨부 양식용). 각 설비의 배정 순서대로 작업명·소요(시간)·예상완료·비고 행.
   // 배정이 없으면 rows는 빈 배열(양식에선 빈 줄 1개로 설비명만 표시).
@@ -1629,7 +1631,7 @@ export default function ScheduleBoard() {
     // 배정 대기: 페이지 브레이크로 새 페이지 상단에서 시작 → 헤드글이 항상 제품명 위에 보인다. 2열.
     if (r > 2) ws.getRow(r - 1).addPageBreak();
     const mwaitMin = locationMinutes(waitingOrders, undefined);
-    box(r, 1, r, 7, `배정 대기   (${waitingOrders.length}건)   합계 ${fmtH(mwaitMin)}`, { fill: GRAY, font: { bold: true, size: 10 }, align: { vertical: "middle", horizontal: "left" } });
+    box(r, 1, r, 7, `배정 대기   (${waitingOrders.length}건)   총 배정시간 ${fmtH(mwaitMin)}   ${fmtDays(mwaitMin)}`, { fill: GRAY, font: { bold: true, size: 10 }, align: { vertical: "middle", horizontal: "left" } });
     r++;
     if (!waitingOrders.length) {
       box(r, 1, r, 7, "-", { font: { size: 9 }, align: { vertical: "middle", horizontal: "left" }, borderObj: { left: thin, right: thin, bottom: thin } });
@@ -2014,7 +2016,7 @@ export default function ScheduleBoard() {
             </div>
           </div>
           <div className="pf-sect">
-            <div className="pf-secttl">배정 대기 <span className="pf-secsum">{fmtH(locationMinutes(waitingOrders, undefined))}</span></div>
+            <div className="pf-secttl">배정 대기 <span className="pf-secsum">{fmtH(locationMinutes(waitingOrders, undefined))} · {fmtDays(locationMinutes(waitingOrders, undefined))}</span></div>
             <div className="pf-secbody">
               {waitingOrders.map((o) => <div key={o.id} className="pf-row">{ov(o)}</div>)}
             </div>
