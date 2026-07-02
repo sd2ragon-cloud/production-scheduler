@@ -291,6 +291,13 @@ async function initializeDb(db: Client) {
     // column already exists
   }
 
+  // Migrate schedule_entries: add done_book (완료책명 — 작업 행별 자유 메모, 화면 전용) if missing
+  try {
+    await db.execute(`ALTER TABLE schedule_entries ADD COLUMN done_book TEXT NOT NULL DEFAULT ''`);
+  } catch {
+    // column already exists
+  }
+
   // 관리자 비밀번호 역할 분리 마이그레이션: 기존 단일 admin_pw가 있으면 매엽·윤전 관리자(admin_pw_sheet)로 이관.
   // (전사 총괄 없이 매엽·윤전 / 무선 두 모드로 운영. 무선 비밀번호는 첫 사용 시 새로 설정한다.)
   try {
