@@ -1566,6 +1566,10 @@ export default function ScheduleBoard() {
     ws.getRow(1).height = 22;
     // 하단(1차배정/배정대기) 없이 설비 박스 2열 그리드만. 각 줄: 번호 | 제품명 | 완료시간.
     // 제품명(47)·완료(15)는 너비를 넘치면 '셀에 맞춤'(shrinkToFit)으로 자동 축소. 좌:1~3열 / 우:5~7열.
+    // 설비명 헤더: 매엽은 곤색 배경·흰 글자(프린트와 동일), 윤전은 회색·검정 유지.
+    const NAVY = "FF002060";
+    const hdrFill = isRoll ? GRAY : NAVY;
+    const hdrFont = (size: number) => (isRoll ? { bold: true, size } : { bold: true, size, color: { argb: "FFFFFFFF" } });
     let r = 2;
     for (let i = 0; i < machines.length; i += 2) {
       const sides = [machines[i], machines[i + 1]];
@@ -1581,8 +1585,8 @@ export default function ScheduleBoard() {
         const md = meta[si];
         if (!md) { box(r, base, r, base + 2, "", {}); return; }
         box(r, base, r, base + 1, `${md.m.name}${md.memo ? `   ${md.memo}` : ""}`,
-          { fill: GRAY, font: { bold: true, size: 10 }, align: { vertical: "middle", horizontal: "left" } });
-        cset(r, base + 2, fmtH(md.total), { fill: GRAY, font: { bold: true, size: 9 }, align: { vertical: "middle", horizontal: "right" } });
+          { fill: hdrFill, font: hdrFont(10), align: { vertical: "middle", horizontal: "left" } });
+        cset(r, base + 2, fmtH(md.total), { fill: hdrFill, font: hdrFont(9), align: { vertical: "middle", horizontal: "right" } });
       });
       ws.getRow(r).height = 16;
       r++;
