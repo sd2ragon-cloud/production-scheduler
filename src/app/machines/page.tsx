@@ -130,12 +130,10 @@ function MachineColumn({ processLine, isAdmin }: { processLine: string; isAdmin:
     return DAY_LABELS.map((_, d) => (ds[d] ? [...ds[d]] : []));
   };
 
-  // 설비 저장값 → 일자별 예외 편집 상태(과거 날짜는 제외). 날짜 오름차순.
+  // 설비 저장값 → 일자별 예외 편집 상태(지난 날짜 포함 — 수정 가능). 날짜 오름차순.
   const dateExFromMachine = (m: Machine): { date: string; shifts: string[] }[] => {
-    const today = todayLocal();
     const ds = parseDateShifts(m.date_shifts);
     return Object.keys(ds)
-      .filter((d) => d >= today)
       .sort()
       .map((date) => ({ date, shifts: [...ds[date]] }));
   };
@@ -174,12 +172,10 @@ function MachineColumn({ processLine, isAdmin }: { processLine: string; isAdmin:
   const applyToMonth = (shifts: string[], scope: "all" | "weekday" | "weekend") => {
     const { y, m } = calYM;
     const dim = new Date(y, m + 1, 0).getDate();
-    const today = todayLocal();
     setEditDateEx((prev) => {
       const map = new Map(prev.map((x) => [x.date, x.shifts]));
       for (let d = 1; d <= dim; d++) {
         const ds = `${y}-${pad2(m + 1)}-${pad2(d)}`;
-        if (ds < today) continue;
         const wd = new Date(y, m, d).getDay();
         const inScope = scope === "all" || (scope === "weekday" && wd >= 1 && wd <= 5) || (scope === "weekend" && (wd === 0 || wd === 6));
         if (inScope) map.set(ds, [...shifts]);
@@ -378,13 +374,13 @@ function MachineColumn({ processLine, isAdmin }: { processLine: string; isAdmin:
                               <button
                                 key={idx}
                                 type="button"
-                                disabled={past}
                                 onClick={() => setSelDate(ds)}
-                                title={past ? "지난 날짜" : ds}
+                                title={past ? `${ds} (지난 날짜 · 수정 가능)` : ds}
                                 className={`h-12 border-r border-b p-0.5 flex flex-col items-center justify-start text-center leading-tight
-                                  ${past ? "bg-gray-100 text-gray-300 cursor-not-allowed" : off ? "bg-gray-50 hover:bg-gray-100" : "bg-white hover:bg-blue-50"}
+                                  ${off ? "bg-gray-50 hover:bg-gray-100" : "bg-white hover:bg-blue-50"}
+                                  ${past ? "opacity-70" : ""}
                                   ${selDate === ds ? "ring-2 ring-blue-500 ring-inset" : ""}
-                                  ${ds === today && !past ? "outline outline-1 outline-blue-300" : ""}`}
+                                  ${ds === today ? "outline outline-1 outline-blue-300" : ""}`}
                               >
                                 <span className={`text-[11px] ${wd === 0 ? "text-red-400" : "text-gray-500"} ${custom ? "font-bold" : ""}`}>{d}{custom ? " •" : ""}</span>
                                 <span className={`text-[10px] mt-0.5 ${off ? "text-gray-400" : "text-blue-700 font-medium"}`}>{abbrShifts(eff)}</span>
@@ -442,8 +438,7 @@ function MachineColumn({ processLine, isAdmin }: { processLine: string; isAdmin:
                     ) : null;
                   })()}
                   {(() => {
-                    const today = todayLocal();
-                    const n = Object.keys(parseDateShifts(m.date_shifts)).filter((d) => d >= today).length;
+                    const n = Object.keys(parseDateShifts(m.date_shifts)).length;
                     return n > 0 ? <span className="ml-1 text-[11px] font-normal text-purple-600">· 날짜지정 {n}일</span> : null;
                   })()}
                 </span>

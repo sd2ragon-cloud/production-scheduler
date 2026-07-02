@@ -96,13 +96,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     recalcNeeded = true;
   }
   // 일자별 예외 근무체제. { "2026-07-10": ["정상(주)"], "2026-08-15": [] } (빈 배열=그 날 휴무).
-  // 스케줄은 오늘부터 앞으로만 계산하므로 과거 날짜는 저장하지 않고 정리한다.
+  // 지난 날짜도 수정·저장 가능(스케줄 계산엔 오늘 이후만 쓰이지만, 기록/보정 목적으로 그대로 보존).
   if (body.date_shifts != null && typeof body.date_shifts === 'object' && !Array.isArray(body.date_shifts)) {
-    const today = todayLocal();
     const clean: Record<string, string[]> = {};
     for (const [k, v] of Object.entries(body.date_shifts as Record<string, unknown>)) {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(k)) continue;
-      if (k < today) continue; // 과거 날짜는 스케줄에 영향 없음 → 자동 정리
       if (Array.isArray(v)) {
         clean[k] = v.filter((x): x is string => typeof x === 'string' && x in SHIFTS); // 빈 배열=휴무 유지
       }
