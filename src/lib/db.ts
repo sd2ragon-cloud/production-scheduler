@@ -258,6 +258,14 @@ async function initializeDb(db: Client) {
     // column already exists
   }
 
+  // Migrate machines: add date_shifts (일자별 예외 근무체제 JSON, 예 {"2026-08-15":[], "2026-07-10":["정상(주)","정상(야)"]}).
+  // 특정 날짜에 대해 근무체제를 지정(빈 배열=그 날 휴무)해 요일 템플릿을 덮어쓴다. 비어 있으면 요일 템플릿 사용.
+  try {
+    await db.execute(`ALTER TABLE machines ADD COLUMN date_shifts TEXT NOT NULL DEFAULT '{}'`);
+  } catch {
+    // column already exists
+  }
+
   // 1회성: 납기일 기능 제거에 따라 기존 주문의 deadline 데이터를 전부 비운다.
   // 마커 테이블 생성이 성공한 최초 1회에만 실행(이후 재시작 시엔 테이블이 이미 있어 건너뜀).
   try {

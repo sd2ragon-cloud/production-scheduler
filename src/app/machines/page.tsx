@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { PROCESS_LINES, roleCanEditLine } from "@/lib/factory-config";
-import { SHIFT_NAMES, parseDayShifts } from "@/lib/shifts";
+import { SHIFT_NAMES, parseDayShifts, parseDateShifts } from "@/lib/shifts";
+import { todayLocal } from "@/lib/date";
 import { useAuth } from "../components/AuthContext";
 
 interface Machine {
@@ -14,6 +15,7 @@ interface Machine {
   off_days: string; // 휴무 요일 JSON 배열 (0=일~6=토)
   day_hours: string; // 요일별 근무시간 오버라이드 JSON (예: {"6":[8,18]})
   day_shifts: string; // 요일별 근무체제 JSON (예: {"1":["정상(주)","정상(야)"]})
+  date_shifts: string; // 일자별 예외 근무체제 JSON (예: {"2026-07-10":["정상(주)"], "2026-08-15":[]})
 }
 
 const DAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
@@ -88,6 +90,9 @@ function MachineColumn({ processLine, isAdmin }: { processLine: string; isAdmin:
   const [editShifts, setEditShifts] = useState<string[][]>([]);
   // 일괄 적용용 근무체제 선택
   const [editBulkShifts, setEditBulkShifts] = useState<string[]>([]);
+  // 일자별 예외(특정 날짜의 근무체제). shifts 빈 배열 = 그 날 휴무. 날짜 오름차순 유지.
+  const [editDateEx, setEditDateEx] = useState<{ date: string; shifts: string[] }[]>([]);
+  const [newExDate, setNewExDate] = useState("");
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   // 삽입 슬롯: 0=맨 위, n=맨 아래 (행 i 앞 = i)
   const [overSlot, setOverSlot] = useState<number | null>(null);
@@ -122,12 +127,35 @@ function MachineColumn({ processLine, isAdmin }: { processLine: string; isAdmin:
     return DAY_LABELS.map((_, d) => (ds[d] ? [...ds[d]] : []));
   };
 
+  // 설비 저장값 → 일자별 예외 편집 상태(과거 날짜는 제외). 날짜 오름차순.
+  const dateExFromMachine = (m: Machine): { date: string; shifts: string[] }[] => {
+    const today = todayLocal();
+    const ds = parseDateShifts(m.date_shifts);
+    return Object.keys(ds)
+      .filter((d) => d >= today)
+      .sort()
+      .map((date) => ({ date, shifts: [...ds[date]] }));
+  };
+
   const startEdit = (m: Machine) => {
     setEditingId(m.id);
     setEditName(m.name);
     setEditShifts(shiftsFromMachine(m));
     setEditBulkShifts([]);
+    setEditDateEx(dateExFromMachine(m));
+    setNewExDate("");
   };
+
+  // 일자별 예외 추가/토글/삭제
+  const addDateEx = () => {
+    if (!newExDate || editDateEx.some((x) => x.date === newExDate)) return;
+    setEditDateEx((prev) => [...prev, { date: newExDate, shifts: [] }].sort((a, b) => a.date.localeCompare(b.date)));
+    setNewExDate("");
+  };
+  const toggleExShift = (date: string, name: string) => {
+    setEditDateEx((prev) => prev.map((x) => (x.date === date ? { ...x, shifts: x.shifts.includes(name) ? x.shifts.filter((s) => s !== name) : [...x.shifts, name] } : x)));
+  };
+  const removeDateEx = (date: string) => setEditDateEx((prev) => prev.filter((x) => x.date !== date));
 
   // 요일별 근무체제 토글(다중)
   const toggleShift = (day: number, name: string) => {
@@ -159,12 +187,15 @@ function MachineColumn({ processLine, isAdmin }: { processLine: string; isAdmin:
     const day_shifts: Record<number, string[]> = {};
     const offSorted: number[] = [];
     editShifts.forEach((arr, d) => { if (arr.length) day_shifts[d] = arr; else offSorted.push(d); });
+    // 일자별 예외(빈 배열=그 날 휴무도 유지). 서버가 과거 날짜는 정리한다.
+    const date_shifts: Record<string, string[]> = {};
+    editDateEx.forEach((x) => { date_shifts[x.date] = x.shifts; });
     setLoading(true);
     await fetch(`/api/machines/${m.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       // 휴무(체제 없음) 요일은 off_days로도 저장 → 목록 휴무 표시에 사용
-      body: JSON.stringify({ name: trimmed, day_shifts, off_days: offSorted }),
+      body: JSON.stringify({ name: trimmed, day_shifts, off_days: offSorted, date_shifts }),
     });
     cancelEdit();
     await fetchMachines();
@@ -318,6 +349,28 @@ function MachineColumn({ processLine, isAdmin }: { processLine: string; isAdmin:
                     })}
                   </div>
                   <div className="text-[10px] text-gray-400">여러 개 선택 가능(예: 정상(주)+정상(야)=24시간). 미선택 요일=휴무.</div>
+                  {/* 일자별 예외: 특정 날짜만 요일 템플릿 대신 지정 근무체제(미선택=그 날 휴무) */}
+                  <div className="text-[11px] text-gray-500 mt-1 pt-1.5 border-t">일자별 예외 <span className="text-gray-400">(그 날짜만 근무체제 변경 · 미선택=휴무 · 요일 설정보다 우선)</span></div>
+                  <div className="flex items-center gap-1">
+                    <input type="date" value={newExDate} min={todayLocal()} onChange={(e) => setNewExDate(e.target.value)} className="h-7 border text-xs px-1" />
+                    <button type="button" onClick={addDateEx} disabled={!newExDate} className="h-7 px-2 text-xs border bg-gray-100 hover:bg-gray-200 disabled:opacity-50">+ 예외 추가</button>
+                  </div>
+                  {editDateEx.length > 0 && (
+                    <div className="flex flex-col gap-1">
+                      {editDateEx.map((x) => (
+                        <div key={x.date} className="flex items-center gap-1 flex-wrap">
+                          <span className="text-[11px] font-medium text-purple-700 border border-purple-300 bg-purple-50 px-1.5 h-7 inline-flex items-center whitespace-nowrap">{x.date}</span>
+                          {SHIFT_NAMES.map((s) => (
+                            <button key={s} type="button" onClick={() => toggleExShift(x.date, s)}
+                              className={`h-7 px-1.5 text-[11px] border ${x.shifts.includes(s) ? "bg-blue-600 text-white border-blue-600 font-medium" : "bg-white text-gray-600 hover:bg-gray-100"}`}
+                              title={`${x.date} ${s}`}>{s}</button>
+                          ))}
+                          {x.shifts.length === 0 && <span className="text-[11px] text-red-500 ml-0.5">휴무</span>}
+                          <button type="button" onClick={() => removeDateEx(x.date)} className="h-7 px-1 text-sm text-gray-400 hover:text-red-600" title="예외 삭제">✕</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ) : (
                 <span className={`flex-1 min-w-0 text-sm font-medium ${m.is_active ? "text-gray-900" : "text-gray-400"}`}>
@@ -330,6 +383,11 @@ function MachineColumn({ processLine, isAdmin }: { processLine: string; isAdmin:
                     ) : off.length > 0 ? (
                       <span className="ml-1 text-[11px] font-normal text-orange-500">· 휴무 {off.map((i) => DAY_LABELS[i]).join("·")}</span>
                     ) : null;
+                  })()}
+                  {(() => {
+                    const today = todayLocal();
+                    const n = Object.keys(parseDateShifts(m.date_shifts)).filter((d) => d >= today).length;
+                    return n > 0 ? <span className="ml-1 text-[11px] font-normal text-purple-600">· 예외 {n}일</span> : null;
                   })()}
                 </span>
               )}

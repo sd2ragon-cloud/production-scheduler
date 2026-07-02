@@ -1,6 +1,6 @@
 import { getDb } from './db';
 import { todayLocal } from '@/lib/date';
-import { SHIFTS, parseDayShifts } from './shifts';
+import { SHIFTS, parseDayShifts, parseDateShifts } from './shifts';
 
 interface Machine {
   id: number;
@@ -12,6 +12,7 @@ interface Machine {
   off_days?: string; // 휴무 요일 JSON 배열 (0=일~6=토)
   day_hours?: string; // 요일별 근무시간 오버라이드 JSON (예: {"6":[8,18]})
   day_shifts?: string; // 요일별 근무체제 JSON (예: {"1":["정상(주)","정상(야)"]})
+  date_shifts?: string; // 일자별 예외 근무체제 JSON (예: {"2026-07-10":["정상(주)"], "2026-08-15":[]})
   schedule_start_time?: string;
 }
 
@@ -145,15 +146,21 @@ export async function recalcMachine(machineId: number, baseDate?: string, _start
   // 근무체제(교대) 사용 여부. 설정이 있으면 요일별 근무체제로, 없으면 구버전 시작/종료(또는 day_hours)로.
   const dayShifts = parseDayShifts(machine.day_shifts);
   const useShifts = Object.keys(dayShifts).length > 0;
+  // 일자별 예외(특정 날짜의 근무체제). 있으면 그 날짜는 요일 템플릿 대신 이걸 쓴다(빈 배열=그 날 휴무).
+  const dateShifts = parseDateShifts(machine.date_shifts);
+
+  const shiftWindows = (names: string[]): [number, number][] =>
+    names.map((n) => SHIFTS[n]).filter(Boolean).map((s) => [s.start, s.end] as [number, number]);
 
   // 해당 날짜의 근무 가능 구간들 [시작분, 종료분] (종료가 1440 초과면 익일까지 — 야간 근무).
   const dayWindows = (date: Date): [number, number][] => {
-    if (useShifts) {
-      return (dayShifts[date.getDay()] || [])
-        .map((n) => SHIFTS[n])
-        .filter(Boolean)
-        .map((s) => [s.start, s.end] as [number, number]);
+    // 1) 일자별 예외가 지정된 날짜면 요일 템플릿을 무시하고 그 지정을 따른다(빈 배열=휴무).
+    const ds = formatDate(date);
+    if (Object.prototype.hasOwnProperty.call(dateShifts, ds)) {
+      return shiftWindows(dateShifts[ds]);
     }
+    // 2) 아니면 기존 요일 템플릿(근무체제 또는 시작/종료).
+    if (useShifts) return shiftWindows(dayShifts[date.getDay()] || []);
     if (!isWorkDay(date, machine)) return [];
     const { start, end } = hoursFor(date);
     return [[start, end]];

@@ -46,3 +46,25 @@ export function parseDayShifts(json: string | undefined | null): Record<number, 
 export function hasDayShifts(json: string | undefined | null): boolean {
   return Object.keys(parseDayShifts(json)).length > 0;
 }
+
+// 일자별 예외 근무체제 JSON 파싱. { "2026-07-10": ["정상(주)","정상(야)"], "2026-08-15": [] }
+// (키='YYYY-MM-DD', 값=근무체제명 배열). day_shifts와 달리 빈 배열도 유지한다 — '그 날 휴무'를 뜻함.
+export function parseDateShifts(json: string | undefined | null): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  if (!json) return out;
+  try {
+    const o = JSON.parse(json);
+    if (o && typeof o === "object" && !Array.isArray(o)) {
+      for (const k of Object.keys(o)) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(k)) continue;
+        const arr = (o as Record<string, unknown>)[k];
+        if (Array.isArray(arr)) {
+          out[k] = arr.filter((x): x is string => typeof x === "string" && x in SHIFTS);
+        }
+      }
+    }
+  } catch {
+    /* 잘못된 JSON → 없음 */
+  }
+  return out;
+}
