@@ -55,6 +55,14 @@ export async function POST(req: NextRequest) {
     | undefined;
   if (ord) {
     const comp = parseParts(String(ord.component)).filter((p) => p !== partStr).join(', ');
+    // 구성을 전부 완료(남은 구성 없음)하면 '제품명만 남은' 주문이 되어 배정 대기로 떠버린다.
+    // 이 경우 주문을 통째로 삭제한다(배정 대기로 이동하지 않고 완전 삭제). 남은 엔트리도 함께 제거.
+    if (comp === '') {
+      await db.execute({ sql: 'DELETE FROM schedule_entries WHERE order_id = ?', args: [orderId] });
+      await db.execute({ sql: 'DELETE FROM orders WHERE id = ?', args: [orderId] });
+      await recalcMachine(srcMachine, todayLocal());
+      return NextResponse.json({ success: true, deleted: true });
+    }
     const pd = parsePartDurations(ord.part_durations); delete pd[partStr];
     const pp = parsePartProcesses(ord.part_processes); delete pp[partStr];
     const pq = parsePartDurations(ord.part_quantities); delete pq[partStr];
