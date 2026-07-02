@@ -301,7 +301,7 @@ input[type="number"]::-webkit-outer-spin-button {
     font-weight: bold;
     font-size: 9pt;
     padding: 0.8mm 1.5mm;
-    border-bottom: 1px solid #000;
+    border-bottom: 1px solid #fff; /* 곤색 제목과 하단(첫 칸/목록) 사이 흰색 구분선 */
   }
   .pf-secsum { font-weight: normal; font-size: 8pt; }
   /* 배정 대기: 2열로 나눠 더 많은 물량 표기 */
