@@ -89,10 +89,8 @@ function MachineColumn({ processLine, isAdmin }: { processLine: string; isAdmin:
   const [loading, setLoading] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editName, setEditName] = useState("");
-  // 요일별(0=일~6=토) 근무체제(다중 선택). 빈 배열 = 휴무.
+  // 요일별(0=일~6=토) 근무체제. 편집 UI는 없애고 달력의 '기본 근무'(상속) 표시에만 사용.
   const [editShifts, setEditShifts] = useState<string[][]>([]);
-  // 일괄 적용용 근무체제 선택
-  const [editBulkShifts, setEditBulkShifts] = useState<string[]>([]);
   // 날짜별 근무체제 지정(요일 기본값과 다른 날만 저장). shifts 빈 배열 = 그 날 휴무.
   const [editDateEx, setEditDateEx] = useState<{ date: string; shifts: string[] }[]>([]);
   // 달력에서 보고 있는 연/월(0=1월) + 선택한 날짜('YYYY-MM-DD')
@@ -146,7 +144,6 @@ function MachineColumn({ processLine, isAdmin }: { processLine: string; isAdmin:
     setEditingId(m.id);
     setEditName(m.name);
     setEditShifts(shiftsFromMachine(m));
-    setEditBulkShifts([]);
     setEditDateEx(dateExFromMachine(m));
     const t = new Date();
     setCalYM({ y: t.getFullYear(), m: t.getMonth() });
@@ -168,27 +165,45 @@ function MachineColumn({ processLine, isAdmin }: { processLine: string; isAdmin:
     const cur = effShiftsOf(date, weekday);
     setDateShiftsFor(date, cur.includes(name) ? cur.filter((s) => s !== name) : [...cur, name]);
   };
-  // 그 날짜를 요일 기본값으로 되돌린다(직접 지정 삭제).
+  // 이 날짜 지정 지우기(직접 지정 삭제 → 기본 근무로 복귀).
   const resetDateToDefault = (date: string) => setEditDateEx((prev) => prev.filter((x) => x.date !== date));
   const changeMonth = (delta: number) => setCalYM(({ y, m }) => { const d = new Date(y, m + delta, 1); return { y: d.getFullYear(), m: d.getMonth() }; });
 
-  // 요일별 근무체제 토글(다중)
-  const toggleShift = (day: number, name: string) => {
-    setEditShifts((prev) => prev.map((arr, d) => (d === day ? (arr.includes(name) ? arr.filter((x) => x !== name) : [...arr, name]) : arr)));
+  // 이번 달의 여러 날에 같은 근무체제를 한 번에 지정. scope: all=전체, weekday=평일, weekend=주말.
+  // 지난 날짜는 건너뛴다(오늘부터만).
+  const applyToMonth = (shifts: string[], scope: "all" | "weekday" | "weekend") => {
+    const { y, m } = calYM;
+    const dim = new Date(y, m + 1, 0).getDate();
+    const today = todayLocal();
+    setEditDateEx((prev) => {
+      const map = new Map(prev.map((x) => [x.date, x.shifts]));
+      for (let d = 1; d <= dim; d++) {
+        const ds = `${y}-${pad2(m + 1)}-${pad2(d)}`;
+        if (ds < today) continue;
+        const wd = new Date(y, m, d).getDay();
+        const inScope = scope === "all" || (scope === "weekday" && wd >= 1 && wd <= 5) || (scope === "weekend" && (wd === 0 || wd === 6));
+        if (inScope) map.set(ds, [...shifts]);
+      }
+      return [...map.entries()].map(([date, sh]) => ({ date, shifts: sh })).sort((a, b) => a.date.localeCompare(b.date));
+    });
   };
-  // 일괄 적용용 체제 토글 + 전체 적용
-  const toggleBulkShift = (name: string) => {
-    setEditBulkShifts((prev) => (prev.includes(name) ? prev.filter((x) => x !== name) : [...prev, name]));
-  };
-  const applyBulkToAll = () => {
-    setEditShifts((prev) => prev.map(() => [...editBulkShifts]));
-  };
-  // 다른 설비의 근무체제를 통째로 가져온다(저장 전까지 편집 상태만 변경).
-  const copyFromMachine = (id: number) => {
-    const m2 = machines.find((x) => x.id === id);
-    if (!m2) return;
-    setEditShifts(shiftsFromMachine(m2));
-    setEditBulkShifts([]);
+
+  // 이 설비의 날짜별 근무(달력)를 같은 라인의 모든 설비에 그대로 복사한다.
+  const applyToAllMachines = async () => {
+    if (!window.confirm(`이 달력(날짜별 근무)을 ${processLine} 라인의 모든 설비(${machines.length}대)에 똑같이 적용할까요?\n각 설비의 기존 날짜별 설정은 덮어써집니다.`)) return;
+    const date_shifts: Record<string, string[]> = {};
+    editDateEx.forEach((x) => { date_shifts[x.date] = x.shifts; });
+    setLoading(true);
+    for (const mm of machines) {
+      await fetch(`/api/machines/${mm.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date_shifts }),
+      });
+    }
+    cancelEdit();
+    await fetchMachines();
+    setLoading(false);
   };
 
   const cancelEdit = () => {
@@ -199,18 +214,15 @@ function MachineColumn({ processLine, isAdmin }: { processLine: string; isAdmin:
   const saveEdit = async (m: Machine) => {
     const trimmed = editName.trim();
     if (!trimmed) { cancelEdit(); return; }
-    const day_shifts: Record<number, string[]> = {};
-    const offSorted: number[] = [];
-    editShifts.forEach((arr, d) => { if (arr.length) day_shifts[d] = arr; else offSorted.push(d); });
-    // 일자별 예외(빈 배열=그 날 휴무도 유지). 서버가 과거 날짜는 정리한다.
+    // 이름 + 날짜별 근무(달력)만 저장한다. 요일 근무(day_shifts)·휴무요일은 이 화면에서 건드리지 않는다.
+    // (빈 배열=그 날 휴무도 유지. 서버가 과거 날짜는 정리한다.)
     const date_shifts: Record<string, string[]> = {};
     editDateEx.forEach((x) => { date_shifts[x.date] = x.shifts; });
     setLoading(true);
     await fetch(`/api/machines/${m.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      // 휴무(체제 없음) 요일은 off_days로도 저장 → 목록 휴무 표시에 사용
-      body: JSON.stringify({ name: trimmed, day_shifts, off_days: offSorted, date_shifts }),
+      body: JSON.stringify({ name: trimmed, date_shifts }),
     });
     cancelEdit();
     await fetchMachines();
@@ -324,49 +336,13 @@ function MachineColumn({ processLine, isAdmin }: { processLine: string; isAdmin:
                       if (e.key === "Escape") cancelEdit();
                     }}
                   />
-                  {/* 일괄 적용 + 다른 설비 복사 */}
-                  <div className="flex flex-wrap items-center gap-1 bg-gray-50 border px-2 py-1.5">
-                    <span className="text-[11px] text-gray-500 mr-0.5">일괄</span>
-                    {SHIFT_NAMES.map((s) => (
-                      <button key={s} type="button" onClick={() => toggleBulkShift(s)}
-                        className={`h-7 px-1.5 text-[11px] border ${editBulkShifts.includes(s) ? "bg-blue-600 text-white border-blue-600 font-medium" : "bg-white text-gray-600 hover:bg-gray-100"}`}>{s}</button>
-                    ))}
-                    <button type="button" onClick={applyBulkToAll} className="h-7 px-2 text-xs border bg-blue-600 text-white hover:bg-blue-700">전체 적용</button>
-                    {machines.filter((x) => x.id !== m.id).length > 0 && (
-                      <select
-                        className="h-7 border text-xs px-1 ml-auto"
-                        value=""
-                        onChange={(e) => { if (e.target.value) copyFromMachine(Number(e.target.value)); }}
-                        title="다른 설비의 근무체제 가져오기"
-                      >
-                        <option value="">설비에서 복사</option>
-                        {machines.filter((x) => x.id !== m.id).map((x) => (
-                          <option key={x.id} value={x.id}>{x.name}</option>
-                        ))}
-                      </select>
-                    )}
+                  {/* 근무 달력: 날짜를 눌러 그 날의 근무체제를 고른다. 안 바꾼 날은 기본 근무 그대로. */}
+                  <div className="flex items-center justify-between mt-0.5">
+                    <span className="text-[11px] text-gray-600 font-medium">근무 달력 <span className="text-gray-400 font-normal">· 바꿀 날짜를 누르세요</span></span>
+                    <button type="button" onClick={applyToAllMachines} disabled={loading}
+                      className="h-7 px-2 text-[11px] border bg-white text-blue-700 border-blue-300 hover:bg-blue-50 disabled:opacity-50"
+                      title={`이 달력을 ${processLine} 라인 모든 설비에 똑같이 적용`}>📋 모든 설비에 적용</button>
                   </div>
-                  <div className="text-[11px] text-gray-500">① 평소 근무체제 (요일별 · 아래 달력의 기본값이 됩니다 · 미선택=휴무)</div>
-                  <div className="flex flex-col gap-1">
-                    {DAY_LABELS.map((d, i) => {
-                      const sel = editShifts[i] || [];
-                      return (
-                        <div key={i} className="flex items-center gap-1 flex-wrap">
-                          <span className={`w-6 h-7 inline-flex items-center justify-center text-xs border ${sel.length ? "bg-blue-50 text-blue-700 border-blue-300 font-medium" : "bg-gray-100 text-gray-400 border-gray-200"}`}>{d}</span>
-                          {SHIFT_NAMES.map((s) => (
-                            <button key={s} type="button" onClick={() => toggleShift(i, s)}
-                              className={`h-7 px-1.5 text-[11px] border ${sel.includes(s) ? "bg-blue-600 text-white border-blue-600 font-medium" : "bg-white text-gray-600 hover:bg-gray-100"}`}
-                              title={`${d}요일 ${s}`}>{s}</button>
-                          ))}
-                          {sel.length === 0 && <span className="text-[11px] text-gray-400 ml-1">휴무</span>}
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <div className="text-[10px] text-gray-400">여러 개 선택 가능(예: 정상(주)+정상(야)=24시간). 미선택 요일=휴무.</div>
-
-                  {/* ② 날짜별 근무 달력: 날짜를 눌러 그 날의 근무체제를 직접 바꾼다. 안 바꾼 날은 위 요일 기본값 그대로. */}
-                  <div className="text-[11px] text-gray-500 mt-1 pt-1.5 border-t">② 날짜별 근무 달력 <span className="text-gray-400">(바꿀 날짜를 누르세요)</span></div>
                   {(() => {
                     const today = todayLocal();
                     const { y, m } = calYM;
@@ -437,10 +413,16 @@ function MachineColumn({ processLine, isAdmin }: { processLine: string; isAdmin:
                           ))}
                           {eff.length === 0 && <span className="text-xs text-red-500 ml-0.5 font-medium">휴무</span>}
                         </div>
+                        <div className="flex flex-wrap items-center gap-1 border-t pt-1.5">
+                          <span className="text-[10px] text-gray-500">이 근무를 한 번에:</span>
+                          <button type="button" onClick={() => applyToMonth(eff, "weekday")} className="h-7 px-1.5 text-[11px] border bg-white text-gray-700 hover:bg-gray-100">이번 달 평일 전체</button>
+                          <button type="button" onClick={() => applyToMonth(eff, "weekend")} className="h-7 px-1.5 text-[11px] border bg-white text-gray-700 hover:bg-gray-100">주말 전체</button>
+                          <button type="button" onClick={() => applyToMonth(eff, "all")} className="h-7 px-1.5 text-[11px] border bg-white text-gray-700 hover:bg-gray-100">이번 달 전체</button>
+                        </div>
                         <div className="flex items-center justify-between">
-                          <span className="text-[10px] text-gray-500">{custom ? "이 날짜는 직접 지정됨" : "요일 기본값 그대로"}</span>
+                          <span className="text-[10px] text-gray-500">{custom ? "이 날짜는 직접 지정됨" : "기본 근무 그대로"}</span>
                           {custom && (
-                            <button type="button" onClick={() => resetDateToDefault(selDate)} className="text-[11px] text-blue-600 hover:text-blue-800 underline">요일 기본값으로 되돌리기</button>
+                            <button type="button" onClick={() => resetDateToDefault(selDate)} className="text-[11px] text-blue-600 hover:text-blue-800 underline">이 날짜 지정 지우기</button>
                           )}
                         </div>
                       </div>
