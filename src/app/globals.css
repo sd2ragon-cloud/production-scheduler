@@ -153,16 +153,12 @@ input[type="number"]::-webkit-outer-spin-button {
     flex: 0 0 auto;
     font-size: 13pt;
     font-weight: bold;
-    text-align: center;
+    text-align: left;
     margin-bottom: 3mm;
   }
-  /* 스케줄 출력 헤더: 제목은 가운데, 출력 시각은 우측 상단에 */
+  /* 스케줄 출력 헤더: 제목은 좌측, 출력 시각은 우측 상단에 */
   .pf-head-rel { position: relative; }
   .pf-head-time { position: absolute; right: 0; top: 0; font-size: 8pt; font-weight: normal; white-space: nowrap; }
-  /* 매엽 전용: 제목 좌측 정렬 + 설비 박스 헤더 곤색 배경·흰 글자(설비명·메모·시간) */
-  .pf-mg .pf-head { text-align: left; }
-  .pf-mg .pf-mname { background: #002060; color: #fff; }
-  .pf-mg .pf-memo-inline { color: #fff; }
   /* 기계 박스: 2열. 박스 높이(grid-auto-rows)를 인라인으로 동적 지정해, 설비 그리드 + 하단
      1차 배정(80mm)이 충분한 여백을 두고 한 장에 들어가게 한다(실제 인쇄에서 가장자리 잘림 방지). */
   .pf-machines {
@@ -184,7 +180,8 @@ input[type="number"]::-webkit-outer-spin-button {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    background: #e5e7eb;
+    background: #002060;
+    color: #fff;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
     font-weight: bold;
@@ -198,7 +195,7 @@ input[type="number"]::-webkit-outer-spin-button {
   /* 박스 용량을 초과한 배정 건수 (설비명 옆 작게) */
   .pf-more { font-weight: normal; font-size: 7pt; }
   /* 설비 메모(헤더 메모란 입력값) — 설비명 옆에 작게 표기 */
-  .pf-memo-inline { font-weight: normal; font-size: 7.5pt; color: #000; }
+  .pf-memo-inline { font-weight: normal; font-size: 7.5pt; color: #fff; }
   .pf-list { margin: 0; padding: 1mm 4mm 1mm 3mm; overflow: hidden; }
   .pf-list li { font-size: 7pt; line-height: 1.25; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   /* 배정 내역: 번호 · 제품명(넓게) · 비고 · 완료시간 (각 칸 넘치면 JS가 폰트 유동 축소) */
@@ -297,7 +294,8 @@ input[type="number"]::-webkit-outer-spin-button {
   .pf-secttl {
     display: flex;
     justify-content: space-between;
-    background: #e5e7eb;
+    background: #002060;
+    color: #fff;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
     font-weight: bold;
@@ -334,7 +332,8 @@ input[type="number"]::-webkit-outer-spin-button {
     justify-content: space-between;
     align-items: center;
     gap: 1mm;
-    background: #f0f0f0;
+    background: #002060;
+    color: #fff;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
     font-weight: bold;

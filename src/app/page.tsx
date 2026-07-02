@@ -1566,10 +1566,10 @@ export default function ScheduleBoard() {
     ws.getRow(1).height = 22;
     // 하단(1차배정/배정대기) 없이 설비 박스 2열 그리드만. 각 줄: 번호 | 제품명 | 완료시간.
     // 제품명(47)·완료(15)는 너비를 넘치면 '셀에 맞춤'(shrinkToFit)으로 자동 축소. 좌:1~3열 / 우:5~7열.
-    // 설비명 헤더: 매엽은 곤색 배경·흰 글자(프린트와 동일), 윤전은 회색·검정 유지.
+    // 설비명 헤더: 매엽·윤전 모두 곤색 배경·흰 글자(프린트와 동일).
     const NAVY = "FF002060";
-    const hdrFill = isRoll ? GRAY : NAVY;
-    const hdrFont = (size: number) => (isRoll ? { bold: true, size } : { bold: true, size, color: { argb: "FFFFFFFF" } });
+    const hdrFill = NAVY;
+    const hdrFont = (size: number) => ({ bold: true, size, color: { argb: "FFFFFFFF" } });
     let r = 2;
     for (let i = 0; i < machines.length; i += 2) {
       const sides = [machines[i], machines[i + 1]];
@@ -1981,7 +1981,7 @@ export default function ScheduleBoard() {
     // 하단 1차 배정 칸 수: 매엽은 4칸 고정(HDP 포함 항상 보이게), 윤전은 실제 칸 수만큼(2칸=동일 높이 2분할).
     const bkCount = isRoll ? Math.max(1, buckets.length) : Math.max(4, buckets.length);
     return (
-      <div className={`pf-page ${isRoll ? "" : "pf-mg"}`}>
+      <div className="pf-page">
         <div className="pf-head pf-head-rel">{processLine} 작업 계획<span className="pf-head-time">출력 {printStamp}</span></div>
         <div className="pf-machines" style={{ gridAutoRows: `${machineRowH}mm` }}>
           {machines.map((m) => {
