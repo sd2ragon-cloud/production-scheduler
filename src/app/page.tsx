@@ -1930,22 +1930,34 @@ export default function ScheduleBoard() {
               <th className="jml-note">비고</th>
             </tr>
           </thead>
-          <tbody>
-            {data.map(({ machine, rows }) => {
-              const rr: (JmRow | null)[] = rows.length ? rows : [null];
-              return rr.map((row, i) => (
-                <tr key={`${machine.id}-${i}`} className={i === rr.length - 1 ? "jml-row-end" : undefined}
-                  style={row && row.mark ? { background: MARK_BG[row.mark] } : undefined}>
-                  {i === 0 && <td className="jml-mc" rowSpan={rr.length}>{machine.name}</td>}
-                  <td className="jml-no">{row ? i + 1 : ""}</td>
-                  <td className="jml-job">{row ? row.job : ""}</td>
-                  <td className="jml-dur">{row ? row.hours : ""}</td>
-                  <td className="jml-eta">{row ? row.eta : ""}</td>
-                  <td className="jml-note">{row ? row.note : ""}</td>
-                </tr>
-              ));
-            })}
-          </tbody>
+          {/* 설비마다 별도 tbody → break-inside:avoid로 페이지가 넘어가도 블록(설비명·테두리)이 통째로 유지된다.
+              무선(4/3/1호)은 최소 8행 확보(적거나 없으면 빈 행으로 채움, 8개 넘으면 늘어남).
+              그 외(낙정·배접)는 패딩 없이 자연 높이 → 비어 있으면 줄어 공간을 양보한다. */}
+          {data.map(({ machine, rows }) => {
+            const MIN = 8;
+            const isWireless = machine.name.replace(/\s/g, "").startsWith("무선");
+            let rr: (JmRow | null)[];
+            if (isWireless) {
+              rr = rows.length >= MIN ? rows : [...rows, ...Array(MIN - rows.length).fill(null)];
+            } else {
+              rr = rows.length ? rows : [null];
+            }
+            return (
+              <tbody key={machine.id} className="jml-mgroup">
+                {rr.map((row, i) => (
+                  <tr key={i} className={i === rr.length - 1 ? "jml-row-end" : undefined}
+                    style={row && row.mark ? { background: MARK_BG[row.mark] } : undefined}>
+                    {i === 0 && <td className="jml-mc" rowSpan={rr.length}>{machine.name}</td>}
+                    <td className="jml-no">{row ? i + 1 : ""}</td>
+                    <td className="jml-job">{row ? row.job : ""}</td>
+                    <td className="jml-dur">{row ? row.hours : ""}</td>
+                    <td className="jml-eta">{row ? row.eta : ""}</td>
+                    <td className="jml-note">{row ? row.note : ""}</td>
+                  </tr>
+                ))}
+              </tbody>
+            );
+          })}
         </table>
       </div>
     );
