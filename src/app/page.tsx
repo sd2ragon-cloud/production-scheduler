@@ -1877,7 +1877,7 @@ export default function ScheduleBoard() {
                   {Array.from({ length: rowCount }).map((_, i) => {
                     const e = entries[i];
                     return (
-                      <tr key={i} style={e && e.mark_color ? { background: MARK_BG[e.mark_color] } : undefined}>
+                      <tr key={i} style={e && e.mark_color && isRoll ? { background: MARK_BG[e.mark_color] } : undefined}>
                         <td className="print-num">{e ? i + 1 : ""}</td>
                         <td className="print-name">
                           {e ? (
