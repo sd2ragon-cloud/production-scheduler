@@ -2151,7 +2151,8 @@ export default function ScheduleBoard() {
                       <th className={`px-1.5 py-0 text-center ${isJechae ? "" : "w-44"}`}>비고</th>
                       <th className="px-1.5 py-0 text-center w-28">소요(시간)</th>
                       <th className={`px-1.5 py-0 whitespace-nowrap ${isJechae ? "text-center w-40" : "text-center w-32"}`}>예상완료</th>
-                      <th className="px-1.5 py-0 text-center w-24"></th>
+                      <th className="px-1.5 py-0 text-center w-12"></th>
+                      <th className="px-1.5 py-0 text-center w-16">{isAdmin ? "삭제" : ""}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -2455,8 +2456,15 @@ export default function ScheduleBoard() {
                               >
                                 ⧉
                               </button>
+                              </>) : <span className="text-gray-300">–</span>}
+                            </div>
+                          </td>
+                          {/* 삭제 전용 영역: 행 오른쪽 끝, 셀 전체가 큰 클릭 버튼 (누르다 드래그 방지 = no-drag) */}
+                          <td className="p-0 no-drag border-l border-gray-200">
+                            {isAdmin && (
                               <button
                                 onClick={() => handleDeleteEntry(entry)}
+                                onMouseDown={(e) => e.stopPropagation()}
                                 onDragOver={(e) => {
                                   // 구성 칩을 끌어다 놓으면 그 구성만 완료·삭제
                                   if (dragSplit !== null) {
@@ -2476,13 +2484,12 @@ export default function ScheduleBoard() {
                                   }
                                 }}
                                 disabled={loading}
-                                className={`text-2xl leading-none px-2.5 py-1.5 -my-1 border border-transparent rounded transition-transform ${trashOverEntry === entry.id ? "text-red-600 scale-150" : "text-gray-400 hover:text-red-600 hover:bg-red-50 hover:border-red-300"}`}
-                                title="클릭: 이 설비 배정만 삭제 (1차 배정·대기는 유지) / 구성 칩을 끌어다 놓으면 그 구성만 완료·삭제"
+                                className={`w-full h-full min-h-[32px] flex items-center justify-center text-2xl leading-none transition-colors ${trashOverEntry === entry.id ? "text-red-600 bg-red-200" : "text-gray-400 hover:text-red-600 hover:bg-red-50"}`}
+                                title="이 설비 배정만 삭제 (1차 배정·대기는 유지) / 구성 칩을 끌어다 놓으면 그 구성만 완료·삭제"
                               >
                                 🗑
                               </button>
-                              </>) : <span className="text-gray-300">–</span>}
-                            </div>
+                            )}
                           </td>
                         </tr>
                       );
