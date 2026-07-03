@@ -2151,7 +2151,7 @@ export default function ScheduleBoard() {
                       <th className={`px-1.5 py-0 text-center ${isJechae ? "" : "w-44"}`}>비고</th>
                       <th className="px-1.5 py-0 text-center w-28">소요(시간)</th>
                       <th className={`px-1.5 py-0 whitespace-nowrap ${isJechae ? "text-center w-40" : "text-center w-32"}`}>예상완료</th>
-                      <th className="px-1.5 py-0 text-center w-16"></th>
+                      <th className="px-1.5 py-0 text-center w-24"></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -2476,7 +2476,7 @@ export default function ScheduleBoard() {
                                   }
                                 }}
                                 disabled={loading}
-                                className={`text-xl leading-none px-1.5 py-1 -my-0.5 transition-transform ${trashOverEntry === entry.id ? "text-red-600 scale-150" : "text-gray-400 hover:text-red-600 hover:bg-red-50"}`}
+                                className={`text-2xl leading-none px-2.5 py-1.5 -my-1 border border-transparent rounded transition-transform ${trashOverEntry === entry.id ? "text-red-600 scale-150" : "text-gray-400 hover:text-red-600 hover:bg-red-50 hover:border-red-300"}`}
                                 title="클릭: 이 설비 배정만 삭제 (1차 배정·대기는 유지) / 구성 칩을 끌어다 놓으면 그 구성만 완료·삭제"
                               >
                                 🗑
@@ -2531,7 +2531,7 @@ export default function ScheduleBoard() {
       </div>
 
       {/* 가운데: 1차 배정 (국/4×6/MB6/HDP 등 칸) — 제책 라인은 사용하지 않음 */}
-      <div className={`w-[480px] bg-white shadow-sm flex flex-col overflow-hidden shrink-0 ${isJechae ? "hidden" : ""}`}>
+      <div className={`w-[432px] bg-white shadow-sm flex flex-col overflow-hidden shrink-0 ${isJechae ? "hidden" : ""}`}>
         {/* 스크롤은 바깥에서 받고(스크롤바가 표 우측 테두리 바깥에 위치) 검정 테두리 표는 안쪽에 둔다 → 스크롤 생겨도 우측 라인 안 잘림 */}
         <div className="flex-1 overflow-y-auto">
         <div className="border border-black m-3">
@@ -2622,7 +2622,7 @@ export default function ScheduleBoard() {
 
       {/* 우측: 배정 대기 주문 목록 */}
       <div
-        className={`w-[480px] bg-white border shadow-sm flex flex-col overflow-hidden shrink-0 ${
+        className={`w-[432px] bg-white border shadow-sm flex flex-col overflow-hidden shrink-0 ${
           waitingDrop ? "ring-2 ring-red-400 bg-red-50/30" : ""
         }`}
         onDragOver={(e) => {
