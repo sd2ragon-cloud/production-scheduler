@@ -18,8 +18,8 @@ export async function POST(req: NextRequest) {
   const part = typeof component_part === 'string' ? component_part : '';
   const db = await getDb();
 
-  const orderResult = await db.execute({ sql: 'SELECT quantity_sheets, duration_minutes, component, part_durations FROM orders WHERE id = ?', args: [order_id] });
-  const order = orderResult.rows[0] as unknown as { quantity_sheets: number; duration_minutes: number; component: string; part_durations: string } | undefined;
+  const orderResult = await db.execute({ sql: 'SELECT quantity_sheets, duration_minutes, component, part_durations, product_name, notes FROM orders WHERE id = ?', args: [order_id] });
+  const order = orderResult.rows[0] as unknown as { quantity_sheets: number; duration_minutes: number; component: string; part_durations: string; product_name: string; notes: string } | undefined;
   const totals = partTotals(order?.component ?? '', order?.part_durations, Number(order?.duration_minutes) || 0);
 
   const machineResult = await db.execute({
@@ -92,9 +92,12 @@ export async function POST(req: NextRequest) {
     });
     const maxSeq = Number((maxSeqResult.rows[0] as unknown as { max_seq: number }).max_seq);
 
+    // 윤전: 설비 배정 항목을 원본 주문과 분리(자체 표시값 스냅샷 + entry_edited=1). 이후 설비/카드에서 각각 독립 수정.
+    const isRoll = machine?.process_line === '윤전';
     const insertResult = await db.execute({
-      sql: 'INSERT INTO schedule_entries (order_id, machine_id, sequence, base_minutes, duration_minutes, component_part, part_durations, print_mode, scheduled_date, start_time, end_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      args: [order_id, machine_id, maxSeq + 1, baseDuration, effectiveMinutes(baseDuration, mode), part, JSON.stringify(partDurations), mode, today, today + ' 08:00', today + ' 08:00'],
+      sql: 'INSERT INTO schedule_entries (order_id, machine_id, sequence, base_minutes, duration_minutes, component_part, part_durations, print_mode, scheduled_date, start_time, end_time, entry_product_name, entry_notes, entry_quantity, entry_edited) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      args: [order_id, machine_id, maxSeq + 1, baseDuration, effectiveMinutes(baseDuration, mode), part, JSON.stringify(partDurations), mode, today, today + ' 08:00', today + ' 08:00',
+        isRoll ? String(order?.product_name ?? '') : '', isRoll ? String(order?.notes ?? '') : '', isRoll ? Number(order?.quantity_sheets) || 0 : 0, isRoll ? 1 : 0],
     });
     newEntryId = Number(insertResult.lastInsertRowid);
   }

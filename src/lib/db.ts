@@ -298,6 +298,23 @@ async function initializeDb(db: Client) {
     // column already exists
   }
 
+  // Migrate schedule_entries: 윤전 전용 '설비 배정 항목 자체 표시값'.
+  // 윤전은 구성(파트) 없이 통째로 배정하는 경우가 많아, 설비 배정 항목이 원본 주문의
+  // 제품명·비고·수량을 그대로 보여주면 설비에서 수정할 때 1차 배정·배정 대기(같은 주문)도 함께 바뀐다.
+  // entry_edited=1이면 아래 자체 필드를 표시에 사용해 설비 항목을 주문과 분리(각 구역 독립 수정).
+  for (const col of [
+    { name: 'entry_product_name', def: "TEXT NOT NULL DEFAULT ''" },
+    { name: 'entry_notes', def: "TEXT NOT NULL DEFAULT ''" },
+    { name: 'entry_quantity', def: 'REAL NOT NULL DEFAULT 0' },
+    { name: 'entry_edited', def: 'INTEGER NOT NULL DEFAULT 0' },
+  ]) {
+    try {
+      await db.execute(`ALTER TABLE schedule_entries ADD COLUMN ${col.name} ${col.def}`);
+    } catch {
+      // column already exists
+    }
+  }
+
   // 관리자 비밀번호 역할 분리 마이그레이션: 기존 단일 admin_pw가 있으면 매엽·윤전 관리자(admin_pw_sheet)로 이관.
   // (전사 총괄 없이 매엽·윤전 / 무선 두 모드로 운영. 무선 비밀번호는 첫 사용 시 새로 설정한다.)
   try {

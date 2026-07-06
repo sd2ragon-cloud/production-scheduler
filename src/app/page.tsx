@@ -236,6 +236,8 @@ export default function ScheduleBoard() {
   // 설비 행(엔트리)에서 다구성 주문을 수정할 때, 그 행만 편집(별도 건)하기 위한 엔트리 정보.
   const [editEntryId, setEditEntryId] = useState<number | null>(null);
   const [editEntryParts, setEditEntryParts] = useState<string[]>([]);
+  // 윤전 전용: 설비 배정 항목을 그 항목만(주문·다른 구역과 분리) 수정 중일 때의 엔트리 id.
+  const [editRollEntryId, setEditRollEntryId] = useState<number | null>(null);
   const [newOrder, setNewOrder] = useState({
     order_code: "", product_name: "", component: "", quantity_sheets: 0,
     deadline: "", special_process: "일반", priority: 5, notes: "", extra_notes: "", duration_hours: 0,
@@ -1003,12 +1005,44 @@ export default function ScheduleBoard() {
     setEditMachineId(null);
     setEditEntryId(null);
     setEditEntryParts([]);
+    setEditRollEntryId(null);
   };
 
   // 대기 주문 편집 시작: 폼을 해당 주문 값으로 채운다
   // asCopy=true면 같은 사양으로 '새 주문'을 만든다(값만 채우고 editingOrderId는 비움 → 저장 시 신규 생성).
   // 한 제품을 생산하다 중단·다른 제품 후 이어서 생산하는 계획에서, 다시 입력하지 않고 분량만 고쳐 배정할 수 있다.
   const startEditOrder = (order: Order, asCopy = false, fromMachineId: number | null = null, entry: ScheduleEntry | null = null) => {
+    // 윤전: 설비 행에서 수정하면 '그 설비 배정 항목'만 고친다(주문·1차배정·대기와 분리). 자체 표시값(제품명·비고·수량·소요)만 편집.
+    if (isRoll && !asCopy && entry != null) {
+      // 이 항목이 실제로 가진 구성(entry.component_part)만 보여준다. 구성 없으면 통째(단일 소요시간).
+      const eparts = parseParts(entry.component_part);
+      const epd = parsePartDurations(entry.part_durations);
+      const ePartHours: Record<string, number> = {};
+      for (const p of eparts) ePartHours[p] = Math.round((Number(epd[p]) || 0) / 60);
+      setNewOrder({
+        order_code: order.order_code || "",
+        product_name: entry.product_name || order.product_name,
+        component: entry.component_part || "",
+        quantity_sheets: entry.quantity_sheets || 0,
+        deadline: order.deadline || "",
+        special_process: "",
+        priority: order.priority || 5,
+        notes: entry.order_notes || "",
+        extra_notes: order.extra_notes || "",
+        duration_hours: eparts.length >= 2 ? 0 : Math.round((entry.duration_minutes || 0) / 60),
+        productivity: 0,
+        partHours: ePartHours,
+        partProcesses: {},
+        partQuantities: {},
+      });
+      setEditingOrderId(order.id);
+      setEditMachineId(fromMachineId);
+      setEditEntryId(null);
+      setEditEntryParts([]);
+      setEditRollEntryId(entry.id);
+      setShowAddForm(true);
+      return;
+    }
     // 설비 행에서 수정 + 다구성 주문이면 '그 행(엔트리)의 구성만' 편집(별도 건). 그 외엔 주문 전체 편집.
     const scoped = !asCopy && entry != null && parseParts(order.component).length >= 2 && parseParts(entry.component_part).length >= 1;
     const parts = scoped ? parseParts(entry!.component_part) : parseParts(order.component);
@@ -1052,6 +1086,30 @@ export default function ScheduleBoard() {
 
   const handleAddOrder = async (e: React.FormEvent) => {
     e.preventDefault();
+    // 윤전 설비 항목 수정: 원본 주문은 건드리지 않고 그 배정 항목의 자체 표시값만 갱신(구역 독립).
+    if (isRoll && editRollEntryId !== null) {
+      const ep = parseParts(newOrder.component);
+      const durMin = ep.length >= 2
+        ? ep.reduce((s, x) => s + Math.round((newOrder.partHours[x] || 0) * 60), 0)
+        : Math.round((newOrder.duration_hours || 0) * 60);
+      await fetch("/api/schedule/entry-fields", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          entry_id: editRollEntryId,
+          product_name: newOrder.product_name,
+          notes: newOrder.notes,
+          quantity_sheets: newOrder.quantity_sheets || 0,
+          duration_minutes: durMin,
+        }),
+      });
+      const mid = editMachineId;
+      const oid = editingOrderId;
+      resetForm();
+      await fetchAll();
+      if (oid !== null && mid !== null) await markMoved(oid, mid);
+      return;
+    }
     const parts = parseParts(newOrder.component);
     let partDurations: Record<string, number> = {};
     const partProcesses: Record<string, string> = {};
