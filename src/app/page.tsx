@@ -370,8 +370,8 @@ export default function ScheduleBoard() {
     const SAFETY = 1.5 * PXMM;       // 반올림 줄바꿈 방지 여백
     const NUM_W = 5 * PXMM;          // 맨 앞 번호 칸(≈5mm)
     const usable = LIST_W - NUM_W - 3 * GAP; // 번호+제품명+비고+완료 4칸·3간격
-    // 열 비율은 CSS .pf-li(윤전=5/2/2)·.pf-mg .pf-li(매엽=48/19/13)와 일치시킨다.
-    const R = isRoll ? { job: 5, note: 2, eta: 2, tot: 9 } : { job: 48, note: 19, eta: 13, tot: 80 };
+    // 열 비율은 CSS .pf-li(매엽·윤전 공통=48/19/13)와 일치시킨다.
+    const R = { job: 48, note: 19, eta: 13, tot: 80 };
     const JOB_W = usable * R.job / R.tot - SAFETY;   // 제품명 칸
     const NOTE_W = usable * R.note / R.tot - SAFETY; // 비고 칸
     const ETA_W = usable * R.eta / R.tot - SAFETY;   // 완료 칸(좁음 → 글자 자동 축소)
@@ -401,7 +401,7 @@ export default function ScheduleBoard() {
     rows.forEach((el) => fit(el, WAIT_W));
     bkItems.forEach((el) => fit(el, BK_W));
     document.body.removeChild(meas);
-  }, [schedule, machines, buckets, orders, printView, isJechae, isRoll]);
+  }, [schedule, machines, buckets, orders, printView, isJechae]);
 
   // 제책 양식 인쇄: 작업명이 칸 폭을 넘으면 줄바꿈 대신 폰트를 실측해 유동 축소(한 줄 유지).
   // (비고는 줄바꿈 허용 — 축소하지 않음)
@@ -1973,7 +1973,7 @@ export default function ScheduleBoard() {
     // 하단 1차 배정 칸 수: 매엽은 4칸 고정(HDP 포함 항상 보이게), 윤전은 실제 칸 수만큼(2칸=동일 높이 2분할).
     const bkCount = isRoll ? Math.max(1, buckets.length) : Math.max(4, buckets.length);
     return (
-      <div className={`pf-page ${isRoll ? "" : "pf-mg"}`}>
+      <div className="pf-page">
         <div className="pf-head pf-head-rel">{processLine} 작업 계획<span className="pf-head-time">출력 {printStamp}</span></div>
         <div className="pf-machines" style={{ gridAutoRows: `${machineRowH}mm` }}>
           {machines.map((m) => {
