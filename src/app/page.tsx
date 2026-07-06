@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo, Fragment } from "react";
 import { useProcess } from "./components/ProcessContext";
 import { useAuth } from "./components/AuthContext";
 import { parseParts, parsePartDurations, parsePartProcesses, partTotals, parsePartBuckets } from "@/lib/parts";
@@ -1985,17 +1985,19 @@ export default function ScheduleBoard() {
             return (
               <div className="pf-mbox" key={m.id}>
                 <div className="pf-mname">
-                  <span className="pf-mname-l">{m.name}{overflowCount > 0 ? <span className="pf-more"> 외 {overflowCount}건</span> : null}{memo ? <span className="pf-memo-inline"> {memo}</span> : null}</span>
+                  {/* 윤전은 메모를 헤더가 아니라 '맨 위 제품 아래'에 표기하므로 헤더 인라인 메모는 매엽 등에서만 */}
+                  <span className="pf-mname-l">{m.name}{overflowCount > 0 ? <span className="pf-more"> 외 {overflowCount}건</span> : null}{memo && !isRoll ? <span className="pf-memo-inline"> {memo}</span> : null}</span>
                   <span className="pf-mtime">{fmtH(total)}</span>
                 </div>
                 {entries.length === 0 ? (
-                  <div className="pf-empty">-</div>
+                  <div className="pf-empty">{isRoll && memo ? <span className="pf-memo-block">{memo}</span> : "-"}</div>
                 ) : (
                   <ol className="pf-list">
                     {shown.map((e, i) => {
                       const lbl = jobLabel(e);
                       return (
-                      <li key={e.id} style={e.mark_color ? { background: MARK_BG[e.mark_color] } : undefined}>
+                      <Fragment key={e.id}>
+                      <li style={e.mark_color ? { background: MARK_BG[e.mark_color] } : undefined}>
                         <div className="pf-li">
                           <span className="pf-num">{i + 1}</span>
                           <span className="pf-job">{lbl}</span>
@@ -2003,6 +2005,11 @@ export default function ScheduleBoard() {
                           <span className="pf-eta">{formatEndTime(e.end_time)}</span>
                         </div>
                       </li>
+                      {/* 윤전: 맨 위(첫 번째) 제품 아래에 설비 메모를 그대로 출력 */}
+                      {isRoll && i === 0 && memo ? (
+                        <li className="pf-memo-li">{memo}</li>
+                      ) : null}
+                      </Fragment>
                       );
                     })}
                   </ol>
@@ -2107,6 +2114,20 @@ export default function ScheduleBoard() {
         {machines.map((machine) => {
           const entries = getEntriesForMachine(machine.id);
           const isTarget = dropTarget === machine.id;
+          // 윤전: 설비별 자유 메모 입력칸. '맨 위(첫 번째) 제품 아래'에 배치하며 출력물에도 그대로 나온다.
+          const rollMemoEditor = isRoll ? (
+            <textarea
+              rows={2}
+              className="w-full resize-y min-h-[2.25rem] text-[12px] leading-snug border border-amber-300 bg-amber-50 px-2 py-1 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none disabled:opacity-60 disabled:bg-gray-50"
+              placeholder={isAdmin ? "메모 (자유 입력) — 출력물에도 표시됩니다" : ""}
+              value={machineMemos[machine.id] ?? ""}
+              onChange={(e) => handleMemoChange(machine.id, e.target.value)}
+              onMouseDown={(e) => e.stopPropagation()}
+              onDragStart={(e) => e.preventDefault()}
+              draggable={false}
+              disabled={!isAdmin}
+            />
+          ) : null;
 
           return (
             <div
@@ -2120,14 +2141,19 @@ export default function ScheduleBoard() {
             >
               <div className="bg-gray-800 text-white px-4 py-2 flex items-center">
                 <span className="font-bold shrink-0 whitespace-nowrap mr-4" style={{ width: machineNameWidth }}>{machine.name}</span>
-                <input
-                  type="text"
-                  className="flex-1 min-w-0 bg-gray-700 text-white text-xs px-2 py-0.5 border border-gray-500 focus:border-blue-400 outline-none disabled:opacity-60"
-                  placeholder={isAdmin ? "메모" : ""}
-                  value={machineMemos[machine.id] ?? ""}
-                  onChange={(e) => handleMemoChange(machine.id, e.target.value)}
-                  disabled={!isAdmin}
-                />
+                {/* 윤전은 메모를 헤더가 아니라 '맨 위 제품 아래'에서 편집하므로 헤더 입력칸은 두지 않는다 */}
+                {isRoll ? (
+                  <div className="flex-1 min-w-0" />
+                ) : (
+                  <input
+                    type="text"
+                    className="flex-1 min-w-0 bg-gray-700 text-white text-xs px-2 py-0.5 border border-gray-500 focus:border-blue-400 outline-none disabled:opacity-60"
+                    placeholder={isAdmin ? "메모" : ""}
+                    value={machineMemos[machine.id] ?? ""}
+                    onChange={(e) => handleMemoChange(machine.id, e.target.value)}
+                    disabled={!isAdmin}
+                  />
+                )}
                 <div className="flex items-center gap-3 shrink-0 ml-8">
                   <span className="text-xs text-gray-400 whitespace-nowrap">시작 08:30 고정</span>
                   <button
@@ -2142,9 +2168,16 @@ export default function ScheduleBoard() {
               </div>
 
               {entries.length === 0 ? (
-                <div className="px-4 py-6 text-center text-gray-400 text-sm">
-                  우측에서 작업을 드래그하여 배정하세요
-                </div>
+                isRoll ? (
+                  <div className="px-3 py-3">
+                    <div className="text-center text-gray-400 text-sm mb-2">우측에서 작업을 드래그하여 배정하세요</div>
+                    {rollMemoEditor}
+                  </div>
+                ) : (
+                  <div className="px-4 py-6 text-center text-gray-400 text-sm">
+                    우측에서 작업을 드래그하여 배정하세요
+                  </div>
+                )
               ) : (
                 <div className="px-3 pb-2">
                 <table className="w-full table-fixed">
@@ -2164,8 +2197,8 @@ export default function ScheduleBoard() {
                       const isReorderHover = reorderTarget === entry.id;
                       const isMergeHover = mergeHoverId === entry.id;
                       return (
+                        <Fragment key={entry.id}>
                         <tr
-                          key={entry.id}
                           draggable={isAdmin}
                           onDragStart={(e) => {
                             // 수정/복사/삭제 버튼 영역에서 시작한 드래그는 취소 → 버튼 누르다 실수로
@@ -2496,6 +2529,15 @@ export default function ScheduleBoard() {
                             )}
                           </td>
                         </tr>
+                        {/* 윤전: 맨 위(첫 번째) 제품 바로 아래에 자유 메모 입력칸 (출력물에도 동일 표기) */}
+                        {isRoll && idx === 0 ? (
+                          <tr>
+                            <td colSpan={7} className="px-1.5 pt-1 pb-2">
+                              {rollMemoEditor}
+                            </td>
+                          </tr>
+                        ) : null}
+                        </Fragment>
                       );
                     })}
                   </tbody>
