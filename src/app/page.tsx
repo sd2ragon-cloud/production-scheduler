@@ -1969,7 +1969,7 @@ export default function ScheduleBoard() {
     // 하단 1차 배정 칸 수: 매엽은 4칸 고정(HDP 포함 항상 보이게), 윤전은 실제 칸 수만큼(2칸=동일 높이 2분할).
     const bkCount = isRoll ? Math.max(1, buckets.length) : Math.max(4, buckets.length);
     return (
-      <div className="pf-page">
+      <div className={`pf-page ${isRoll ? "" : "pf-mg"}`}>
         <div className="pf-head pf-head-rel">{processLine} 작업 계획<span className="pf-head-time">출력 {printStamp}</span></div>
         <div className="pf-machines" style={{ gridAutoRows: `${machineRowH}mm` }}>
           {machines.map((m) => {
