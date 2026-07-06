@@ -201,8 +201,8 @@ input[type="number"]::-webkit-outer-spin-button {
   /* 배정 내역: 번호 · 제품명(넓게) · 비고 · 완료시간 (각 칸 넘치면 JS가 폰트 유동 축소) */
   .pf-li { display: grid; grid-template-columns: auto 5fr 2fr 2fr; gap: 1.5mm; align-items: baseline; }
   /* 매엽: 완료예정일시(마지막 열)를 단계적으로 더 축소하고 그만큼 제품명·비고를 반씩 넓힘. 윤전은 기본(위) 유지.
-     현재값 제품명470/비고227/완료32 (완료를 직전 48에서 1/3 더 축소, 줄인 16을 제품명·비고에 +8씩). */
-  .pf-mg .pf-li { grid-template-columns: auto 470fr 227fr 32fr; }
+     현재값 제품명1426/비고697/완료64 (완료를 직전 96에서 1/3 더 축소, 줄인 32를 제품명·비고에 +16씩). */
+  .pf-mg .pf-li { grid-template-columns: auto 1426fr 697fr 64fr; }
   .pf-num { color: #000; font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
   .pf-job { overflow: hidden; word-break: break-all; }
   .pf-note { overflow: hidden; word-break: break-all; color: #000; }
