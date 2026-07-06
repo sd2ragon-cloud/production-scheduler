@@ -1982,15 +1982,17 @@ export default function ScheduleBoard() {
             const shown = entries.slice(0, PF_ROWS);
             const overflowCount = entries.length - shown.length;
             const memo = (machineMemos[m.id] ?? m.memo ?? "").trim();
+            // 윤전 전용: 헤더 메모(memo)와 별개로 '맨 위 제품 아래'에 추가되는 메모(extra_notes 재사용)
+            const rollMemo = isRoll ? (machineExtras[m.id] ?? m.extra_notes ?? "").trim() : "";
             return (
               <div className="pf-mbox" key={m.id}>
                 <div className="pf-mname">
-                  {/* 윤전은 메모를 헤더가 아니라 '맨 위 제품 아래'에 표기하므로 헤더 인라인 메모는 매엽 등에서만 */}
-                  <span className="pf-mname-l">{m.name}{overflowCount > 0 ? <span className="pf-more"> 외 {overflowCount}건</span> : null}{memo && !isRoll ? <span className="pf-memo-inline"> {memo}</span> : null}</span>
+                  {/* 헤더 메모(설비명 우측)는 매엽·윤전 공통 유지 */}
+                  <span className="pf-mname-l">{m.name}{overflowCount > 0 ? <span className="pf-more"> 외 {overflowCount}건</span> : null}{memo ? <span className="pf-memo-inline"> {memo}</span> : null}</span>
                   <span className="pf-mtime">{fmtH(total)}</span>
                 </div>
                 {entries.length === 0 ? (
-                  <div className="pf-empty">{isRoll && memo ? <span className="pf-memo-block">{memo}</span> : "-"}</div>
+                  <div className="pf-empty">{rollMemo ? <span className="pf-memo-block">{rollMemo}</span> : "-"}</div>
                 ) : (
                   <ol className="pf-list">
                     {shown.map((e, i) => {
@@ -2005,9 +2007,9 @@ export default function ScheduleBoard() {
                           <span className="pf-eta">{formatEndTime(e.end_time)}</span>
                         </div>
                       </li>
-                      {/* 윤전: 맨 위(첫 번째) 제품 아래에 설비 메모를 그대로 출력 */}
-                      {isRoll && i === 0 && memo ? (
-                        <li className="pf-memo-li">{memo}</li>
+                      {/* 윤전: 맨 위(첫 번째) 제품 아래에 추가 메모(extra_notes)를 한 줄로 출력 */}
+                      {isRoll && i === 0 && rollMemo ? (
+                        <li className="pf-memo-li">{rollMemo}</li>
                       ) : null}
                       </Fragment>
                       );
@@ -2114,14 +2116,15 @@ export default function ScheduleBoard() {
         {machines.map((machine) => {
           const entries = getEntriesForMachine(machine.id);
           const isTarget = dropTarget === machine.id;
-          // 윤전: 설비별 자유 메모 입력칸. '맨 위(첫 번째) 제품 아래'에 배치하며 출력물에도 그대로 나온다.
+          // 윤전: 헤더 메모(memo)와 별개로 '맨 위(첫 번째) 제품 아래'에 추가되는 메모 입력칸.
+          // 별도 필드(extra_notes)를 재사용하며, 높이는 고정(기존 헤더 메모와 동일한 한 줄). 출력물에도 같은 위치에 나온다.
           const rollMemoEditor = isRoll ? (
-            <textarea
-              rows={2}
-              className="w-full resize-y min-h-[2.25rem] text-[12px] leading-snug border border-amber-300 bg-amber-50 px-2 py-1 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none disabled:opacity-60 disabled:bg-gray-50"
-              placeholder={isAdmin ? "메모 (자유 입력) — 출력물에도 표시됩니다" : ""}
-              value={machineMemos[machine.id] ?? ""}
-              onChange={(e) => handleMemoChange(machine.id, e.target.value)}
+            <input
+              type="text"
+              className="w-full text-xs h-6 border border-amber-300 bg-amber-50 px-2 py-0.5 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none disabled:opacity-60 disabled:bg-gray-50"
+              placeholder={isAdmin ? "메모 (출력물에도 표시)" : ""}
+              value={machineExtras[machine.id] ?? ""}
+              onChange={(e) => handleMachineExtraChange(machine.id, e.target.value)}
               onMouseDown={(e) => e.stopPropagation()}
               onDragStart={(e) => e.preventDefault()}
               draggable={false}
@@ -2141,19 +2144,14 @@ export default function ScheduleBoard() {
             >
               <div className="bg-gray-800 text-white px-4 py-2 flex items-center">
                 <span className="font-bold shrink-0 whitespace-nowrap mr-4" style={{ width: machineNameWidth }}>{machine.name}</span>
-                {/* 윤전은 메모를 헤더가 아니라 '맨 위 제품 아래'에서 편집하므로 헤더 입력칸은 두지 않는다 */}
-                {isRoll ? (
-                  <div className="flex-1 min-w-0" />
-                ) : (
-                  <input
-                    type="text"
-                    className="flex-1 min-w-0 bg-gray-700 text-white text-xs px-2 py-0.5 border border-gray-500 focus:border-blue-400 outline-none disabled:opacity-60"
-                    placeholder={isAdmin ? "메모" : ""}
-                    value={machineMemos[machine.id] ?? ""}
-                    onChange={(e) => handleMemoChange(machine.id, e.target.value)}
-                    disabled={!isAdmin}
-                  />
-                )}
+                <input
+                  type="text"
+                  className="flex-1 min-w-0 bg-gray-700 text-white text-xs px-2 py-0.5 border border-gray-500 focus:border-blue-400 outline-none disabled:opacity-60"
+                  placeholder={isAdmin ? "메모" : ""}
+                  value={machineMemos[machine.id] ?? ""}
+                  onChange={(e) => handleMemoChange(machine.id, e.target.value)}
+                  disabled={!isAdmin}
+                />
                 <div className="flex items-center gap-3 shrink-0 ml-8">
                   <span className="text-xs text-gray-400 whitespace-nowrap">시작 08:30 고정</span>
                   <button
@@ -2529,10 +2527,10 @@ export default function ScheduleBoard() {
                             )}
                           </td>
                         </tr>
-                        {/* 윤전: 맨 위(첫 번째) 제품 바로 아래에 자유 메모 입력칸 (출력물에도 동일 표기) */}
+                        {/* 윤전: 맨 위(첫 번째) 제품 바로 아래에 추가 메모 입력칸 (헤더 메모와 별개, 고정 높이, 출력물에도 동일 표기) */}
                         {isRoll && idx === 0 ? (
                           <tr>
-                            <td colSpan={7} className="px-1.5 pt-1 pb-2">
+                            <td colSpan={7} className="px-1.5 py-1">
                               {rollMemoEditor}
                             </td>
                           </tr>
