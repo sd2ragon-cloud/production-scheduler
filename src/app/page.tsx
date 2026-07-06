@@ -370,8 +370,11 @@ export default function ScheduleBoard() {
     const SAFETY = 1.5 * PXMM;       // 반올림 줄바꿈 방지 여백
     const NUM_W = 5 * PXMM;          // 맨 앞 번호 칸(≈5mm)
     const usable = LIST_W - NUM_W - 3 * GAP; // 번호+제품명+비고+완료 4칸·3간격
-    const JOB_W = usable * 5 / 9 - SAFETY;  // 제품명 칸(5/9, 넓게)
-    const NOTE_W = usable * 2 / 9 - SAFETY; // 비고 칸(2/9)
+    // 열 비율은 CSS .pf-li(윤전=5/2/2)·.pf-mg .pf-li(매엽=48/19/13)와 일치시킨다.
+    const R = isRoll ? { job: 5, note: 2, eta: 2, tot: 9 } : { job: 48, note: 19, eta: 13, tot: 80 };
+    const JOB_W = usable * R.job / R.tot - SAFETY;   // 제품명 칸
+    const NOTE_W = usable * R.note / R.tot - SAFETY; // 비고 칸
+    const ETA_W = usable * R.eta / R.tot - SAFETY;   // 완료 칸(좁음 → 글자 자동 축소)
     const WAIT_W = 44 * PXMM;               // 배정 대기 2열 한 칸 폭 ≈ 44mm
     const BK_W = 44 * PXMM;                 // 1차 배정 2열 한 칸 내부 폭 ≈ 44mm
     const ref = lis[0]?.querySelector<HTMLElement>(".pf-job") ?? rows[0] ?? document.body;
@@ -393,11 +396,12 @@ export default function ScheduleBoard() {
     lis.forEach((li) => {
       fit(li.querySelector<HTMLElement>(".pf-job"), JOB_W);
       fit(li.querySelector<HTMLElement>(".pf-note"), NOTE_W);
+      fit(li.querySelector<HTMLElement>(".pf-eta"), ETA_W);
     });
     rows.forEach((el) => fit(el, WAIT_W));
     bkItems.forEach((el) => fit(el, BK_W));
     document.body.removeChild(meas);
-  }, [schedule, machines, buckets, orders, printView, isJechae]);
+  }, [schedule, machines, buckets, orders, printView, isJechae, isRoll]);
 
   // 제책 양식 인쇄: 작업명이 칸 폭을 넘으면 줄바꿈 대신 폰트를 실측해 유동 축소(한 줄 유지).
   // (비고는 줄바꿈 허용 — 축소하지 않음)
