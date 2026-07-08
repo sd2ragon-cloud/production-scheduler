@@ -1096,8 +1096,15 @@ export default function ScheduleBoard() {
     // 윤전 설비 항목 수정: 원본 주문은 건드리지 않고 그 배정 항목의 자체 표시값만 갱신(구역 독립).
     if (isRoll && editRollEntryId !== null) {
       const ep = parseParts(newOrder.component);
+      // 구성별 소요시간: 여러 개면 파트별 입력값, 단일이면 전체 소요시간칸 값을 그 구성에 적용.
+      const partsPayload = ep.map((p) => ({
+        name: p,
+        minutes: ep.length >= 2
+          ? Math.round((newOrder.partHours[p] || 0) * 60)
+          : Math.round((newOrder.duration_hours || 0) * 60),
+      }));
       const durMin = ep.length >= 2
-        ? ep.reduce((s, x) => s + Math.round((newOrder.partHours[x] || 0) * 60), 0)
+        ? partsPayload.reduce((s, x) => s + x.minutes, 0)
         : Math.round((newOrder.duration_hours || 0) * 60);
       await fetch("/api/schedule/entry-fields", {
         method: "POST",
@@ -1108,6 +1115,7 @@ export default function ScheduleBoard() {
           notes: newOrder.notes,
           quantity_sheets: newOrder.quantity_sheets || 0,
           duration_minutes: durMin,
+          parts: partsPayload,
         }),
       });
       const mid = editMachineId;
