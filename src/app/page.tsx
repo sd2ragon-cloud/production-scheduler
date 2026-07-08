@@ -1096,6 +1096,22 @@ export default function ScheduleBoard() {
     // 윤전 설비 항목 수정: 원본 주문은 건드리지 않고 그 배정 항목의 자체 표시값만 갱신(구역 독립).
     if (isRoll && editRollEntryId !== null) {
       const ep = parseParts(newOrder.component);
+      // 설비 항목 수정에서는 '새 구성'만 추가할 수 있다. 이미 배정 대기(주문)나 다른 설비에 있는 구성을
+      // 여기서 타이핑해 넣으면 그 구성이 그쪽에서 빠져(합쳐져) 버리므로, 그런 입력은 막고 드래그로 옮기게 한다.
+      const origEntry = schedule.find((s) => s.id === editRollEntryId);
+      const origParts = parseParts(origEntry?.component_part || "");
+      const added = ep.filter((p) => !origParts.includes(p));
+      const ord = allOrders.find((o) => o.id === editingOrderId);
+      const orderParts = parseParts(ord?.component || "");
+      const otherEntryParts = new Set<string>();
+      for (const s of schedule) {
+        if (s.order_id === editingOrderId && s.id !== editRollEntryId) parseParts(s.component_part).forEach((p) => otherEntryParts.add(p));
+      }
+      const conflict = added.filter((p) => orderParts.includes(p) || otherEntryParts.has(p));
+      if (conflict.length > 0) {
+        window.alert(`'${conflict.join(", ")}' 구성은 이미 배정 대기(또는 다른 설비)에 있습니다.\n설비로 옮기려면 그 구성을 드래그하세요. (설비 수정에서는 새 구성만 추가할 수 있습니다.)`);
+        return;
+      }
       // 구성별 소요시간: 여러 개면 파트별 입력값, 단일이면 전체 소요시간칸 값을 그 구성에 적용.
       const partsPayload = ep.map((p) => ({
         name: p,
