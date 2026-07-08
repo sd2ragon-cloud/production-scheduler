@@ -35,6 +35,24 @@ export async function POST(req: NextRequest) {
 
   const remaining = srcParts.filter((p) => p !== partStr);
   const durs = parsePartDurations(src.part_durations);
+  const partMinutes = Number(durs[partStr]) || 0;
+
+  // 이 파트가 주문 사양(component)에 없으면(설비 수정에서 직접 추가한 구성 등) 배정 대기에 나타날 수 없어 사라진다.
+  // 대기로 되돌리는 것이므로 주문 사양에 없으면 추가해 배정 대기에 보이게 한다.
+  const ordRes0 = await db.execute({ sql: 'SELECT component, part_durations FROM orders WHERE id = ?', args: [orderId] });
+  const ord0 = ordRes0.rows[0] as unknown as { component: string; part_durations: string } | undefined;
+  if (ord0) {
+    const oc = parseParts(String(ord0.component));
+    if (!oc.includes(partStr)) {
+      oc.push(partStr);
+      const opd = parsePartDurations(ord0.part_durations);
+      if (!(partStr in opd)) opd[partStr] = partMinutes;
+      await db.execute({
+        sql: 'UPDATE orders SET component = ?, part_durations = ?, duration_minutes = ? WHERE id = ?',
+        args: [oc.join(', '), JSON.stringify(opd), sumDurations(opd), orderId],
+      });
+    }
+  }
 
   if (remaining.length === 0) {
     await db.execute({ sql: 'DELETE FROM schedule_entries WHERE id = ?', args: [Number(src.id)] });
