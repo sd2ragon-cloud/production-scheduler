@@ -193,6 +193,13 @@ export default function ScheduleBoard() {
   // 윤전·제책은 '구분(공정)' 대신 수량을 입력·표기한다. 윤전=수량(부), 제책=부수.
   const usesQuantity = isRoll || isJechae;
   const qtyLabel = isJechae ? "부수" : "수량";
+  // 윤전 제품명 뒤 표기: " / N대분 * 수량". N=그 위치(설비/대기/칸)의 구성(대) 개수, 수량=부수. 윤전만.
+  const rollTag = (count: number, qty: number): string => {
+    if (!isRoll) return "";
+    let s = count > 0 ? ` / ${count}대분` : "";
+    if (qty > 0) s += ` * ${qty.toLocaleString()}`;
+    return s;
+  };
   // 제책: 부수 ÷ 생산성(부/시간) = 소요시간(시간). 정수로 반올림(소요시간 입력칸은 정수 단위).
   const calcDurationHours = (qty: number, prod: number): number | null =>
     prod > 0 && qty > 0 ? Math.round(qty / prod) : null;
@@ -1789,7 +1796,7 @@ export default function ScheduleBoard() {
       >
         <div>
           <div className="flex items-center justify-between">
-            <p className="font-medium text-xs leading-tight min-w-0 flex-1 break-all">{order.product_name}</p>
+            <p className="font-medium text-xs leading-tight min-w-0 flex-1 break-all">{order.product_name}{rollTag(remainingParts.length, order.quantity_sheets)}</p>
             <div className="flex items-center gap-1.5 shrink-0 ml-2">
               {isAdmin && (<>
               <button
@@ -1854,7 +1861,8 @@ export default function ScheduleBoard() {
               ))}
             </div>
           )}
-          {usesQuantity && order.quantity_sheets ? (
+          {/* 윤전은 수량을 제품명 뒤(' * 수량')에 표기하므로 여기선 제책만 별도 표기 */}
+          {isJechae && order.quantity_sheets ? (
             <p className="text-xs font-medium text-gray-600 mt-1.5">{qtyLabel} : {order.quantity_sheets.toLocaleString()}부</p>
           ) : null}
           {order.notes && (
@@ -2346,7 +2354,7 @@ export default function ScheduleBoard() {
                           </td>
                           <td className="px-1.5 py-0">
                             <div className="flex items-center gap-1 overflow-x-auto jobscroll">
-                            <span className={`font-medium shrink-0 ${isJechae ? "text-[13px] text-black" : "text-[12px]"}`}>{entry.product_name}</span>
+                            <span className={`font-medium shrink-0 ${isJechae ? "text-[13px] text-black" : "text-[12px]"}`}>{entry.product_name}{rollTag(parseParts(entry.component_part).length, entry.quantity_sheets)}</span>
                             {(() => {
                               const eparts = parseParts(entry.component_part);
                               if (eparts.length === 0) {
@@ -2483,8 +2491,9 @@ export default function ScheduleBoard() {
                                 </span>
                               );
                             })()}
-                            {usesQuantity && entry.quantity_sheets ? (
-                              <span className={`font-medium text-gray-600 shrink-0 whitespace-nowrap ${isJechae ? "text-[13px]" : "text-[12px]"}`}>{entry.quantity_sheets.toLocaleString()}부</span>
+                            {/* 윤전은 수량을 제품명 뒤(' * 수량')에 표기하므로 여기선 제책만 별도 표기 */}
+                            {isJechae && entry.quantity_sheets ? (
+                              <span className={`font-medium text-gray-600 shrink-0 whitespace-nowrap text-[13px]`}>{entry.quantity_sheets.toLocaleString()}부</span>
                             ) : null}
                             </div>
                           </td>
@@ -2852,14 +2861,25 @@ export default function ScheduleBoard() {
                             {!usesQuantity && <span className="text-[10px] text-gray-500">구분</span>}
                           </div>
                           <div className="space-y-1">
-                            {newParts.map((p) => (
+                            {newParts.map((p, pi) => (
                               <div key={p} className={`grid ${usesQuantity ? "grid-cols-2" : "grid-cols-3"} gap-1 items-center`}>
                                 <span className="text-[11px] text-gray-700 truncate" title={p}>{p}</span>
                                 <input
-                                  type="number" min="0" step="1" placeholder="시간"
+                                  type="number" min="0" step="1" placeholder={pi === 0 ? "시간(전체 자동)" : "시간"}
+                                  title={pi === 0 ? "최상단에 입력하면 아래 구성도 같은 값으로 자동 입력됩니다(개별 수정 가능)" : undefined}
                                   className="border px-2 py-1 text-xs w-full min-w-0"
                                   value={newOrder.partHours[p] || ""}
-                                  onChange={(e) => setNewOrder({ ...newOrder, partHours: { ...newOrder.partHours, [p]: Number(e.target.value) } })}
+                                  onChange={(e) => {
+                                    const v = Number(e.target.value);
+                                    // 최상단(첫 구성) 입력 시 아래 구성들도 같은 값으로 자동 채움. 이후 각 칸 개별 수정 가능.
+                                    if (pi === 0) {
+                                      const filled = { ...newOrder.partHours };
+                                      for (const q of newParts) filled[q] = v;
+                                      setNewOrder({ ...newOrder, partHours: filled });
+                                    } else {
+                                      setNewOrder({ ...newOrder, partHours: { ...newOrder.partHours, [p]: v } });
+                                    }
+                                  }}
                                 />
                                 {!usesQuantity && (
                                   <select
