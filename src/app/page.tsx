@@ -2794,7 +2794,18 @@ export default function ScheduleBoard() {
                   type="text" placeholder="구성 (표지, 본문 등)"
                   className="border px-2 py-1.5 text-xs w-full"
                   value={newOrder.component}
-                  onChange={(e) => setNewOrder({ ...newOrder, component: e.target.value })}
+                  onChange={(e) => {
+                    // 구성 추가 시, 새로 들어온 구성은 '최상단 구성의 시간'을 그대로 적용(기존 구성 시간은 유지).
+                    const comp = e.target.value;
+                    const np = parseParts(comp);
+                    const first = np[0];
+                    const topHour = (first != null && newOrder.partHours[first] != null)
+                      ? newOrder.partHours[first]
+                      : (newOrder.duration_hours || 0);
+                    const ph = { ...newOrder.partHours };
+                    for (const p of np) { if (!(p in ph)) ph[p] = topHour; }
+                    setNewOrder({ ...newOrder, component: comp, partHours: ph });
+                  }}
                 />
                 {/* 윤전·제책: 구분 대신 수량(윤전=수량(부), 제책=부수) 수기 입력. 매엽: 구분 입력. */}
                 {usesQuantity ? (
