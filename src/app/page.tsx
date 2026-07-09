@@ -1028,7 +1028,7 @@ export default function ScheduleBoard() {
       const eparts = parseParts(entry.component_part);
       const epd = parsePartDurations(entry.part_durations);
       const ePartHours: Record<string, number> = {};
-      for (const p of eparts) ePartHours[p] = Math.round((Number(epd[p]) || 0) / 60);
+      for (const p of eparts) ePartHours[p] = Math.round((Number(epd[p]) || 0) / 60 * 2) / 2;
       setNewOrder({
         order_code: order.order_code || "",
         product_name: entry.product_name || order.product_name,
@@ -1039,7 +1039,7 @@ export default function ScheduleBoard() {
         priority: order.priority || 5,
         notes: entry.order_notes || "",
         extra_notes: order.extra_notes || "",
-        duration_hours: eparts.length >= 2 ? 0 : Math.round((entry.duration_minutes || 0) / 60),
+        duration_hours: eparts.length >= 2 ? 0 : Math.round((entry.duration_minutes || 0) / 60 * 2) / 2,
         productivity: 0,
         partHours: ePartHours,
         partProcesses: {},
@@ -1063,7 +1063,7 @@ export default function ScheduleBoard() {
     const partProcesses: Record<string, string> = {};
     const partQuantities: Record<string, number> = {};
     for (const p of parts) {
-      partHours[p] = Math.round(((Number(pd[p]) || 0) / 60));
+      partHours[p] = Math.round((Number(pd[p]) || 0) / 60 * 2) / 2;
       partProcesses[p] = pp[p] || order.special_process || "일반";
       partQuantities[p] = Number(pq[p]) || order.quantity_sheets || 0;
     }
@@ -1077,7 +1077,7 @@ export default function ScheduleBoard() {
       priority: order.priority || 5,
       notes: order.notes || "",
       extra_notes: order.extra_notes || "",
-      duration_hours: parts.length >= 2 ? 0 : (scoped ? Math.round((Number(pd[parts[0]]) || 0) / 60) : Math.round((order.duration_minutes || 0) / 60)),
+      duration_hours: parts.length >= 2 ? 0 : (scoped ? Math.round((Number(pd[parts[0]]) || 0) / 60 * 2) / 2 : Math.round((order.duration_minutes || 0) / 60 * 2) / 2),
       // 생산성은 부수 ÷ 소요시간으로 역산(저장 없이 복원)
       productivity: (() => {
         const durH = (order.duration_minutes || 0) / 60;
@@ -2905,7 +2905,7 @@ export default function ScheduleBoard() {
                               <div key={p} className={`grid ${usesQuantity ? "grid-cols-2" : "grid-cols-3"} gap-1 items-center`}>
                                 <span className="text-[11px] text-gray-700 truncate" title={p}>{p}</span>
                                 <input
-                                  type="number" min="0" step="1" placeholder={pi === 0 ? "시간(전체 자동)" : "시간"}
+                                  type="number" min="0" step="0.5" placeholder={pi === 0 ? "시간(전체 자동)" : "시간"}
                                   title={pi === 0 ? "최상단에 입력하면 아래 구성도 같은 값으로 자동 입력됩니다(개별 수정 가능)" : undefined}
                                   className="border px-2 py-1 text-xs w-full min-w-0"
                                   value={newOrder.partHours[p] || ""}
@@ -2939,7 +2939,7 @@ export default function ScheduleBoard() {
                           <div>
                             <label className="text-[10px] text-gray-500">소요시간 (시간)</label>
                             <input
-                              type="number" min="0" step="1" placeholder="자동"
+                              type="number" min="0" step="0.5" placeholder="자동"
                               className="border px-2 py-1.5 text-xs w-full"
                               value={newOrder.duration_hours || ""}
                               onChange={(e) => setNewOrder({ ...newOrder, duration_hours: Number(e.target.value) })}
