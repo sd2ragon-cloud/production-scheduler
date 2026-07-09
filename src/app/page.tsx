@@ -197,7 +197,7 @@ export default function ScheduleBoard() {
   const rollTag = (count: number, qty: number): string => {
     if (!isRoll) return "";
     let s = count > 0 ? ` / ${count}대분` : "";
-    if (qty > 0) s += ` * ${qty.toLocaleString()}`;
+    if (qty > 0) s += ` * ${qty.toLocaleString()}부`;
     return s;
   };
   // 제책: 부수 ÷ 생산성(부/시간) = 소요시간(시간). 정수로 반올림(소요시간 입력칸은 정수 단위).
