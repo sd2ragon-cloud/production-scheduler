@@ -297,6 +297,9 @@ export default function ScheduleBoard() {
         parseParts(s.component_part).forEach((p) => present.add(p));
         for (const [p, m] of Object.entries(parsePartDurations(s.part_durations))) alloc[p] = (alloc[p] || 0) + (Number(m) || 0);
       }
+      // 윤전은 대(구성)를 시간으로 쪼개 여러 설비에 나누지 않는다(한 대=한 설비). 그래서 설비에 '있는지'로만
+      // 판단한다(소요시간이 주문값과 조금 달라도 대기로 뜨지 않게). 매엽은 시간 기준(부분 배정) 유지.
+      if (isRoll) return parts.some((p) => !present.has(p));
       return parts.some((p) => { const t = Number(totals[p]) || 0; return t > 0 ? (alloc[p] || 0) < t : !present.has(p); });
     };
     setOrders(orderData.filter((o: Order) => o.status === "pending" || orderHasRemaining(o)));
@@ -1424,6 +1427,8 @@ export default function ScheduleBoard() {
         alloc[p] = (alloc[p] || 0) + (Number(m) || 0);
       }
     }
+    // 윤전은 대(구성)를 시간으로 분할하지 않으므로 '설비에 있으면 배정됨'으로만 본다(소요시간 차이로 대기에 뜨지 않게).
+    if (isRoll) return parts.filter((p) => !present.has(p));
     return parts.filter((p) => {
       const t = Number(totals[p]) || 0;
       return t > 0 ? (alloc[p] || 0) < t : !present.has(p);
