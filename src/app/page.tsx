@@ -338,6 +338,9 @@ export default function ScheduleBoard() {
 
   // 드래그 중 화면 위/아래 가장자리에 커서가 가면 설비 목록을 자동 스크롤(맨 아래→맨 위 설비로도 옮길 수 있게).
   const listScrollRef = useRef<HTMLDivElement>(null);
+  const waitListRef = useRef<HTMLDivElement>(null); // 배정 대기 스크롤 컨테이너(순서변경 중 자동스크롤 대상)
+  // 배정 대기 순서변경 드래그 중 커서가 배정 대기 패널 위에 있는지 (그동안 다른 열은 세로 스크롤 잠금 → 엉뚱한 열이 안 올라가게)
+  const [overWaitPanel, setOverWaitPanel] = useState(false);
   const dragPointerY = useRef<number | null>(null);
   useEffect(() => {
     let raf = 0;
@@ -1015,6 +1018,15 @@ export default function ScheduleBoard() {
       if (!isReorderingWaitCard()) return; // 설비/1차배정 이동·배정취소 드래그는 그대로 흘려보냄
       e.preventDefault();
       e.stopPropagation();
+      if (!overWaitPanel) setOverWaitPanel(true); // 다른 열 세로 스크롤 잠금
+      // 배정 대기 목록만 자동 스크롤: 커서가 위/아래 가장자리에 오면 그 목록을 직접 스크롤한다.
+      const sc = waitListRef.current;
+      if (sc) {
+        const r = sc.getBoundingClientRect();
+        const edge = 48;
+        if (e.clientY < r.top + edge) sc.scrollTop -= 16;
+        else if (e.clientY > r.bottom - edge) sc.scrollTop += 16;
+      }
       const t = waitInsertAt(e.currentTarget, e.clientY);
       setWaitReorderId((prev) => (prev === t.targetId ? prev : t.targetId));
       setWaitReorderAfter((prev) => (prev === t.after ? prev : t.after));
@@ -1340,6 +1352,7 @@ export default function ScheduleBoard() {
     e.preventDefault();
     dragOverMachine.current = machineId;
     if (dropTarget !== machineId) setDropTarget(machineId);
+    if (overWaitPanel) setOverWaitPanel(false); // 설비 위로 오면 설비 열 스크롤 잠금 해제(먼 설비로 배정 가능)
   };
 
   // 주문의 특정 파트가 아직 배정되지 않은 남은 시간(분)
@@ -1364,6 +1377,7 @@ export default function ScheduleBoard() {
     setDragAll(false);
     setDropTarget(null);
     setMergeHoverId(null);
+    setOverWaitPanel(false);
   };
 
   // 현재 드래그 중인 항목이 속한 주문 id (없으면 null)
@@ -1887,7 +1901,7 @@ export default function ScheduleBoard() {
         data-oid={order.id}
         draggable={isAdmin}
         onDragStart={() => (hasParts ? onDragStartAll(order.id, remainingParts) : onDragStartOrder(order.id))}
-        onDragEnd={() => { setWaitReorderId(null); }}
+        onDragEnd={() => { setWaitReorderId(null); setOverWaitPanel(false); }}
         title={hasParts ? "이 카드의 구성 전체를 설비/칸으로 드래그 (칸=한 칸에 모아 1차 배정)" : (isWaiting ? "위/아래로 드래그하여 배정 대기 순서 변경" : undefined)}
         className={`p-2.5 border transition hover:shadow-sm cursor-grab active:cursor-grabbing ${
           dragOrderId === order.id && !dragPart ? "opacity-40" : ""
@@ -2231,7 +2245,7 @@ export default function ScheduleBoard() {
     {/* 고정 폭(반응형 축소 없음). 화면이 작으면 비율 축소 대신 가로/세로 스크롤로 본다. */}
     <div className="flex gap-4 h-full min-w-[1776px]">
       {/* 좌측: 설비별 배정 현황 */}
-      <div ref={listScrollRef} className="flex-1 overflow-y-auto space-y-3 pr-2">
+      <div ref={listScrollRef} className={`flex-1 space-y-3 pr-2 ${overWaitPanel ? "overflow-y-hidden" : "overflow-y-auto"}`}>
         <div className="flex items-center justify-between mb-2 sticky top-0 bg-gray-50 py-2 z-10">
           <div className="shrink-0">
             <h2 className="text-xl font-bold text-gray-900 whitespace-nowrap">기계별 작업 계획</h2>
@@ -2752,7 +2766,7 @@ export default function ScheduleBoard() {
       {/* 가운데: 1차 배정 (국/4×6/MB6/HDP 등 칸) — 제책 라인은 사용하지 않음 */}
       <div className={`w-[432px] bg-white shadow-sm flex flex-col overflow-hidden shrink-0 ${isJechae ? "hidden" : ""}`}>
         {/* 스크롤은 바깥에서 받고(스크롤바가 표 우측 테두리 바깥에 위치) 검정 테두리 표는 안쪽에 둔다 → 스크롤 생겨도 우측 라인 안 잘림 */}
-        <div className="flex-1 overflow-y-auto">
+        <div className={`flex-1 ${overWaitPanel ? "overflow-y-hidden" : "overflow-y-auto"}`}>
         <div className="border border-black m-3">
         <div className="sticky top-0 z-10 px-3 py-3 border-b border-black bg-gray-50 flex items-center justify-between">
           <div>
@@ -3077,7 +3091,7 @@ export default function ScheduleBoard() {
           </div>
         )}
 
-        <div className="flex-1 overflow-y-auto p-2 space-y-1">
+        <div ref={waitListRef} className="flex-1 overflow-y-auto p-2 space-y-1">
           {waitingOrders.length === 0 ? (
             <div className="text-center text-gray-400 text-sm py-8">
               대기 중인 주문이 없습니다
