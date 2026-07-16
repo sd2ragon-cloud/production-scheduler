@@ -13,7 +13,8 @@ export async function GET(req: NextRequest) {
     sql += ' WHERE process_line = ?';
     args.push(processLine);
   }
-  sql += ' ORDER BY priority DESC, deadline ASC';
+  // 수기 정렬(sort_order)이 우선. 같은 값이면 기존 기준(priority, deadline, id)으로.
+  sql += ' ORDER BY sort_order ASC, priority DESC, deadline ASC, id ASC';
 
   const result = await db.execute({ sql, args });
   return NextResponse.json(result.rows);
@@ -36,8 +37,12 @@ export async function POST(req: NextRequest) {
     ? JSON.stringify(body.part_quantities)
     : '{}';
 
+  // 새 주문은 해당 라인 배정 대기의 맨 아래에 오도록 sort_order를 최대값+1로.
+  const maxRes = await db.execute({ sql: 'SELECT COALESCE(MAX(sort_order), 0) as m FROM orders WHERE process_line = ?', args: [body.process_line || '매엽'] });
+  const nextSort = Number((maxRes.rows[0] as unknown as { m: number }).m) + 1;
+
   const result = await db.execute({
-    sql: `INSERT INTO orders (order_code, product_name, component, quantity_sheets, deadline, special_process, priority, notes, duration_minutes, part_durations, part_processes, part_quantities, extra_notes, factory, process_line) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    sql: `INSERT INTO orders (order_code, product_name, component, quantity_sheets, deadline, special_process, priority, notes, duration_minutes, part_durations, part_processes, part_quantities, extra_notes, factory, process_line, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       body.order_code || '',
       body.product_name,
@@ -54,6 +59,7 @@ export async function POST(req: NextRequest) {
       body.extra_notes || '',
       body.factory || '본공장',
       body.process_line || '매엽',
+      nextSort,
     ],
   });
 

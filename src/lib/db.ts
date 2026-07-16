@@ -176,6 +176,19 @@ async function initializeDb(db: Client) {
     // column already exists
   }
 
+  // Migrate orders: add sort_order (배정 대기 등에서 수기 정렬 순서) column if missing.
+  // 최초 1회 백필: 기존 표시 순서(priority DESC, deadline ASC, id ASC)대로 순번을 부여해 순서를 보존한다.
+  try {
+    await db.execute(`ALTER TABLE orders ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0`);
+    const rows = await db.execute(`SELECT id FROM orders ORDER BY priority DESC, deadline ASC, id ASC`);
+    let i = 1;
+    for (const r of rows.rows as unknown as { id: number }[]) {
+      await db.execute({ sql: 'UPDATE orders SET sort_order = ? WHERE id = ?', args: [i++, Number(r.id)] });
+    }
+  } catch {
+    // column already exists
+  }
+
   // Migrate schedule_entries: add component_part column if missing
   try {
     await db.execute(`ALTER TABLE schedule_entries ADD COLUMN component_part TEXT NOT NULL DEFAULT ''`);

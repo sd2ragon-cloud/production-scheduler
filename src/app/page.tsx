@@ -233,6 +233,9 @@ export default function ScheduleBoard() {
   const [manageBuckets, setManageBuckets] = useState(false);
   const [reorderTarget, setReorderTarget] = useState<number | null>(null);
   const [reorderAfter, setReorderAfter] = useState(false);
+  // 배정 대기 카드 순서 변경(위/아래 드래그)용 삽입 위치 표시
+  const [waitReorderId, setWaitReorderId] = useState<number | null>(null);
+  const [waitReorderAfter, setWaitReorderAfter] = useState(false);
   // 같은 제품 행 위에 드롭하면 '묶기(merge)' — 이 행을 초록으로 강조한다(삽입선 대신).
   const [mergeHoverId, setMergeHoverId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
@@ -963,6 +966,24 @@ export default function ScheduleBoard() {
     });
     await fetchAll();
     await markMoved(movedOid, machineId);
+  };
+
+  // 배정 대기 카드 순서 변경(위/아래 드래그). orderedIds = 재정렬 대상 주문 id들의 새 순서.
+  const handleReorderWaiting = async (orderedIds: number[]) => {
+    // 낙관적 갱신: 대기 슬롯 위치에 새 순서대로 카드를 끼워넣어 즉시 반영.
+    const idSet = new Set(orderedIds);
+    setOrders((prev) => {
+      const byId = new Map(prev.map((o) => [o.id, o] as const));
+      const seq = orderedIds.map((id) => byId.get(id)).filter(Boolean) as Order[];
+      let i = 0;
+      return prev.map((o) => (idSet.has(o.id) ? seq[i++] : o));
+    });
+    await fetch("/api/orders/reorder", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids: orderedIds, process_line: processLine }),
+    });
+    await fetchAll();
   };
 
   const durationTimers = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
@@ -1814,15 +1835,44 @@ export default function ScheduleBoard() {
     const remainingParts = partsAtLocation(order, bucketId);
     if (hasParts && remainingParts.length === 0) return null;
     if (!hasParts && !showsAt(order, bucketId)) return null;
+    const isWaiting = bucketId === undefined; // 배정 대기에서만 카드 순서 변경(위/아래 드래그) 허용
+    // 지금 '배정 대기 카드 전체'를 끌고 있는지(부분 칩·설비 드래그가 아님)
+    const isWaitCardDrag = dragOrderId !== null && dragOrderId !== order.id && !dragPart
+      && dragEntryId === null && dragSplit === null && waitingOrders.some((o) => o.id === dragOrderId);
     return (
       <div
         key={order.id}
         draggable={isAdmin}
         onDragStart={() => (hasParts ? onDragStartAll(order.id, remainingParts) : onDragStartOrder(order.id))}
-        title={hasParts ? "이 카드의 구성 전체를 설비/칸으로 드래그 (칸=한 칸에 모아 1차 배정)" : undefined}
+        onDragEnd={() => { setWaitReorderId(null); }}
+        onDragOver={isWaiting && isAdmin ? (e) => {
+          if (!isWaitCardDrag) return; // 순서 변경 드래그가 아니면 패널(배정 취소)로 흘려보냄
+          e.preventDefault();
+          e.stopPropagation();
+          const r = e.currentTarget.getBoundingClientRect();
+          const after = e.clientY - r.top > r.height / 2;
+          if (waitReorderId !== order.id) setWaitReorderId(order.id);
+          if (waitReorderAfter !== after) setWaitReorderAfter(after);
+        } : undefined}
+        onDragLeave={isWaiting ? () => { if (waitReorderId === order.id) setWaitReorderId(null); } : undefined}
+        onDrop={isWaiting && isAdmin ? (e) => {
+          if (!isWaitCardDrag) return;
+          e.preventDefault();
+          e.stopPropagation();
+          const r = e.currentTarget.getBoundingClientRect();
+          const after = e.clientY - r.top > r.height / 2;
+          const ids = waitingOrders.map((o) => o.id).filter((id) => id !== dragOrderId);
+          let idx = ids.indexOf(order.id);
+          if (idx < 0) idx = ids.length; else if (after) idx += 1;
+          ids.splice(idx, 0, dragOrderId!);
+          setWaitReorderId(null);
+          clearDragState();
+          handleReorderWaiting(ids);
+        } : undefined}
+        title={hasParts ? "이 카드의 구성 전체를 설비/칸으로 드래그 (칸=한 칸에 모아 1차 배정)" : (isWaiting ? "위/아래로 드래그하여 배정 대기 순서 변경" : undefined)}
         className={`p-2.5 border transition hover:shadow-sm cursor-grab active:cursor-grabbing ${
           dragOrderId === order.id && !dragPart ? "opacity-40" : ""
-        } border-gray-200 bg-white`}
+        } ${waitReorderId === order.id ? (waitReorderAfter ? "border-b-2 border-b-blue-500" : "border-t-2 border-t-blue-500") : "border-gray-200"} bg-white`}
       >
         <div>
           <div className="flex items-center justify-between">
@@ -2774,7 +2824,9 @@ export default function ScheduleBoard() {
           waitingDrop ? "ring-2 ring-red-400 bg-red-50/30" : ""
         }`}
         onDragOver={(e) => {
-          if (dragSplit !== null || dragEntryId !== null || dragOrderId !== null) {
+          // 배정 대기 카드끼리 순서만 바꾸는 드래그면 패널(배정 취소) 하이라이트/처리를 하지 않는다.
+          const reorderingWaitCard = dragOrderId !== null && !dragPart && dragEntryId === null && dragSplit === null && waitingOrders.some((o) => o.id === dragOrderId);
+          if (!reorderingWaitCard && (dragSplit !== null || dragEntryId !== null || dragOrderId !== null)) {
             e.preventDefault();
             if (!waitingDrop) setWaitingDrop(true);
           }
@@ -2782,7 +2834,12 @@ export default function ScheduleBoard() {
         onDragLeave={(e) => {
           if (!e.currentTarget.contains(e.relatedTarget as Node)) setWaitingDrop(false);
         }}
-        onDrop={() => { setWaitingDrop(false); onDropOnWaiting(); }}
+        onDrop={() => {
+          const reorderingWaitCard = dragOrderId !== null && !dragPart && dragEntryId === null && dragSplit === null && waitingOrders.some((o) => o.id === dragOrderId);
+          setWaitingDrop(false);
+          if (reorderingWaitCard) { clearDragState(); return; } // 순서 변경 드롭은 카드가 처리
+          onDropOnWaiting();
+        }}
       >
         <div className="px-4 py-3 border-b bg-gray-50 flex items-center justify-between">
           <div>
