@@ -342,13 +342,16 @@ export default function ScheduleBoard() {
   // 배정 대기 순서변경 드래그 중 커서가 배정 대기 패널 위에 있는지 (그동안 다른 열은 세로 스크롤 잠금 → 엉뚱한 열이 안 올라가게)
   const [overWaitPanel, setOverWaitPanel] = useState(false);
   const dragPointerY = useRef<number | null>(null);
+  const overWaitPanelRef = useRef(false); // RAF 루프에서 참조: 배정 대기 순서변경 중엔 설비열 자동스크롤 금지
+  useEffect(() => { overWaitPanelRef.current = overWaitPanel; }, [overWaitPanel]);
   useEffect(() => {
     let raf = 0;
     const onOver = (e: DragEvent) => { dragPointerY.current = e.clientY; };
     const onEnd = () => { dragPointerY.current = null; };
     const loop = () => {
-      const el = listScrollRef.current;
       const y = dragPointerY.current;
+      // 배정 대기 카드 순서변경 중이면 '배정 대기 목록'을, 그 외엔 '설비(기계별 작업계획) 열'을 자동 스크롤.
+      const el = overWaitPanelRef.current ? waitListRef.current : listScrollRef.current;
       if (el && y != null) {
         const r = el.getBoundingClientRect();
         const EDGE = 90, MAX = 22;
@@ -1018,15 +1021,7 @@ export default function ScheduleBoard() {
       if (!isReorderingWaitCard()) return; // 설비/1차배정 이동·배정취소 드래그는 그대로 흘려보냄
       e.preventDefault();
       e.stopPropagation();
-      if (!overWaitPanel) setOverWaitPanel(true); // 다른 열 세로 스크롤 잠금
-      // 배정 대기 목록만 자동 스크롤: 커서가 위/아래 가장자리에 오면 그 목록을 직접 스크롤한다.
-      const sc = waitListRef.current;
-      if (sc) {
-        const r = sc.getBoundingClientRect();
-        const edge = 48;
-        if (e.clientY < r.top + edge) sc.scrollTop -= 16;
-        else if (e.clientY > r.bottom - edge) sc.scrollTop += 16;
-      }
+      if (!overWaitPanel) setOverWaitPanel(true); // 다른 열 세로 스크롤 잠금 + RAF 루프가 배정 대기 목록을 자동 스크롤
       const t = waitInsertAt(e.currentTarget, e.clientY);
       setWaitReorderId((prev) => (prev === t.targetId ? prev : t.targetId));
       setWaitReorderAfter((prev) => (prev === t.after ? prev : t.after));
@@ -1900,7 +1895,10 @@ export default function ScheduleBoard() {
         key={order.id}
         data-oid={order.id}
         draggable={isAdmin}
-        onDragStart={() => (hasParts ? onDragStartAll(order.id, remainingParts) : onDragStartOrder(order.id))}
+        onDragStart={() => {
+          if (isWaiting) setOverWaitPanel(true); // 드래그 시작 즉시 옆 열 스크롤 잠금(타이밍 지연으로 엉뚱한 열이 올라가는 것 방지)
+          return hasParts ? onDragStartAll(order.id, remainingParts) : onDragStartOrder(order.id);
+        }}
         onDragEnd={() => { setWaitReorderId(null); setOverWaitPanel(false); }}
         title={hasParts ? "이 카드의 구성 전체를 설비/칸으로 드래그 (칸=한 칸에 모아 1차 배정)" : (isWaiting ? "위/아래로 드래그하여 배정 대기 순서 변경" : undefined)}
         className={`p-2.5 border transition hover:shadow-sm cursor-grab active:cursor-grabbing ${
@@ -2861,7 +2859,12 @@ export default function ScheduleBoard() {
         onDragOver={(e) => {
           // 배정 대기 카드끼리 순서만 바꾸는 드래그면 패널(배정 취소) 하이라이트/처리를 하지 않는다.
           const reorderingWaitCard = dragOrderId !== null && !dragPart && dragEntryId === null && dragSplit === null && waitingOrders.some((o) => o.id === dragOrderId);
-          if (!reorderingWaitCard && (dragSplit !== null || dragEntryId !== null || dragOrderId !== null)) {
+          if (reorderingWaitCard) {
+            // 패널 어디(헤더·빈 공간 포함)에 있어도 옆 열 스크롤 잠금 유지 → 자동스크롤이 기계별 작업계획을 못 건드림
+            if (!overWaitPanel) setOverWaitPanel(true);
+            return;
+          }
+          if (dragSplit !== null || dragEntryId !== null || dragOrderId !== null) {
             e.preventDefault();
             if (!waitingDrop) setWaitingDrop(true);
           }
