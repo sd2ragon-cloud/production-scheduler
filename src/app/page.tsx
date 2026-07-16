@@ -1607,11 +1607,11 @@ export default function ScheduleBoard() {
     const wb: any = new ExcelJS.Workbook();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const ws: any = wb.addWorksheet(processLine, { views: [{ showGridLines: false }] });
-    // 좌:번호·제품명(47)·완료(15) / 간격 / 우:번호·제품명(47)·완료(15)  (비고 열 삭제)
+    // 좌:번호·제품명(30)·비고(17)·완료(15) / 간격 / 우:번호·제품명(30)·비고(17)·완료(15)
     ws.columns = [
-      { width: 4.5 }, { width: 47 }, { width: 15 },
+      { width: 4.5 }, { width: 30 }, { width: 17 }, { width: 15 },
       { width: 2.5 },
-      { width: 4.5 }, { width: 47 }, { width: 15 },
+      { width: 4.5 }, { width: 30 }, { width: 17 }, { width: 15 },
     ];
     // 세로(Portrait). 폭은 1페이지에 맞추되(fitToHeight:0) 내용이 길면(배정 대기 등) 다음 장으로 이어짐.
     // 1행(제목·출력일시)은 페이지마다 반복.
@@ -1660,7 +1660,7 @@ export default function ScheduleBoard() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const tL: any = ws.getCell(1, 1); tL.value = `${processLine} 작업 계획`; tL.font = { bold: true, size: 12 }; tL.alignment = { vertical: "middle" };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const tR: any = ws.getCell(1, 7); tR.value = `출력 ${printStamp}`; tR.font = { size: 10 }; tR.alignment = { vertical: "middle", horizontal: "right" };
+    const tR: any = ws.getCell(1, 9); tR.value = `출력 ${printStamp}`; tR.font = { size: 10 }; tR.alignment = { vertical: "middle", horizontal: "right" };
     ws.getRow(1).height = 22;
     // 하단(1차배정/배정대기) 없이 설비 박스 2열 그리드만. 각 줄: 번호 | 제품명 | 완료시간.
     // 제품명(47)·완료(15)는 너비를 넘치면 '셀에 맞춤'(shrinkToFit)으로 자동 축소. 좌:1~3열 / 우:5~7열.
@@ -1679,12 +1679,12 @@ export default function ScheduleBoard() {
         return { m, entries, total, memo };
       });
       sides.forEach((m, si) => {
-        const base = si === 0 ? 1 : 5;
+        const base = si === 0 ? 1 : 6;
         const md = meta[si];
-        if (!md) { box(r, base, r, base + 2, "", {}); return; }
-        box(r, base, r, base + 1, `${md.m.name}${md.memo ? `   ${md.memo}` : ""}`,
+        if (!md) { box(r, base, r, base + 3, "", {}); return; }
+        box(r, base, r, base + 2, `${md.m.name}${md.memo ? `   ${md.memo}` : ""}`,
           { fill: hdrFill, font: hdrFont(10), align: { vertical: "middle", horizontal: "left" } });
-        cset(r, base + 2, fmtH(md.total), { fill: hdrFill, font: hdrFont(9), align: { vertical: "middle", horizontal: "right" } });
+        cset(r, base + 3, fmtH(md.total), { fill: hdrFill, font: hdrFont(9), align: { vertical: "middle", horizontal: "right" } });
       });
       ws.getRow(r).height = 16;
       r++;
@@ -1693,15 +1693,16 @@ export default function ScheduleBoard() {
         // 제품 행: 세로선(left/right)만, 제품끼리 가로선 없음. 마지막 줄에만 아래선(박스 하단).
         const rowBd = { left: thin, right: thin, ...(k === maxRows - 1 ? { bottom: thin } : {}) };
         sides.forEach((m, si) => {
-          const base = si === 0 ? 1 : 5;
+          const base = si === 0 ? 1 : 6;
           const e = meta[si]?.entries[k];
           if (e) {
             const mf = markArgb(e.mark_color); // 표시색(있으면 배경 채움)
             cset(r, base, k + 1, { font: { size: 9 }, align: { vertical: "middle", horizontal: "center" }, fill: mf, borderObj: rowBd });
             cset(r, base + 1, jobLabel(e), { font: { size: 9 }, align: { vertical: "middle", horizontal: "left", shrinkToFit: true }, fill: mf, borderObj: rowBd });
-            cset(r, base + 2, formatEndTime(e.end_time), { font: { size: 9 }, align: { vertical: "middle", horizontal: "center", shrinkToFit: true }, fill: mf, borderObj: rowBd });
+            cset(r, base + 2, (e.order_notes || "").trim(), { font: { size: 9 }, align: { vertical: "middle", horizontal: "left", shrinkToFit: true }, fill: mf, borderObj: rowBd });
+            cset(r, base + 3, formatEndTime(e.end_time), { font: { size: 9 }, align: { vertical: "middle", horizontal: "center", shrinkToFit: true }, fill: mf, borderObj: rowBd });
           } else {
-            for (let cc = base; cc < base + 3; cc++) cset(r, cc, "", { borderObj: rowBd });
+            for (let cc = base; cc < base + 4; cc++) cset(r, cc, "", { borderObj: rowBd });
           }
         });
         r++;
@@ -1719,14 +1720,14 @@ export default function ScheduleBoard() {
     // 좌측: 1차 배정 (칸을 세로로 쌓음)
     let rl = r0;
     const bkTotal = buckets.reduce((s, b) => s + locationMinutes(orders.filter((o) => showsAt(o, b.id)), b.id), 0);
-    box(rl, 1, rl, 2, "1차 배정", { fill: GRAY, font: secFont, align: { vertical: "middle", horizontal: "left" } });
-    cset(rl, 3, fmtH(bkTotal), { fill: GRAY, font: secFont, align: { vertical: "middle", horizontal: "center" } });
+    box(rl, 1, rl, 3, "1차 배정", { fill: GRAY, font: secFont, align: { vertical: "middle", horizontal: "left" } });
+    cset(rl, 4, fmtH(bkTotal), { fill: GRAY, font: secFont, align: { vertical: "middle", horizontal: "center" } });
     ws.getRow(rl).height = 16;
     rl++;
     for (const b of buckets) {
       const bo = orders.filter((o) => showsAt(o, b.id));
-      box(rl, 1, rl, 2, b.name, { fill: GRAY, font: secFont, align: { vertical: "middle", horizontal: "left" } });
-      cset(rl, 3, fmtH(locationMinutes(bo, b.id)), { fill: GRAY, font: { bold: true, size: 9 }, align: { vertical: "middle", horizontal: "center" } });
+      box(rl, 1, rl, 3, b.name, { fill: GRAY, font: secFont, align: { vertical: "middle", horizontal: "left" } });
+      cset(rl, 4, fmtH(locationMinutes(bo, b.id)), { fill: GRAY, font: { bold: true, size: 9 }, align: { vertical: "middle", horizontal: "center" } });
       ws.getRow(rl).height = 16;
       rl++;
       const items = bo.length ? bo : [null];
@@ -1735,10 +1736,10 @@ export default function ScheduleBoard() {
         const bd = { left: thin, right: thin, ...(k === items.length - 1 ? { bottom: thin } : {}) };
         if (o) {
           cset(rl, 1, k + 1, { font: { size: 9 }, align: itemAlignC, borderObj: bd });
-          cset(rl, 2, waitLabel(o, b.id), { font: { size: 9 }, align: itemAlignL, borderObj: bd });
-          cset(rl, 3, fmtH(locationMinutes([o], b.id)), { font: { size: 9 }, align: itemAlignC, borderObj: bd });
+          box(rl, 2, rl, 3, waitLabel(o, b.id), { font: { size: 9 }, align: itemAlignL, borderObj: bd });
+          cset(rl, 4, fmtH(locationMinutes([o], b.id)), { font: { size: 9 }, align: itemAlignC, borderObj: bd });
         } else {
-          for (let cc = 1; cc <= 3; cc++) cset(rl, cc, "", { borderObj: bd });
+          for (let cc = 1; cc <= 4; cc++) cset(rl, cc, "", { borderObj: bd });
         }
         rl++;
       }
@@ -1747,8 +1748,8 @@ export default function ScheduleBoard() {
     // 우측: 배정 대기 (한 열로 나열)
     let rr = r0;
     const mwaitMin = locationMinutes(waitingOrders, undefined);
-    box(rr, 5, rr, 6, `배정 대기 (${waitingOrders.length}건)`, { fill: GRAY, font: secFont, align: { vertical: "middle", horizontal: "left" } });
-    cset(rr, 7, `${fmtH(mwaitMin)}(${fmtDays(mwaitMin)})`, { fill: GRAY, font: secFont, align: { vertical: "middle", horizontal: "center" } });
+    box(rr, 6, rr, 8, `배정 대기 (${waitingOrders.length}건)`, { fill: GRAY, font: secFont, align: { vertical: "middle", horizontal: "left" } });
+    cset(rr, 9, `${fmtH(mwaitMin)}(${fmtDays(mwaitMin)})`, { fill: GRAY, font: secFont, align: { vertical: "middle", horizontal: "center" } });
     ws.getRow(rr).height = 16;
     rr++;
     const wlist = waitingOrders.length ? waitingOrders : [null];
@@ -1756,11 +1757,11 @@ export default function ScheduleBoard() {
       const o = wlist[k];
       const bd = { left: thin, right: thin, ...(k === wlist.length - 1 ? { bottom: thin } : {}) };
       if (o) {
-        cset(rr, 5, k + 1, { font: { size: 9 }, align: itemAlignC, borderObj: bd });
-        cset(rr, 6, waitLabel(o), { font: { size: 9 }, align: itemAlignL, borderObj: bd });
-        cset(rr, 7, fmtH(locationMinutes([o], undefined)), { font: { size: 9 }, align: itemAlignC, borderObj: bd });
+        cset(rr, 6, k + 1, { font: { size: 9 }, align: itemAlignC, borderObj: bd });
+        box(rr, 7, rr, 8, waitLabel(o), { font: { size: 9 }, align: itemAlignL, borderObj: bd });
+        cset(rr, 9, fmtH(locationMinutes([o], undefined)), { font: { size: 9 }, align: itemAlignC, borderObj: bd });
       } else {
-        for (let cc = 5; cc <= 7; cc++) cset(rr, cc, "", { borderObj: bd });
+        for (let cc = 6; cc <= 9; cc++) cset(rr, cc, "", { borderObj: bd });
       }
       rr++;
     }
