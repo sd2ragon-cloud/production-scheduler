@@ -986,6 +986,51 @@ export default function ScheduleBoard() {
     await fetchAll();
   };
 
+  // 지금 '배정 대기 카드 전체'를 순서 변경 목적으로 끌고 있는가 (부분 칩·설비 드래그·1차배정 카드가 아님)
+  const isReorderingWaitCard = (): boolean =>
+    dragOrderId !== null && !dragPart && dragEntryId === null && dragSplit === null && waitingOrders.some((o) => o.id === dragOrderId);
+  // 커서 Y로 삽입 위치(어느 카드 앞/뒤)를 계산. 카드 사이 빈 공간·목록 위아래 끝에서도 동작.
+  const waitInsertAt = (container: HTMLElement, clientY: number): { targetId: number | null; after: boolean } => {
+    const cards = Array.from(container.querySelectorAll<HTMLElement>("[data-oid]")).filter((c) => Number(c.dataset.oid) !== dragOrderId);
+    for (const c of cards) {
+      const r = c.getBoundingClientRect();
+      if (clientY < r.top + r.height / 2) return { targetId: Number(c.dataset.oid), after: false };
+    }
+    return { targetId: cards.length ? Number(cards[cards.length - 1].dataset.oid) : null, after: true };
+  };
+  const dropWaitReorder = (targetId: number | null, after: boolean) => {
+    if (dragOrderId === null) return;
+    const ids = waitingOrders.map((o) => o.id).filter((id) => id !== dragOrderId);
+    let idx: number;
+    if (targetId === null) idx = ids.length;
+    else { idx = ids.indexOf(targetId); if (idx < 0) idx = ids.length; else if (after) idx += 1; }
+    ids.splice(idx, 0, dragOrderId);
+    setWaitReorderId(null);
+    clearDragState();
+    handleReorderWaiting(ids);
+  };
+  // 배정 대기 목록/그룹 컨테이너에 붙이는 순서변경 DnD 핸들러 (카드 사이·위아래 끝 어디에 놓아도 동작)
+  const waitReorderDnd = isAdmin ? {
+    onDragOver: (e: React.DragEvent<HTMLElement>) => {
+      if (!isReorderingWaitCard()) return; // 설비/1차배정 이동·배정취소 드래그는 그대로 흘려보냄
+      e.preventDefault();
+      e.stopPropagation();
+      const t = waitInsertAt(e.currentTarget, e.clientY);
+      setWaitReorderId((prev) => (prev === t.targetId ? prev : t.targetId));
+      setWaitReorderAfter((prev) => (prev === t.after ? prev : t.after));
+    },
+    onDrop: (e: React.DragEvent<HTMLElement>) => {
+      if (!isReorderingWaitCard()) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const t = waitInsertAt(e.currentTarget, e.clientY);
+      dropWaitReorder(t.targetId, t.after);
+    },
+    onDragLeave: (e: React.DragEvent<HTMLElement>) => {
+      if (!e.currentTarget.contains(e.relatedTarget as Node)) setWaitReorderId(null);
+    },
+  } : {};
+
   const durationTimers = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
 
   const handleDurationChange = (entryId: number, hours: number) => {
@@ -1836,39 +1881,13 @@ export default function ScheduleBoard() {
     if (hasParts && remainingParts.length === 0) return null;
     if (!hasParts && !showsAt(order, bucketId)) return null;
     const isWaiting = bucketId === undefined; // 배정 대기에서만 카드 순서 변경(위/아래 드래그) 허용
-    // 지금 '배정 대기 카드 전체'를 끌고 있는지(부분 칩·설비 드래그가 아님)
-    const isWaitCardDrag = dragOrderId !== null && dragOrderId !== order.id && !dragPart
-      && dragEntryId === null && dragSplit === null && waitingOrders.some((o) => o.id === dragOrderId);
     return (
       <div
         key={order.id}
+        data-oid={order.id}
         draggable={isAdmin}
         onDragStart={() => (hasParts ? onDragStartAll(order.id, remainingParts) : onDragStartOrder(order.id))}
         onDragEnd={() => { setWaitReorderId(null); }}
-        onDragOver={isWaiting && isAdmin ? (e) => {
-          if (!isWaitCardDrag) return; // 순서 변경 드래그가 아니면 패널(배정 취소)로 흘려보냄
-          e.preventDefault();
-          e.stopPropagation();
-          const r = e.currentTarget.getBoundingClientRect();
-          const after = e.clientY - r.top > r.height / 2;
-          if (waitReorderId !== order.id) setWaitReorderId(order.id);
-          if (waitReorderAfter !== after) setWaitReorderAfter(after);
-        } : undefined}
-        onDragLeave={isWaiting ? () => { if (waitReorderId === order.id) setWaitReorderId(null); } : undefined}
-        onDrop={isWaiting && isAdmin ? (e) => {
-          if (!isWaitCardDrag) return;
-          e.preventDefault();
-          e.stopPropagation();
-          const r = e.currentTarget.getBoundingClientRect();
-          const after = e.clientY - r.top > r.height / 2;
-          const ids = waitingOrders.map((o) => o.id).filter((id) => id !== dragOrderId);
-          let idx = ids.indexOf(order.id);
-          if (idx < 0) idx = ids.length; else if (after) idx += 1;
-          ids.splice(idx, 0, dragOrderId!);
-          setWaitReorderId(null);
-          clearDragState();
-          handleReorderWaiting(ids);
-        } : undefined}
         title={hasParts ? "이 카드의 구성 전체를 설비/칸으로 드래그 (칸=한 칸에 모아 1차 배정)" : (isWaiting ? "위/아래로 드래그하여 배정 대기 순서 변경" : undefined)}
         className={`p-2.5 border transition hover:shadow-sm cursor-grab active:cursor-grabbing ${
           dragOrderId === order.id && !dragPart ? "opacity-40" : ""
@@ -2206,7 +2225,9 @@ export default function ScheduleBoard() {
     <div className="print-root print-area">
       {printView === "full" ? (isJechae ? renderJechaeMatrix() : renderFullPrint()) : renderPrint()}
     </div>
-    <div className="overflow-auto h-[calc(100vh-80px)]">
+    {/* 가로만 스크롤(세로는 각 열이 자체 스크롤). 세로 스크롤을 열어두면 드래그 중 자동스크롤이 이 컨테이너를
+        움직여 기계별 작업계획까지 올라가 버린다. */}
+    <div className="overflow-x-auto overflow-y-hidden h-[calc(100vh-80px)]">
     {/* 고정 폭(반응형 축소 없음). 화면이 작으면 비율 축소 대신 가로/세로 스크롤로 본다. */}
     <div className="flex gap-4 h-full min-w-[1776px]">
       {/* 좌측: 설비별 배정 현황 */}
@@ -3071,14 +3092,16 @@ export default function ScheduleBoard() {
                   <div className="sticky top-0 z-10 px-2 py-1 text-[11px] font-bold text-gray-700 bg-gray-100 border-b">
                     {cat || "미지정"} <span className="font-normal text-gray-400">({group.length})</span>
                   </div>
-                  <div className="space-y-1 mt-1">
+                  <div className="space-y-1 mt-1" {...waitReorderDnd}>
                     {group.map((o) => renderOrderCard(o, undefined))}
                   </div>
                 </div>
               );
             })
           ) : (
-            waitingOrders.map((o) => renderOrderCard(o, undefined))
+            <div className="space-y-1 min-h-full" {...waitReorderDnd}>
+              {waitingOrders.map((o) => renderOrderCard(o, undefined))}
+            </div>
           )}
         </div>
       </div>
