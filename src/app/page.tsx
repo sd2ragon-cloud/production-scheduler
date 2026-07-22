@@ -1126,8 +1126,9 @@ export default function ScheduleBoard() {
       setShowAddForm(true);
       return;
     }
-    // 설비 행에서 수정 + 다구성 주문이면 '그 행(엔트리)의 구성만' 편집(별도 건). 그 외엔 주문 전체 편집.
-    const scoped = !asCopy && entry != null && parseParts(order.component).length >= 2 && parseParts(entry.component_part).length >= 1;
+    // 설비 행에서 수정하면 '그 설비 배정 항목(엔트리)의 구성'을 기준으로 편집한다(폼=칩과 일치, 저장 시 교체).
+    // 주문 구성과 설비 항목 구성이 어긋나 있어도 설비 항목을 그대로 불러오므로 표시 불일치가 없다.
+    const scoped = !asCopy && entry != null && parseParts(entry.component_part).length >= 1;
     const parts = scoped ? parseParts(entry!.component_part) : parseParts(order.component);
     const pd = parsePartDurations(scoped ? entry!.part_durations : order.part_durations);
     const pp = parsePartProcesses(order.part_processes);
@@ -1246,7 +1247,19 @@ export default function ScheduleBoard() {
       const origPD = parsePartDurations(origOrder?.part_durations);
       const origPP = parsePartProcesses(origOrder?.part_processes);
       const minutesOf = (p: string) => (parts.length >= 2 ? (partDurations[p] || 0) : durationMinutes);
-      const kept = origParts.filter((p) => !editEntryParts.includes(p)); // 다른 설비/대기에 있던 구성
+      // 주문에 남길 구성(kept): 이 설비 항목의 옛 구성은 폼값으로 교체되므로 뺀다.
+      // - 다른 설비에 실제로 있는 구성: 유지
+      // - 어느 설비에도 없는 구성: 아직 미배정(pending)이면 대기 구성으로 유지, 이미 전량 배정(scheduled)이면
+      //   설비 항목과 어긋난 옛 잔재로 보고 버린다(빈칸에 유령 구성이 생기지 않게).
+      const otherEntryParts = new Set<string>();
+      for (const s of schedule) {
+        if (s.order_id === editingOrderId && s.id !== editEntryId) parseParts(s.component_part).forEach((p) => otherEntryParts.add(p));
+      }
+      const kept = origParts.filter((p) => {
+        if (editEntryParts.includes(p)) return false;
+        if (otherEntryParts.has(p)) return true;
+        return existingStatus !== "scheduled";
+      });
       const mergedComp = [...kept, ...parts.filter((p) => !kept.includes(p))];
       const mergedPD: Record<string, number> = {};
       const mergedPP: Record<string, string> = {};
