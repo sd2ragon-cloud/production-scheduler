@@ -3245,6 +3245,63 @@ export default function ScheduleBoard() {
                 })}
               </div>
             )}
+
+            {/* [추가] 1차 배정 (판) — 어떤 판에 어떤 물량이 대기 중인지 한눈에 */}
+            {buckets.length > 0 && (
+              <div className="mt-5">
+                <div className="text-sm font-bold text-gray-700 mb-2 px-0.5 flex items-center gap-2">
+                  <span>🗂 1차 배정 (판)</span>
+                  <span className="text-[11px] font-normal text-gray-400">합계 {fmtH(buckets.reduce((s, b) => s + locationMinutes(orders.filter((o) => showsAt(o, b.id)), b.id), 0))}</span>
+                </div>
+                <div className={`grid gap-3 items-start ${summaryFull ? "grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4" : "grid-cols-1 md:grid-cols-2 xl:grid-cols-3"}`}>
+                  {buckets.map((b) => {
+                    const bo = orders.filter((o) => showsAt(o, b.id));
+                    return (
+                      <div key={b.id} className="bg-white border border-gray-300 shadow-sm overflow-hidden">
+                        <div className="px-2.5 py-1.5 bg-teal-700 text-white flex items-center justify-between">
+                          <span className="font-bold text-sm break-all">{b.name}</span>
+                          <span className="text-[11px] text-white/80 shrink-0 ml-2 whitespace-nowrap">{bo.length}건 · {fmtH(locationMinutes(bo, b.id))}</span>
+                        </div>
+                        {bo.length === 0 ? (
+                          <div className="px-2.5 py-3 text-center text-gray-400 text-xs">대기 없음</div>
+                        ) : (
+                          <div className="divide-y divide-gray-100">
+                            {bo.map((o, i) => (
+                              <div key={o.id} className="flex items-baseline gap-1.5 px-2.5 py-1">
+                                <span className="text-gray-400 tabular-nums text-[11px] shrink-0 w-4 text-right">{i + 1}</span>
+                                <span className="text-gray-800 text-[12px] sm-fit whitespace-nowrap overflow-hidden flex-1 min-w-0">{waitLabel(o, b.id)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* [추가] 배정 대기 — 아직 어느 판에도 안 들어간 물량 */}
+            <div className="mt-5">
+              <div className="text-sm font-bold text-gray-700 mb-2 px-0.5 flex items-center gap-2">
+                <span>⏳ 배정 대기</span>
+                <span className="text-[11px] font-normal text-gray-400">{waitingOrders.length}건 · 합계 {fmtH(locationMinutes(waitingOrders, undefined))}</span>
+              </div>
+              <div className="bg-white border border-gray-300 shadow-sm overflow-hidden">
+                {waitingOrders.length === 0 ? (
+                  <div className="px-2.5 py-3 text-center text-gray-400 text-xs">배정 대기 없음</div>
+                ) : (
+                  <div className={`grid ${summaryFull ? "grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4" : "grid-cols-1 md:grid-cols-2 xl:grid-cols-3"}`}>
+                    {waitingOrders.map((o, i) => (
+                      <div key={o.id} className="flex items-baseline gap-1.5 px-2.5 py-1 border-b border-r border-gray-100">
+                        <span className="text-gray-400 tabular-nums text-[11px] shrink-0 w-5 text-right">{i + 1}</span>
+                        <span className="text-gray-800 text-[12px] sm-fit whitespace-nowrap overflow-hidden flex-1 min-w-0">{waitLabel(o)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </div>
