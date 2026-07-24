@@ -3196,8 +3196,8 @@ export default function ScheduleBoard() {
                             <thead>
                               <tr className="text-gray-400 bg-gray-50 border-b border-gray-200">
                                 <th className="py-0.5 pr-1 text-right font-medium">#</th>
-                                <th className="py-0.5 px-1 text-left font-medium">제품명 / 비고</th>
-                                <th className="py-0.5 pr-7 pl-1 text-right font-medium whitespace-nowrap">완료 예정</th>
+                                <th className="py-0.5 px-1 text-center font-medium">제품명 / 비고</th>
+                                <th className="py-0.5 px-1 text-center font-medium whitespace-nowrap">완료 예정</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -3210,7 +3210,7 @@ export default function ScheduleBoard() {
                                       <div className="text-gray-800 break-words">{e.product_name}{e.component_part ? <span className="text-gray-500"> ({e.component_part})</span> : null}</div>
                                       {note ? <div className="text-gray-500 text-[11px] mt-0.5 break-words">{note}</div> : null}
                                     </td>
-                                    <td className="py-1 pr-7 pl-1 text-right font-mono text-[11px] tracking-tight text-gray-700 whitespace-nowrap">{formatEndTime(e.end_time)}</td>
+                                    <td className="py-1 pr-7 pl-1 text-right font-mono text-[11px] tracking-tighter text-gray-700 whitespace-nowrap">{formatEndTime(e.end_time)}</td>
                                   </tr>
                                 );
                               })}
