@@ -2297,7 +2297,7 @@ export default function ScheduleBoard() {
             </button>
             {/* [추가] 설비별 진행현황 요약 — 출력 없이 화면에서 한눈에 보기 */}
             <button
-              onClick={() => setShowSummary(true)}
+              onClick={() => { setSummaryFull(true); setShowSummary(true); }}
               className="text-xs border border-blue-500 bg-blue-600 px-2 py-1 hover:bg-blue-700 text-white font-medium whitespace-nowrap"
               title="설비별로 어떤 제품이 언제 끝나는지 한눈에 보는 요약 화면 (출력 불필요)"
             >
