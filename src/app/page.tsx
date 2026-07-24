@@ -213,6 +213,7 @@ export default function ScheduleBoard() {
   const [showBreaks, setShowBreaks] = useState(false);
   // [추가] 설비별 진행현황 요약(미리보기) 모달 표시 여부 — 기존 로직과 무관한 읽기 전용 화면.
   const [showSummary, setShowSummary] = useState(false);
+  const [summaryFull, setSummaryFull] = useState(false); // 요약 모달 전체화면(최대화) 여부
   // 설비별 비가동시간(설비고장·교육훈련 등)
   const [downtimes, setDowntimes] = useState<Downtime[]>([]);
   const [dtModalMachine, setDtModalMachine] = useState<number | null>(null);
@@ -3149,28 +3150,33 @@ export default function ScheduleBoard() {
 
     {/* [추가] 설비별 진행현황 요약(미리보기) — 읽기 전용. 기존 데이터(machines/schedule)만 사용하며 아무것도 변경하지 않는다. */}
     {showSummary && (
-      <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-3" onClick={() => setShowSummary(false)}>
-        <div className="bg-white shadow-2xl w-[96vw] max-w-[1500px] h-[92vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+      <div className={`fixed inset-0 bg-black/50 z-50 flex items-center justify-center ${summaryFull ? "p-0" : "p-3"}`} onClick={() => setShowSummary(false)}>
+        <div className={`bg-white shadow-2xl flex flex-col ${summaryFull ? "w-screen h-screen" : "w-[96vw] max-w-[1600px] h-[92vh]"}`} onClick={(e) => e.stopPropagation()}>
           <div className="px-5 py-3 bg-[#002060] text-white flex items-center justify-between shrink-0">
             <div>
               <h3 className="font-bold text-lg">📋 설비별 진행현황 <span className="font-normal text-white/80 text-sm">— {processLine}</span></h3>
               <p className="text-xs text-white/70">각 설비의 작업이 언제 끝나는지 한눈에 · {printStamp} 기준 (보기 전용)</p>
             </div>
-            <button onClick={() => setShowSummary(false)} className="text-white/80 hover:text-white text-2xl leading-none px-2" title="닫기">✕</button>
+            <div className="flex items-center gap-1 shrink-0">
+              <button onClick={() => setSummaryFull((v) => !v)} className="text-white/80 hover:text-white text-lg leading-none px-2 py-1 border border-white/30 hover:bg-white/10" title={summaryFull ? "창 모드로" : "전체화면(최대화)"}>
+                {summaryFull ? "🗗 창모드" : "⛶ 전체화면"}
+              </button>
+              <button onClick={() => setShowSummary(false)} className="text-white/80 hover:text-white text-2xl leading-none px-2" title="닫기">✕</button>
+            </div>
           </div>
           <div className="flex-1 overflow-y-auto p-3 bg-gray-100">
             {machines.length === 0 ? (
               <div className="text-center text-gray-400 text-sm py-10">설비가 없습니다.</div>
             ) : (
-              <div className="columns-1 sm:columns-2 lg:columns-3 xl:columns-4 gap-3">
+              <div className={`grid gap-3 items-start ${summaryFull ? "grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4" : "grid-cols-1 md:grid-cols-2 xl:grid-cols-3"}`}>
                 {machines.map((m) => {
                   const es = getEntriesForMachine(m.id);
                   const totalMin = es.reduce((s, e) => s + (e.duration_minutes || 0), 0);
                   const lastEnd = es.length ? formatEndTime(es[es.length - 1].end_time) : "";
                   return (
-                    <div key={m.id} className="break-inside-avoid mb-3 bg-white border border-gray-300 shadow-sm">
+                    <div key={m.id} className="bg-white border border-gray-300 shadow-sm overflow-hidden">
                       <div className="px-2.5 py-1.5 bg-[#002060] text-white flex items-center justify-between">
-                        <span className="font-bold text-sm truncate">{m.name}</span>
+                        <span className="font-bold text-sm break-all">{m.name}</span>
                         <span className="text-[11px] text-white/80 shrink-0 ml-2 whitespace-nowrap">{fmtH(totalMin)}</span>
                       </div>
                       {es.length === 0 ? (
@@ -3181,17 +3187,32 @@ export default function ScheduleBoard() {
                             <span className="font-medium">✅ 최종 완료 예정</span>
                             <span className="font-bold font-mono">{lastEnd}</span>
                           </div>
-                          <div className="divide-y divide-gray-100">
-                            {es.map((e, i) => (
-                              <div key={e.id} className="flex items-center gap-2 px-2.5 py-1 text-[11px]" style={e.mark_color ? { background: MARK_BG[e.mark_color] } : undefined}>
-                                <span className="w-4 text-right text-gray-400 shrink-0 tabular-nums">{i + 1}</span>
-                                <span className="flex-1 min-w-0 truncate text-gray-800" title={`${e.product_name}${e.component_part ? `(${e.component_part})` : ""}`}>
-                                  {e.product_name}{e.component_part ? <span className="text-gray-400"> ({e.component_part})</span> : null}
-                                </span>
-                                <span className="font-mono text-gray-700 shrink-0 whitespace-nowrap">{formatEndTime(e.end_time)}</span>
-                              </div>
-                            ))}
-                          </div>
+                          <table className="w-full table-fixed text-[11px] border-collapse">
+                            <colgroup>
+                              <col style={{ width: "24px" }} />
+                              <col />
+                              <col style={{ width: "34%" }} />
+                              <col style={{ width: "82px" }} />
+                            </colgroup>
+                            <thead>
+                              <tr className="text-gray-400 bg-gray-50 border-b border-gray-200">
+                                <th className="py-0.5 pr-1 text-right font-medium">#</th>
+                                <th className="py-0.5 px-1 text-left font-medium">제품명</th>
+                                <th className="py-0.5 px-1 text-left font-medium">비고</th>
+                                <th className="py-0.5 px-1 text-right font-medium whitespace-nowrap">완료 예정</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {es.map((e, i) => (
+                                <tr key={e.id} className="border-b border-gray-100 align-top" style={e.mark_color ? { background: MARK_BG[e.mark_color] } : undefined}>
+                                  <td className="py-1 pr-1 text-right text-gray-400 tabular-nums">{i + 1}</td>
+                                  <td className="py-1 px-1 text-gray-800 break-words">{e.product_name}{e.component_part ? <span className="text-gray-500"> ({e.component_part})</span> : null}</td>
+                                  <td className="py-1 px-1 text-gray-500 break-words">{(e.order_notes || "").trim()}</td>
+                                  <td className="py-1 px-1 text-right font-mono text-gray-700 whitespace-nowrap">{formatEndTime(e.end_time)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
                         </>
                       )}
                     </div>
