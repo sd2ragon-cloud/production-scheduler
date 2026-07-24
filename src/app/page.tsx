@@ -342,27 +342,6 @@ export default function ScheduleBoard() {
   // 드래그 중 화면 위/아래 가장자리에 커서가 가면 설비 목록을 자동 스크롤(맨 아래→맨 위 설비로도 옮길 수 있게).
   const listScrollRef = useRef<HTMLDivElement>(null);
   const waitListRef = useRef<HTMLDivElement>(null); // 배정 대기 스크롤 컨테이너(순서변경 중 자동스크롤 대상)
-  const summaryRef = useRef<HTMLDivElement>(null); // 진행현황 요약 모달 본문(폰트 자동 축소 대상)
-  // 진행현황 요약: 제품명·비고가 칸을 넘치면 줄바꿈 대신 폰트를 축소해 한 줄로 맞춘다.
-  useEffect(() => {
-    if (!showSummary) return;
-    const run = () => {
-      const root = summaryRef.current;
-      if (!root) return;
-      root.querySelectorAll<HTMLElement>(".sm-fit").forEach((el) => {
-        el.style.fontSize = ""; // 기준 크기로 리셋 후 다시 측정
-        const avail = el.clientWidth;
-        const content = el.scrollWidth;
-        if (avail > 0 && content > avail + 1) {
-          const base = parseFloat(getComputedStyle(el).fontSize) || 11;
-          const size = Math.max(6.5, Math.floor((base * avail) / content * 10) / 10);
-          el.style.fontSize = `${size}px`;
-        }
-      });
-    };
-    const raf = requestAnimationFrame(run);
-    return () => cancelAnimationFrame(raf);
-  }, [showSummary, summaryFull, machines, schedule, processLine]);
   // 배정 대기 순서변경 드래그 중 커서가 배정 대기 패널 위에 있는지 (그동안 다른 열은 세로 스크롤 잠금 → 엉뚱한 열이 안 올라가게)
   const [overWaitPanel, setOverWaitPanel] = useState(false);
   const dragPointerY = useRef<number | null>(null);
@@ -3185,7 +3164,7 @@ export default function ScheduleBoard() {
               <button onClick={() => setShowSummary(false)} className="text-white/80 hover:text-white text-2xl leading-none px-2" title="닫기">✕</button>
             </div>
           </div>
-          <div ref={summaryRef} className="flex-1 overflow-y-auto p-3 bg-gray-100">
+          <div className="flex-1 overflow-y-auto p-3 bg-gray-100">
             {machines.length === 0 ? (
               <div className="text-center text-gray-400 text-sm py-10">설비가 없습니다.</div>
             ) : (
@@ -3208,30 +3187,33 @@ export default function ScheduleBoard() {
                             <span className="font-medium">✅ 최종 완료 예정</span>
                             <span className="font-bold font-mono">{lastEnd}</span>
                           </div>
-                          <table className="w-full table-fixed text-[11px] border-collapse">
+                          <table className="w-full table-fixed text-[12px] border-collapse">
                             <colgroup>
                               <col style={{ width: "24px" }} />
                               <col />
-                              <col style={{ width: "34%" }} />
                               <col style={{ width: "82px" }} />
                             </colgroup>
                             <thead>
                               <tr className="text-gray-400 bg-gray-50 border-b border-gray-200">
                                 <th className="py-0.5 pr-1 text-right font-medium">#</th>
-                                <th className="py-0.5 px-1 text-left font-medium">제품명</th>
-                                <th className="py-0.5 px-1 text-left font-medium">비고</th>
+                                <th className="py-0.5 px-1 text-left font-medium">제품명 / 비고</th>
                                 <th className="py-0.5 px-1 text-right font-medium whitespace-nowrap">완료 예정</th>
                               </tr>
                             </thead>
                             <tbody>
-                              {es.map((e, i) => (
-                                <tr key={e.id} className="border-b border-gray-100 align-top" style={e.mark_color ? { background: MARK_BG[e.mark_color] } : undefined}>
-                                  <td className="py-1 pr-1 text-right text-gray-400 tabular-nums">{i + 1}</td>
-                                  <td className="py-1 px-1 text-gray-800 sm-fit whitespace-nowrap overflow-hidden">{e.product_name}{e.component_part ? <span className="text-gray-500"> ({e.component_part})</span> : null}</td>
-                                  <td className="py-1 px-1 text-gray-500 sm-fit whitespace-nowrap overflow-hidden">{(e.order_notes || "").trim()}</td>
-                                  <td className="py-1 px-1 text-right font-mono text-gray-700 whitespace-nowrap">{formatEndTime(e.end_time)}</td>
-                                </tr>
-                              ))}
+                              {es.map((e, i) => {
+                                const note = (e.order_notes || "").trim();
+                                return (
+                                  <tr key={e.id} className="border-b border-gray-100 align-top" style={e.mark_color ? { background: MARK_BG[e.mark_color] } : undefined}>
+                                    <td className="py-1 pr-1 text-right text-gray-400 tabular-nums">{i + 1}</td>
+                                    <td className="py-1 px-1">
+                                      <div className="text-gray-800 break-words">{e.product_name}{e.component_part ? <span className="text-gray-500"> ({e.component_part})</span> : null}</div>
+                                      {note ? <div className="text-gray-500 text-[11px] mt-0.5 break-words">{note}</div> : null}
+                                    </td>
+                                    <td className="py-1 px-1 text-right font-mono text-gray-700 whitespace-nowrap">{formatEndTime(e.end_time)}</td>
+                                  </tr>
+                                );
+                              })}
                             </tbody>
                           </table>
                         </>
