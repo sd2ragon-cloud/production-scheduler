@@ -3213,7 +3213,7 @@ export default function ScheduleBoard() {
                             <colgroup>
                               <col style={{ width: "24px" }} />
                               <col />
-                              <col style={{ width: "102px" }} />
+                              <col style={{ width: "108px" }} />
                             </colgroup>
                             <thead>
                               <tr className="text-gray-400 bg-gray-50 border-b border-gray-200">
@@ -3232,7 +3232,7 @@ export default function ScheduleBoard() {
                                       <div className="text-gray-800 sm-fit whitespace-nowrap overflow-hidden">{e.product_name}{e.component_part ? <span className="text-gray-500"> ({e.component_part})</span> : null}</div>
                                       {note ? <div className="text-gray-500 text-[11px] mt-0.5 sm-fit whitespace-nowrap overflow-hidden">{note}</div> : null}
                                     </td>
-                                    <td className="py-1 pr-7 pl-1 text-right font-mono text-[11px] tracking-[-2.05px] text-gray-700 whitespace-nowrap">{formatEndTime(e.end_time)}</td>
+                                    <td className="py-1 pr-7 pl-1 text-right font-mono text-[11px] tracking-[-1.55px] text-gray-700 whitespace-nowrap">{formatEndTime(e.end_time)}</td>
                                   </tr>
                                 );
                               })}
