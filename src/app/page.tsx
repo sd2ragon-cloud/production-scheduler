@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef, useMemo, Fragment } from "rea
 import { useProcess } from "./components/ProcessContext";
 import { useAuth } from "./components/AuthContext";
 import { parseParts, parsePartDurations, parsePartProcesses, partTotals, parsePartBuckets } from "@/lib/parts";
+import { parseDayShifts, parseDateShifts } from "@/lib/shifts";
 import { isDoubleSided } from "@/lib/print";
 import { roleCanEditLine } from "@/lib/factory-config";
 
@@ -20,6 +21,8 @@ interface Machine {
   memo: string;
   extra_notes: string; // 설비 블록 하단 기타사항 (제책)
   off_days?: string; // 휴무 요일 JSON 배열 (0=일~6=토)
+  day_shifts?: string; // 요일별 근무체제 JSON {"1":["정상(주)","정상(야)"]}
+  date_shifts?: string; // 일자별 예외 근무체제 JSON {"2026-07-27":["정상(주)"]}
 }
 
 interface Order {
@@ -2026,6 +2029,23 @@ export default function ScheduleBoard() {
   const dateStr = `${now.getFullYear()}년 ${now.getMonth() + 1}월 ${now.getDate()}일`;
   const p2x = (n: number) => String(n).padStart(2, "0");
   const printStamp = `${now.getFullYear()}-${p2x(now.getMonth() + 1)}-${p2x(now.getDate())} ${p2x(now.getHours())}:${p2x(now.getMinutes())}`;
+  // 기준일(로컬 '오늘') — 날짜가 바뀌면 자동으로 그 날 기준으로 근무체제를 가져온다.
+  const todayYmd = `${now.getFullYear()}-${p2x(now.getMonth() + 1)}-${p2x(now.getDate())}`;
+  const todayWeekday = now.getDay(); // 0=일 ~ 6=토
+  // 설비의 '오늘' 근무체제(설비관리에서 설정). 일자별 예외 > 요일별 순으로 적용.
+  // 반환: {label, dim}. 미설정이면 label="" , 그 날 휴무(빈 배열)면 "휴무".
+  const machineShiftToday = (m: Machine): { label: string; dim: boolean } => {
+    const dateMap = parseDateShifts(m.date_shifts);
+    let arr: string[] | null = null;
+    if (todayYmd in dateMap) arr = dateMap[todayYmd];
+    else {
+      const dayMap = parseDayShifts(m.day_shifts);
+      if (todayWeekday in dayMap) arr = dayMap[todayWeekday];
+    }
+    if (arr === null) return { label: "", dim: true };
+    if (arr.length === 0) return { label: "휴무", dim: true };
+    return { label: arr.join("/"), dim: false };
+  };
 
   // 설비명 칸 너비 = 현재 탭에서 가장 긴 설비명의 실제 픽셀 폭(canvas 측정).
   // 설비명은 좌측 정렬, 칸 오른쪽에 좌측 패딩(px-4=16px)과 동일한 여백을 둔 뒤 메모란이 시작된다.
@@ -2341,6 +2361,7 @@ export default function ScheduleBoard() {
         {machines.map((machine) => {
           const entries = getEntriesForMachine(machine.id);
           const isTarget = dropTarget === machine.id;
+          const shiftToday = machineShiftToday(machine); // 오늘(기준일) 근무체제 — 설비명 옆 메모란 우측에 표기
           // 윤전: 헤더 메모(memo)와 별개로 '맨 위(첫 번째) 제품 아래'에 추가되는 메모 입력칸.
           // 별도 필드(extra_notes)를 재사용하며, 높이는 고정(기존 헤더 메모와 동일한 한 줄). 출력물에도 같은 위치에 나온다.
           const rollMemoEditor = isRoll ? (
@@ -2369,14 +2390,25 @@ export default function ScheduleBoard() {
             >
               <div className="bg-gray-800 text-white px-4 py-2 flex items-center">
                 <span className="font-bold shrink-0 whitespace-nowrap mr-4" style={{ width: machineNameWidth }}>{machine.name}</span>
-                <input
-                  type="text"
-                  className="flex-1 min-w-0 bg-gray-700 text-white text-xs px-2 py-0.5 border border-gray-500 focus:border-blue-400 outline-none disabled:opacity-60"
-                  placeholder={isAdmin ? "메모" : ""}
-                  value={machineMemos[machine.id] ?? ""}
-                  onChange={(e) => handleMemoChange(machine.id, e.target.value)}
-                  disabled={!isAdmin}
-                />
+                <div className="flex-1 min-w-0 flex items-center gap-2 mr-2">
+                  <input
+                    type="text"
+                    className="w-40 shrink-0 bg-gray-700 text-white text-xs px-2 py-0.5 border border-gray-500 focus:border-blue-400 outline-none disabled:opacity-60"
+                    placeholder={isAdmin ? "메모" : ""}
+                    value={machineMemos[machine.id] ?? ""}
+                    onChange={(e) => handleMemoChange(machine.id, e.target.value)}
+                    disabled={!isAdmin}
+                  />
+                  {/* [추가] 오늘(기준일) 근무체제 — 설비관리에서 요일별/일자별로 설정한 값. 날짜가 바뀌면 그 날 값으로. */}
+                  {shiftToday.label && (
+                    <span
+                      className={`min-w-0 truncate text-xs whitespace-nowrap font-medium ${shiftToday.dim ? "text-gray-400" : "text-amber-300"}`}
+                      title={`${dateStr} 근무체제: ${shiftToday.label}`}
+                    >
+                      🕒 {shiftToday.label}
+                    </span>
+                  )}
+                </div>
                 <div className="flex items-center gap-3 shrink-0 ml-8">
                   <span className="text-xs text-gray-400 whitespace-nowrap">시작 08:30 고정</span>
                   <button
