@@ -35,7 +35,10 @@ export async function POST(req: NextRequest) {
     setSql += ', component_part = ?, part_durations = ?, base_minutes = ?, duration_minutes = ?';
     args.push(names.join(', '), JSON.stringify(durs), base, effectiveMinutes(base, String(src.print_mode)));
   } else {
-    // 구성 없는(통째) 항목: 전체 소요시간만 갱신
+    // 구성을 비운(또는 원래 통째) 항목: 구성·파트별 소요시간을 확실히 비우고(예전 자동생성 '1대' 등 잔재 제거)
+    // 전체 소요시간으로 갱신한다. component_part를 반드시 ''로 덮어써야 수정에서 구성을 지웠을 때 실제로 사라진다.
+    setSql += ', component_part = ?, part_durations = ?';
+    args.push('', '{}');
     const dur = Number(duration_minutes);
     if (Number.isFinite(dur) && dur > 0) {
       setSql += ', base_minutes = ?, duration_minutes = ?';
