@@ -58,6 +58,8 @@ export async function POST(req: NextRequest) {
         for (const p of removeParts) { delete pd[p]; delete pp[p]; delete pq[p]; delete pb[p]; }
         if (keptParts.length === 0 && others.length === 0) {
           await db.execute({ sql: 'DELETE FROM orders WHERE id = ?', args: [orderId] });
+          // 주문을 통째로 지워도 같은 설비의 '남은 작업'들은 앞으로 당겨져야 하므로 반드시 재계산한다.
+          await recalcMachine(machineId, todayLocal());
           return NextResponse.json({ success: true, deleted: true });
         }
         const total = keptParts.reduce((s, p) => s + (Number(pd[p]) || 0), 0);
@@ -70,6 +72,8 @@ export async function POST(req: NextRequest) {
       // 통짜(무구성): 남은 엔트리 없으면 주문 삭제, 있으면 소요시간만 차감.
       if (others.length === 0) {
         await db.execute({ sql: 'DELETE FROM orders WHERE id = ?', args: [orderId] });
+        // 주문을 통째로 지워도 같은 설비의 '남은 작업'들은 앞으로 당겨져야 하므로 반드시 재계산한다.
+        await recalcMachine(machineId, todayLocal());
         return NextResponse.json({ success: true, deleted: true });
       }
       const remain = Math.max(0, (Number(ord.duration_minutes) || 0) - (Number(src.base_minutes) || 0));
