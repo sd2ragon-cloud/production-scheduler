@@ -2469,6 +2469,10 @@ export default function ScheduleBoard() {
                     {entries.map((entry, idx) => {
                       const isReorderHover = reorderTarget === entry.id;
                       const isMergeHover = mergeHoverId === entry.id;
+                      // 제책: 주문의 구성별 부수(part_quantities). 구성 칩 옆에 각 부수를 표기하는 데 사용.
+                      const entryPartQty = parsePartDurations(allOrders.find((o) => o.id === entry.order_id)?.part_quantities);
+                      const entryPartsList = parseParts(entry.component_part);
+                      const hasPerPartQty = isJechae && entryPartsList.some((p) => entryPartQty[p]);
                       return (
                         <Fragment key={entry.id}>
                         <tr
@@ -2691,7 +2695,7 @@ export default function ScheduleBoard() {
                                             }`}
                                             title="다른 설비로 드래그하면 분리, 같은 행에서 칩의 왼쪽/오른쪽으로 드롭하면 앞/뒤로 이동"
                                           >
-                                            {p}
+                                            {p}{entryPartQty[p] ? <span className="ml-1 font-normal text-gray-500">{entryPartQty[p].toLocaleString()}부</span> : null}
                                           </span>
                                         );
                                       })}
@@ -2700,8 +2704,9 @@ export default function ScheduleBoard() {
                                 </span>
                               );
                             })()}
-                            {/* 윤전은 수량을 제품명 뒤(' * 수량')에 표기하므로 여기선 제책만 별도 표기 */}
-                            {isJechae && entry.quantity_sheets ? (
+                            {/* 윤전은 수량을 제품명 뒤(' * 수량')에 표기. 제책은 여기서 별도 표기하되,
+                                구성별 부수가 칩에 이미 표시되는 경우(다구성)엔 총합 중복 표기를 생략. */}
+                            {isJechae && entry.quantity_sheets && !hasPerPartQty ? (
                               <span className={`font-medium text-gray-600 shrink-0 whitespace-nowrap text-[13px]`}>{entry.quantity_sheets.toLocaleString()}부</span>
                             ) : null}
                             </div>
