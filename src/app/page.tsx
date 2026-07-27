@@ -203,9 +203,6 @@ export default function ScheduleBoard() {
     if (qty > 0) s += ` * ${qty.toLocaleString()}부`;
     return s;
   };
-  // 제책: 부수 ÷ 생산성(부/시간) = 소요시간(시간). 정수로 반올림(소요시간 입력칸은 정수 단위).
-  const calcDurationHours = (qty: number, prod: number): number | null =>
-    prod > 0 && qty > 0 ? Math.round(qty / prod) : null;
   const [machines, setMachines] = useState<Machine[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   // 전체 주문(대기·배정 완료 포함). 설비에 배정된 작업의 사양 편집에 사용.
@@ -3028,37 +3025,15 @@ export default function ScheduleBoard() {
                 {usesQuantity ? (
                   isJechae ? (
                     <>
-                      {/* 무선-다구성이면 부수를 '구성별'로 아래 표에서 입력하므로 이 단일 부수칸은 숨긴다. */}
+                      {/* 제책은 생산성 입력란 없음(소요시간 수동 입력). 무선-다구성이면 부수는 아래 구성표에서 구성별로 입력. */}
                       {!museonMulti && (
-                        <div className={isMuseon ? "col-span-2" : undefined}>
+                        <div className="col-span-2">
                           <label className="text-[10px] text-gray-500">부수</label>
                           <input
                             type="number" min="0" step="1" placeholder="부"
                             className="border px-2 py-1.5 text-xs w-full"
                             value={newOrder.quantity_sheets || ""}
-                            onChange={(e) => {
-                              const q = Number(e.target.value);
-                              // 무선은 생산성을 쓰지 않음(소요시간 수동). 그 외 제책은 생산성으로 소요시간 자동 계산.
-                              const d = isMuseon ? null : calcDurationHours(q, newOrder.productivity);
-                              setNewOrder({ ...newOrder, quantity_sheets: q, ...(d != null ? { duration_hours: d } : {}) });
-                            }}
-                          />
-                        </div>
-                      )}
-                      {/* 무선은 생산성 대신 소요시간을 수동 입력 → 생산성칸 숨김. */}
-                      {!isMuseon && (
-                        <div>
-                          <label className="text-[10px] text-gray-500">생산성 (부/시간)</label>
-                          <input
-                            type="number" min="0" step="1" placeholder="부/시간"
-                            className="border px-2 py-1.5 text-xs w-full"
-                            value={newOrder.productivity || ""}
-                            onChange={(e) => {
-                              const p = Number(e.target.value);
-                              // 생산성 입력 시 부수 ÷ 생산성 = 소요시간 자동 입력
-                              const d = calcDurationHours(newOrder.quantity_sheets, p);
-                              setNewOrder({ ...newOrder, productivity: p, ...(d != null ? { duration_hours: d } : {}) });
-                            }}
+                            onChange={(e) => setNewOrder({ ...newOrder, quantity_sheets: Number(e.target.value) })}
                           />
                         </div>
                       )}
