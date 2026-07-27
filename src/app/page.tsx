@@ -3024,18 +3024,8 @@ export default function ScheduleBoard() {
                 {usesQuantity ? (
                   isJechae ? (
                     <>
-                      {/* 제책은 생산성 입력란 없음(소요시간 수동 입력). 다구성이면 부수는 아래 구성표에서 구성별로 입력. */}
-                      {!jechaeMulti && (
-                        <div className="col-span-2">
-                          <label className="text-[10px] text-gray-500">부수</label>
-                          <input
-                            type="number" min="0" step="1" placeholder="부"
-                            className="border px-2 py-1.5 text-xs w-full"
-                            value={newOrder.quantity_sheets || ""}
-                            onChange={(e) => setNewOrder({ ...newOrder, quantity_sheets: Number(e.target.value) })}
-                          />
-                        </div>
-                      )}
+                      {/* 제책은 생산성 입력란 없음(소요시간 수동 입력). 단일 구성 부수는 소요시간 옆(윤전과 동일),
+                          다구성이면 아래 구성표에서 구성별로 입력. */}
                       <div className="col-span-2">
                         <label className="text-[10px] text-gray-500">구분 (배정 대기 분류)</label>
                         <select
@@ -3131,6 +3121,18 @@ export default function ScheduleBoard() {
                               onChange={(e) => setNewOrder({ ...newOrder, duration_hours: Number(e.target.value) })}
                             />
                           </div>
+                          {/* 제책 단일 구성: 부수를 소요시간 옆에 (윤전 수량과 동일 위치) */}
+                          {isJechae && (
+                            <div>
+                              <label className="text-[10px] text-gray-500">부수</label>
+                              <input
+                                type="number" min="0" step="1" placeholder="부"
+                                className="border px-2 py-1.5 text-xs w-full"
+                                value={newOrder.quantity_sheets || ""}
+                                onChange={(e) => setNewOrder({ ...newOrder, quantity_sheets: Number(e.target.value) })}
+                              />
+                            </div>
+                          )}
                           {!usesQuantity && (
                             <div>
                               <label className="text-[10px] text-gray-500">구분</label>
