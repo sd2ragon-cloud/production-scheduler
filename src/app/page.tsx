@@ -3112,16 +3112,7 @@ export default function ScheduleBoard() {
                         </div>
                       ) : (
                         <>
-                          <div>
-                            <label className="text-[10px] text-gray-500">소요시간 (시간)</label>
-                            <input
-                              type="number" min="0" step="0.5" placeholder="자동"
-                              className="border px-2 py-1.5 text-xs w-full"
-                              value={newOrder.duration_hours || ""}
-                              onChange={(e) => setNewOrder({ ...newOrder, duration_hours: Number(e.target.value) })}
-                            />
-                          </div>
-                          {/* 제책 단일 구성: 부수를 소요시간 옆에 (윤전 수량과 동일 위치) */}
+                          {/* 제책 단일 구성: 부수를 왼쪽(소요시간 앞)에 배치 */}
                           {isJechae && (
                             <div>
                               <label className="text-[10px] text-gray-500">부수</label>
@@ -3133,6 +3124,15 @@ export default function ScheduleBoard() {
                               />
                             </div>
                           )}
+                          <div>
+                            <label className="text-[10px] text-gray-500">소요시간 (시간)</label>
+                            <input
+                              type="number" min="0" step="0.5" placeholder="자동"
+                              className="border px-2 py-1.5 text-xs w-full"
+                              value={newOrder.duration_hours || ""}
+                              onChange={(e) => setNewOrder({ ...newOrder, duration_hours: Number(e.target.value) })}
+                            />
+                          </div>
                           {!usesQuantity && (
                             <div>
                               <label className="text-[10px] text-gray-500">구분</label>
