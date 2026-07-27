@@ -262,6 +262,9 @@ export default function ScheduleBoard() {
     partProcesses: {} as Record<string, string>,
     partQuantities: {} as Record<string, number>,
   });
+  // 무선(제책 구분): 생산성 대신 소요시간 수동 입력 + 부수를 구성별로 입력.
+  const isMuseon = isJechae && newOrder.special_process === "무선";
+  const museonMulti = isMuseon && parseParts(newOrder.component).length >= 2;
   // 구성 칩을 🗑로 끌어다 놓는 중인 행(완료·삭제 강조)
   const [trashOverEntry, setTrashOverEntry] = useState<number | null>(null);
   const dragOverMachine = useRef<number | null>(null);
@@ -1260,6 +1263,16 @@ export default function ScheduleBoard() {
     } else {
       durationMinutes = Math.round((newOrder.duration_hours || 0) * 60);
     }
+    // 무선: 구성별 부수(part_quantities). 다구성이면 표의 구성별 부수, 단일이면 부수칸 값을 그 구성에.
+    // 전체 부수(quantity_sheets)는 구성별 부수의 합으로 저장(표시·하위호환).
+    const partQuantities: Record<string, number> = {};
+    if (isMuseon) {
+      if (parts.length >= 2) for (const p of parts) partQuantities[p] = Number(newOrder.partQuantities[p]) || 0;
+      else if (parts.length === 1) partQuantities[parts[0]] = newOrder.quantity_sheets || 0;
+    }
+    const qtyTotal = (isMuseon && parts.length >= 2)
+      ? Object.values(partQuantities).reduce((a, b) => a + b, 0)
+      : newOrder.quantity_sheets;
     // 윤전은 구분 없음(빈값). 매엽=공정, 제책=배정대기 구분(무선/낙정/배접; 그 외엔 미지정='').
     const specialProcess = isRoll
       ? ""
@@ -1293,6 +1306,14 @@ export default function ScheduleBoard() {
       const mergedPP: Record<string, string> = {};
       for (const p of kept) { mergedPD[p] = Number(origPD[p]) || 0; mergedPP[p] = origPP[p] || ""; }
       for (const p of parts) { mergedPD[p] = minutesOf(p); mergedPP[p] = partProcesses[p] ?? ""; }
+      // 무선: 구성별 부수도 병합(다른 설비/대기 구성의 부수는 원본 유지, 이 항목 구성은 폼값). 아니면 원본 그대로.
+      const origPQ = parsePartDurations(origOrder?.part_quantities);
+      const mergedPQ: Record<string, number> = {};
+      if (isMuseon) {
+        for (const p of kept) mergedPQ[p] = Number(origPQ[p]) || 0;
+        for (const p of parts) mergedPQ[p] = parts.length >= 2 ? (Number(newOrder.partQuantities[p]) || 0) : (newOrder.quantity_sheets || 0);
+      }
+      const mergedQty = isMuseon ? Object.values(mergedPQ).reduce((a, b) => a + b, 0) : newOrder.quantity_sheets;
       await fetch(`/api/orders/${editingOrderId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -1300,10 +1321,11 @@ export default function ScheduleBoard() {
           ...newOrder,
           component: mergedComp.join(", "),
           special_process: specialProcess,
+          quantity_sheets: mergedQty,
           duration_minutes: Object.values(mergedPD).reduce((a, b) => a + b, 0),
           part_durations: mergedPD,
           part_processes: mergedPP,
-          part_quantities: {},
+          part_quantities: isMuseon ? mergedPQ : {},
           status: existingStatus,
         }),
       });
@@ -1321,10 +1343,11 @@ export default function ScheduleBoard() {
         body: JSON.stringify({
           ...newOrder,
           special_process: specialProcess,
+          quantity_sheets: qtyTotal,
           duration_minutes: durationMinutes,
           part_durations: partDurations,
           part_processes: partProcesses,
-          part_quantities: {},
+          part_quantities: partQuantities,
           status: existingStatus,
         }),
       });
@@ -1348,10 +1371,11 @@ export default function ScheduleBoard() {
         body: JSON.stringify({
           ...newOrder,
           special_process: specialProcess,
+          quantity_sheets: qtyTotal,
           duration_minutes: durationMinutes,
           part_durations: partDurations,
           part_processes: partProcesses,
-          part_quantities: {},
+          part_quantities: partQuantities,
           process_line: processLine,
         }),
       });
@@ -2390,26 +2414,24 @@ export default function ScheduleBoard() {
             >
               <div className="bg-gray-800 text-white px-4 py-2 flex items-center">
                 <span className="font-bold shrink-0 whitespace-nowrap mr-4" style={{ width: machineNameWidth }}>{machine.name}</span>
-                <div className="flex-1 min-w-0 flex items-center gap-2 mr-2">
-                  <input
-                    type="text"
-                    className="w-40 shrink-0 bg-gray-700 text-white text-xs px-2 py-0.5 border border-gray-500 focus:border-blue-400 outline-none disabled:opacity-60"
-                    placeholder={isAdmin ? "메모" : ""}
-                    value={machineMemos[machine.id] ?? ""}
-                    onChange={(e) => handleMemoChange(machine.id, e.target.value)}
-                    disabled={!isAdmin}
-                  />
-                  {/* [추가] 오늘(기준일) 근무체제 — 설비관리에서 요일별/일자별로 설정한 값. 날짜가 바뀌면 그 날 값으로. */}
+                <input
+                  type="text"
+                  className="flex-1 min-w-0 mr-2 bg-gray-700 text-white text-xs px-2 py-0.5 border border-gray-500 focus:border-blue-400 outline-none disabled:opacity-60"
+                  placeholder={isAdmin ? "메모" : ""}
+                  value={machineMemos[machine.id] ?? ""}
+                  onChange={(e) => handleMemoChange(machine.id, e.target.value)}
+                  disabled={!isAdmin}
+                />
+                <div className="flex items-center gap-3 shrink-0 ml-8">
+                  {/* [추가] 오늘(기준일) 근무체제 — '시작 08:30 고정' 좌측. 설비관리 요일별/일자별 설정, 날짜 바뀌면 그 날 값. */}
                   {shiftToday.label && (
                     <span
-                      className={`min-w-0 truncate text-xs whitespace-nowrap font-medium ${shiftToday.dim ? "text-gray-400" : "text-amber-300"}`}
+                      className={`whitespace-nowrap text-xs font-medium ${shiftToday.dim ? "text-gray-400" : "text-amber-300"}`}
                       title={`${dateStr} 근무체제: ${shiftToday.label}`}
                     >
                       🕒 {shiftToday.label}
                     </span>
                   )}
-                </div>
-                <div className="flex items-center gap-3 shrink-0 ml-8">
                   <span className="text-xs text-gray-400 whitespace-nowrap">시작 08:30 고정</span>
                   <button
                     onClick={() => { setDtModalMachine(machine.id); setDtForm({ start: "", end: "", reason: "" }); }}
@@ -3006,34 +3028,40 @@ export default function ScheduleBoard() {
                 {usesQuantity ? (
                   isJechae ? (
                     <>
-                      <div>
-                        <label className="text-[10px] text-gray-500">부수</label>
-                        <input
-                          type="number" min="0" step="1" placeholder="부"
-                          className="border px-2 py-1.5 text-xs w-full"
-                          value={newOrder.quantity_sheets || ""}
-                          onChange={(e) => {
-                            const q = Number(e.target.value);
-                            // 부수 변경 시 생산성이 있으면 소요시간 자동 계산
-                            const d = calcDurationHours(q, newOrder.productivity);
-                            setNewOrder({ ...newOrder, quantity_sheets: q, ...(d != null ? { duration_hours: d } : {}) });
-                          }}
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[10px] text-gray-500">생산성 (부/시간)</label>
-                        <input
-                          type="number" min="0" step="1" placeholder="부/시간"
-                          className="border px-2 py-1.5 text-xs w-full"
-                          value={newOrder.productivity || ""}
-                          onChange={(e) => {
-                            const p = Number(e.target.value);
-                            // 생산성 입력 시 부수 ÷ 생산성 = 소요시간 자동 입력
-                            const d = calcDurationHours(newOrder.quantity_sheets, p);
-                            setNewOrder({ ...newOrder, productivity: p, ...(d != null ? { duration_hours: d } : {}) });
-                          }}
-                        />
-                      </div>
+                      {/* 무선-다구성이면 부수를 '구성별'로 아래 표에서 입력하므로 이 단일 부수칸은 숨긴다. */}
+                      {!museonMulti && (
+                        <div className={isMuseon ? "col-span-2" : undefined}>
+                          <label className="text-[10px] text-gray-500">부수</label>
+                          <input
+                            type="number" min="0" step="1" placeholder="부"
+                            className="border px-2 py-1.5 text-xs w-full"
+                            value={newOrder.quantity_sheets || ""}
+                            onChange={(e) => {
+                              const q = Number(e.target.value);
+                              // 무선은 생산성을 쓰지 않음(소요시간 수동). 그 외 제책은 생산성으로 소요시간 자동 계산.
+                              const d = isMuseon ? null : calcDurationHours(q, newOrder.productivity);
+                              setNewOrder({ ...newOrder, quantity_sheets: q, ...(d != null ? { duration_hours: d } : {}) });
+                            }}
+                          />
+                        </div>
+                      )}
+                      {/* 무선은 생산성 대신 소요시간을 수동 입력 → 생산성칸 숨김. */}
+                      {!isMuseon && (
+                        <div>
+                          <label className="text-[10px] text-gray-500">생산성 (부/시간)</label>
+                          <input
+                            type="number" min="0" step="1" placeholder="부/시간"
+                            className="border px-2 py-1.5 text-xs w-full"
+                            value={newOrder.productivity || ""}
+                            onChange={(e) => {
+                              const p = Number(e.target.value);
+                              // 생산성 입력 시 부수 ÷ 생산성 = 소요시간 자동 입력
+                              const d = calcDurationHours(newOrder.quantity_sheets, p);
+                              setNewOrder({ ...newOrder, productivity: p, ...(d != null ? { duration_hours: d } : {}) });
+                            }}
+                          />
+                        </div>
+                      )}
                       <div className="col-span-2">
                         <label className="text-[10px] text-gray-500">구분 (배정 대기 분류)</label>
                         <select
@@ -3068,15 +3096,16 @@ export default function ScheduleBoard() {
                     <>
                       {multi ? (
                         <div className="col-span-2">
-                          {/* 윤전·제책은 구분 없이 구성·소요시간만, 매엽은 구성·소요시간·구분 */}
-                          <div className={`grid ${usesQuantity ? "grid-cols-2" : "grid-cols-3"} gap-1 mb-1`}>
+                          {/* 매엽=구성·소요·구분 / 무선=구성·소요·부수(구성별) / 그 외(윤전·제책)=구성·소요 */}
+                          <div className={`grid ${(!usesQuantity || museonMulti) ? "grid-cols-3" : "grid-cols-2"} gap-1 mb-1`}>
                             <span className="text-[10px] text-gray-500">구성</span>
                             <span className="text-[10px] text-gray-500">소요(시간)</span>
                             {!usesQuantity && <span className="text-[10px] text-gray-500">구분</span>}
+                            {museonMulti && <span className="text-[10px] text-gray-500">부수</span>}
                           </div>
                           <div className="space-y-1">
                             {newParts.map((p, pi) => (
-                              <div key={p} className={`grid ${usesQuantity ? "grid-cols-2" : "grid-cols-3"} gap-1 items-center`}>
+                              <div key={p} className={`grid ${(!usesQuantity || museonMulti) ? "grid-cols-3" : "grid-cols-2"} gap-1 items-center`}>
                                 <span className="text-[11px] text-gray-700 truncate" title={p}>{p}</span>
                                 <input
                                   type="number" min="0" step="0.5" placeholder={pi === 0 ? "시간(전체 자동)" : "시간"}
@@ -3103,6 +3132,15 @@ export default function ScheduleBoard() {
                                   >
                                     {PROCESSES.map((proc) => <option key={proc} value={proc}>{proc}</option>)}
                                   </select>
+                                )}
+                                {/* 무선: 구성별 부수 입력 */}
+                                {museonMulti && (
+                                  <input
+                                    type="number" min="0" step="1" placeholder="부"
+                                    className="border px-2 py-1 text-xs w-full min-w-0"
+                                    value={newOrder.partQuantities[p] || ""}
+                                    onChange={(e) => setNewOrder({ ...newOrder, partQuantities: { ...newOrder.partQuantities, [p]: Number(e.target.value) } })}
+                                  />
                                 )}
                               </div>
                             ))}
