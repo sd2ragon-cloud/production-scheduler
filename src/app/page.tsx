@@ -2024,6 +2024,12 @@ export default function ScheduleBoard() {
             </div>
           ) : (
             <div className="flex flex-wrap items-center gap-0.5 mt-1.5">
+              {/* 윤전: 구성 미입력 주문도 배정 대기에서 소요시간이 보이게 표기 */}
+              {isRoll && order.duration_minutes ? (
+                <span className="px-2 py-0.5 border text-[11px] font-medium bg-gray-100 text-gray-600 border-gray-200">
+                  {Math.round((order.duration_minutes / 60) * 10) / 10}h
+                </span>
+              ) : null}
               {processesForParts(parts, order.part_processes, order.special_process).filter(Boolean).map((proc) => (
                 <span key={proc} className={`px-1.5 py-0 text-[10px] font-medium border ${
                   PROCESS_COLORS[proc] || "bg-gray-100 text-gray-600 border-gray-200"
