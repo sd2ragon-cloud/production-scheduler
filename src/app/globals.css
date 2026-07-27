@@ -204,9 +204,9 @@ input[type="number"]::-webkit-outer-spin-button {
   .pf-eta { white-space: nowrap; overflow: hidden; color: #000; font-variant-numeric: tabular-nums; text-align: right; }
   .pf-empty { font-size: 8pt; color: #000; padding: 1mm 1.5mm; }
   /* 윤전 추가 메모: 맨 위 제품 아래에 한 줄(고정 높이)로 출력 — 박스 높이는 기존과 동일하게 유지 */
-  /* 윤전 메모(요청): 기존 가운데 정렬에서 왼쪽으로 반만 이동 → 오른쪽 여백 50%로 좌측 절반 영역에 가운데 정렬(중심이 25% 지점) */
-  .pf-list li.pf-memo-li { list-style: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; word-break: break-all; color: #000; padding: 0.2mm 50% 0.4mm 0; margin: 0 -4mm 0 -3mm; text-align: center; }
-  .pf-memo-block { display: block; text-align: center; padding-right: 50%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* 윤전 메모(요청): 왼쪽 정렬 + 좌측 여백 30px 고정. (li 음수 margin -3mm로 리스트 패딩을 상쇄해 박스 좌단 기준 30px) */
+  .pf-list li.pf-memo-li { list-style: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; word-break: break-all; color: #000; padding: 0.2mm 0 0.4mm 30px; margin: 0 -4mm 0 -3mm; text-align: left; }
+  .pf-memo-block { display: block; text-align: left; padding-left: 30px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   /* 제책 일자별 매트릭스 (날짜 × 설비) */
   .jm { width: 100%; border-collapse: collapse; table-layout: fixed; }
   .jm th, .jm td { border: 0.3mm solid #333; padding: 0.8mm 1mm; vertical-align: top; font-size: 7pt; overflow: hidden; }
