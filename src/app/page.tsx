@@ -2486,7 +2486,7 @@ export default function ScheduleBoard() {
                         <td key={key} className="border border-black p-0 align-middle">
                           <textarea
                             rows={1}
-                            className="w-full border-0 px-1.5 py-0.5 text-[12px] leading-snug text-center resize-y outline-none focus:bg-blue-50/40 disabled:opacity-60"
+                            className="block w-full border-0 px-1.5 py-0.5 text-[12px] leading-snug text-center resize-y outline-none focus:bg-blue-50/40 disabled:opacity-60"
                             value={ex[key] ?? ""}
                             onChange={(e) => setField(key, e.target.value)}
                             disabled={!isAdmin}
