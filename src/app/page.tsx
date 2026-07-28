@@ -196,12 +196,10 @@ export default function ScheduleBoard() {
   // 윤전·제책은 '구분(공정)' 대신 수량을 입력·표기한다. 윤전=수량(부), 제책=부수.
   const usesQuantity = isRoll || isJechae;
   const qtyLabel = isJechae ? "부수" : "수량";
-  // 윤전 제품명 뒤 표기: " / N대분 * 수량". N=그 위치(설비/대기/칸)의 구성(대) 개수, 수량=부수. 윤전만.
-  const rollTag = (count: number, qty: number): string => {
+  // 윤전 제품명 뒤 표기: " * 수량". (요청: '대분' 표기는 빼고 제품명 * 수량만) 윤전만.
+  const rollTag = (qty: number): string => {
     if (!isRoll) return "";
-    let s = count > 0 ? ` / ${count}대분` : "";
-    if (qty > 0) s += ` * ${qty.toLocaleString()}부`;
-    return s;
+    return qty > 0 ? ` * ${qty.toLocaleString()}부` : "";
   };
   const [machines, setMachines] = useState<Machine[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -1968,7 +1966,7 @@ export default function ScheduleBoard() {
       >
         <div>
           <div className="flex items-center justify-between">
-            <p className="font-medium text-xs leading-tight min-w-0 flex-1 break-all">{order.product_name}{rollTag(remainingParts.length, order.quantity_sheets)}</p>
+            <p className="font-medium text-xs leading-tight min-w-0 flex-1 break-all">{order.product_name}{rollTag(order.quantity_sheets)}</p>
             <div className="flex items-center gap-1.5 shrink-0 ml-2">
               {isAdmin && (<>
               <button
@@ -2087,17 +2085,28 @@ export default function ScheduleBoard() {
   // 인쇄용 작업명: "제품명(구성)소요시간" — 스케줄 출력물 기계 박스에서 사용.
   // 윤전은 설비 항목 component_part가 기준(구역 독립). 비었으면 주문 component('1대' 잔재)로 폴백하지 않는다.
   const jobLabel = (e: ScheduleEntry): string => {
-    const comp = e.component_part || (isRoll ? "" : e.component) || "";
-    const base = comp ? `${e.product_name}(${comp})` : e.product_name;
     const hours = e.duration_minutes ? Math.round((e.duration_minutes / 60) * 10) / 10 : "";
+    if (isRoll) {
+      // 윤전은 구성 표기 없이 '제품명 * 수량'(요청).
+      const q = Number(e.quantity_sheets) || 0;
+      const base = q > 0 ? `${e.product_name} * ${q.toLocaleString()}부` : e.product_name;
+      return hours !== "" ? `${base} ${hours}` : base;
+    }
+    const comp = e.component_part || e.component || "";
+    const base = comp ? `${e.product_name}(${comp})` : e.product_name;
     return hours !== "" ? `${base}${hours}` : base;
   };
 
   // 작업순서 출력물 첫 줄: "작업명 (공백) 소요시간" (비고는 다음 줄에 별도 렌더)
   const orderSheetLabel = (e: ScheduleEntry): string => {
-    const comp = e.component_part || (isRoll ? "" : e.component) || "";
-    const name = comp ? `${e.product_name}(${comp})` : e.product_name;
     const hours = e.duration_minutes ? Math.round((e.duration_minutes / 60) * 10) / 10 : "";
+    if (isRoll) {
+      const q = Number(e.quantity_sheets) || 0;
+      const name = q > 0 ? `${e.product_name} * ${q.toLocaleString()}부` : e.product_name;
+      return hours !== "" ? `${name} ${hours}` : name;
+    }
+    const comp = e.component_part || e.component || "";
+    const name = comp ? `${e.product_name}(${comp})` : e.product_name;
     return hours !== "" ? `${name} ${hours}` : name;
   };
 
@@ -2574,8 +2583,10 @@ export default function ScheduleBoard() {
                           </td>
                           <td className="px-1.5 py-0">
                             <div className="flex items-center gap-1 overflow-x-auto jobscroll">
-                            <span className={`font-medium shrink-0 ${isJechae ? "text-[13px] text-black" : "text-[12px]"}`}>{entry.product_name}{rollTag(parseParts(entry.component_part).length, entry.quantity_sheets)}</span>
+                            <span className={`font-medium shrink-0 ${isJechae ? "text-[13px] text-black" : "text-[12px]"}`}>{entry.product_name}{rollTag(entry.quantity_sheets)}</span>
                             {(() => {
+                              // 윤전은 제품명 * 수량만 표기(요청) — 구성 칩/구분 칩을 표시하지 않는다.
+                              if (isRoll) return null;
                               const eparts = parseParts(entry.component_part);
                               if (eparts.length === 0) {
                                 // 구성이 단일(통째 배정)이거나 구성 미입력: 구분(있으면)·구성(있으면)을 칩으로 표시
