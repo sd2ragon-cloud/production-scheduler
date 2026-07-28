@@ -134,8 +134,8 @@ const PROCESS_COLORS: Record<string, string> = {
   "낙정": "bg-rose-100 text-rose-800 border-rose-200",
   "배접": "bg-teal-100 text-teal-800 border-teal-200",
 };
-// 제책 배정 대기 구분(공정 종류). special_process 컬럼을 재활용해 저장한다. (낙정·배접 삭제 — 무선만)
-const JECHAE_CATS = ["무선"] as const;
+// 제책 배정 대기 구분(공정 종류). special_process 컬럼을 재활용해 저장한다.
+const JECHAE_CATS = ["무선", "낙정", "배접"] as const;
 
 // 파트 목록의 구분(공정)을 중복 없이 구한다. 파트별 지정이 없으면 주문 기본 구분(fallback) 사용.
 function processesForParts(parts: string[], partProcessesJson: string, fallback: string): string[] {
@@ -1725,7 +1725,7 @@ export default function ScheduleBoard() {
         setc2(2, i + 1, h, { fill: NAVY, font: { bold: true, size: 10, color: { argb: "FFFFFFFF" } }, align: { vertical: "middle", horizontal: "center" }, border: "white" }));
       ws2.getRow(2).height = 20;
       let r2 = 3;
-      for (const m of machines) {
+      for (const m of machines.filter((m) => isShiftPanelMachine(m.name))) {
         const ex = parseExtraNotes(machineExtras[m.id] ?? m.extra_notes ?? "");
         setc2(r2, 1, m.name, { align: { vertical: "middle", horizontal: "center", wrapText: true }, font: { size: 10, bold: true } });
         EXTRA_DAYS.forEach(([k], i) => setc2(r2, i + 2, ex[k] || "", { align: { vertical: "top", horizontal: "left", wrapText: true }, font: { size: 10 } }));
@@ -2084,6 +2084,10 @@ export default function ScheduleBoard() {
     return { label: arr.join("/"), dim: false };
   };
 
+  // 제책 '설비별 요일 근무체제' 패널·출력·엑셀에서 제외할 설비(요청: 낙정·배접 설비는 표기 안 함).
+  const isShiftPanelMachine = (name: string) => !/낙정|배접/.test(name || "");
+  const jechaeShiftMachines = machines.filter((m) => isShiftPanelMachine(m.name));
+
   // 설비명 칸 너비 = 현재 탭에서 가장 긴 설비명의 실제 픽셀 폭(canvas 측정).
   // 설비명은 좌측 정렬, 칸 오른쪽에 좌측 패딩(px-4=16px)과 동일한 여백을 둔 뒤 메모란이 시작된다.
   const machineNameWidth = useMemo(() => {
@@ -2200,7 +2204,7 @@ export default function ScheduleBoard() {
             </tr>
           </thead>
           <tbody>
-            {data.map(({ machine }) => {
+            {data.filter(({ machine }) => isShiftPanelMachine(machine.name)).map(({ machine }) => {
               const ex = parseExtraNotes(machineExtras[machine.id] ?? machine.extra_notes ?? "");
               return (
                 <tr key={machine.id} className="jml-row-end">
@@ -2436,7 +2440,7 @@ export default function ScheduleBoard() {
         </div>
 
         {/* [제책] 설비별×요일 작업계획 입력 — 화면 맨 위 공통 패널(기존 설비 하단 요일칸을 대체) */}
-        {isJechae && machines.length > 0 && (
+        {isJechae && jechaeShiftMachines.length > 0 && (
           <div className="border border-black bg-white mb-3">
             <div className="px-2 py-1.5 bg-gray-800 text-white text-sm font-bold">설비별 요일 근무체제</div>
             <table className="w-full table-fixed border-collapse">
@@ -2454,7 +2458,7 @@ export default function ScheduleBoard() {
                 </tr>
               </thead>
               <tbody>
-                {machines.map((m) => {
+                {jechaeShiftMachines.map((m) => {
                   const ex = parseExtraNotes(machineExtras[m.id] ?? "");
                   const setField = (key: string, val: string) =>
                     handleMachineExtraChange(m.id, JSON.stringify({ ...ex, [key]: val }));
