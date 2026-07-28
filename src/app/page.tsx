@@ -266,8 +266,6 @@ export default function ScheduleBoard() {
   const [machineMemos, setMachineMemos] = useState<Record<number, string>>({});
   // 설비 블록 하단 기타사항(제책) 자유 입력
   const [machineExtras, setMachineExtras] = useState<Record<number, string>>({});
-  // 기타사항 요일칸 높이(설비별, 7칸 공통). 하단 핸들을 드래그하면 한 번에 전체 변경.
-  const [extraHeights, setExtraHeights] = useState<Record<number, number>>({});
   // 인쇄 출력 종류: 'order'=기계별 작업순서표, 'full'=스케줄 전체 개요(기계계획+1차배정+대기)
   const [printView, setPrintView] = useState<"order" | "full">("order");
   const wantPrint = useRef(false);
@@ -554,23 +552,6 @@ export default function ScheduleBoard() {
         extraTimers.current.delete(machineId);
       }, 600)
     );
-  };
-
-  // 기타사항 칸 높이 조절: 하단 핸들 드래그 → 해당 설비 7칸 높이를 한꺼번에 변경.
-  const startExtraResize = (machineId: number, e: React.PointerEvent) => {
-    e.preventDefault();
-    const startY = e.clientY;
-    const startH = extraHeights[machineId] ?? 64;
-    const onMove = (ev: PointerEvent) => {
-      const h = Math.max(36, startH + (ev.clientY - startY));
-      setExtraHeights((prev) => ({ ...prev, [machineId]: h }));
-    };
-    const onUp = () => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-    };
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
   };
 
   // #번호 클릭 → 표시 색상 토글(없음 ↔ 노랑). DB 저장으로 여러 관리자 공유.
@@ -1722,6 +1703,36 @@ export default function ScheduleBoard() {
         jbox(r, w, { font: { size: 10 }, align: { vertical: "middle", horizontal: "left", shrinkToFit: true } });
         r++;
       }
+      // [제책] 설비별 요일 작업 계획 — 별도 시트(설비 × 월~일). 화면 상단 패널과 동일 데이터.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const ws2: any = wb.addWorksheet("요일 작업계획", { views: [{ showGridLines: false }] });
+      ws2.columns = [{ width: 12 }, ...EXTRA_DAYS.map(() => ({ width: 20 }))];
+      ws2.pageSetup = { orientation: "landscape", paperSize: 9, margins: { left: 0, right: 0, top: 0, bottom: 0, header: 0, footer: 0 }, horizontalCentered: true, printTitlesRow: "1:2" };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const setc2 = (r: number, c: number, value: string | number, opts: any = {}) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const cl: any = ws2.getCell(r, c);
+        cl.value = value;
+        cl.border = opts.border === "white" ? allWhite : allThin;
+        if (opts.fill) cl.fill = { type: "pattern", pattern: "solid", fgColor: { argb: opts.fill } };
+        if (opts.font) cl.font = opts.font;
+        cl.alignment = opts.align ?? { vertical: "middle" };
+      };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const n1: any = ws2.getCell(1, 1); n1.value = `${processLine} 설비별 요일 작업 계획`; n1.font = { bold: true, size: 12 }; n1.alignment = { vertical: "middle" };
+      ws2.getRow(1).height = 22;
+      ["설비", ...EXTRA_DAYS.map(([, l]) => l)].forEach((h, i) =>
+        setc2(2, i + 1, h, { fill: NAVY, font: { bold: true, size: 10, color: { argb: "FFFFFFFF" } }, align: { vertical: "middle", horizontal: "center" }, border: "white" }));
+      ws2.getRow(2).height = 20;
+      let r2 = 3;
+      for (const m of machines) {
+        const ex = parseExtraNotes(machineExtras[m.id] ?? m.extra_notes ?? "");
+        setc2(r2, 1, m.name, { align: { vertical: "middle", horizontal: "center", wrapText: true }, font: { size: 10, bold: true } });
+        EXTRA_DAYS.forEach(([k], i) => setc2(r2, i + 2, ex[k] || "", { align: { vertical: "top", horizontal: "left", wrapText: true }, font: { size: 10 } }));
+        ws2.getRow(r2).height = 44;
+        r2++;
+      }
+
       const buf = await wb.xlsx.writeBuffer();
       const blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
       const url = URL.createObjectURL(blob);
@@ -2176,6 +2187,32 @@ export default function ScheduleBoard() {
     const data = jechaeMachineRows();
     return (
       <div className="jml-print">
+        {/* [제책] 설비별 요일 작업 계획(상단 공통 패널) — 출력물에도 표기 */}
+        <table className="jml" style={{ marginBottom: "3mm" }}>
+          <colgroup>
+            <col style={{ width: "10%" }} />
+            {EXTRA_DAYS.map(([k]) => <col key={k} style={{ width: `${90 / 7}%` }} />)}
+          </colgroup>
+          <thead>
+            <tr>
+              <th className="jml-mc">설비</th>
+              {EXTRA_DAYS.map(([k, l]) => <th key={k}>{l}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {data.map(({ machine }) => {
+              const ex = parseExtraNotes(machineExtras[machine.id] ?? machine.extra_notes ?? "");
+              return (
+                <tr key={machine.id} className="jml-row-end">
+                  <td className="jml-mc">{machine.name}</td>
+                  {EXTRA_DAYS.map(([k]) => (
+                    <td key={k} className="jml-note" style={{ textAlign: "center" }}>{ex[k] || ""}</td>
+                  ))}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
         <table className="jml">
           <colgroup>
             <col style={{ width: "7.4%" }} />
@@ -2397,6 +2434,50 @@ export default function ScheduleBoard() {
             )}
           </div>
         </div>
+
+        {/* [제책] 설비별×요일 작업계획 입력 — 화면 맨 위 공통 패널(기존 설비 하단 요일칸을 대체) */}
+        {isJechae && machines.length > 0 && (
+          <div className="border border-black bg-white mb-3">
+            <div className="px-2 py-1.5 bg-gray-800 text-white text-sm font-bold">설비별 요일 작업 계획</div>
+            <table className="w-full table-fixed border-collapse">
+              <colgroup>
+                <col style={{ width: "96px" }} />
+                {EXTRA_DAYS.map(([k]) => <col key={k} />)}
+              </colgroup>
+              <thead>
+                <tr>
+                  <th className="border border-black bg-gray-800 text-white text-[12px] font-semibold py-1">설비</th>
+                  {EXTRA_DAYS.map(([key, label]) => (
+                    <th key={key} className="border border-black bg-gray-800 text-white text-[12px] font-semibold py-1">{label}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {machines.map((m) => {
+                  const ex = parseExtraNotes(machineExtras[m.id] ?? "");
+                  const setField = (key: string, val: string) =>
+                    handleMachineExtraChange(m.id, JSON.stringify({ ...ex, [key]: val }));
+                  return (
+                    <tr key={m.id}>
+                      <td className="border border-black text-center text-[12px] font-semibold px-1 break-all">{m.name}</td>
+                      {EXTRA_DAYS.map(([key]) => (
+                        <td key={key} className="border border-black p-0 align-top">
+                          <textarea
+                            rows={3}
+                            className="w-full border-0 px-1.5 py-1 text-[12px] leading-snug text-center resize-y outline-none focus:bg-blue-50/40 disabled:opacity-60"
+                            value={ex[key] ?? ""}
+                            onChange={(e) => setField(key, e.target.value)}
+                            disabled={!isAdmin}
+                          />
+                        </td>
+                      ))}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
 
         {machines.map((machine) => {
           const entries = getEntriesForMachine(machine.id);
@@ -2846,40 +2927,7 @@ export default function ScheduleBoard() {
                 </table>
                 </div>
               )}
-              {isJechae && (() => {
-                const ex = parseExtraNotes(machineExtras[machine.id] ?? "");
-                const setField = (key: string, val: string) =>
-                  handleMachineExtraChange(machine.id, JSON.stringify({ ...ex, [key]: val }));
-                const rowH = extraHeights[machine.id] ?? 64;
-                return (
-                  <div className="border-t border-black">
-                    {/* 헤더는 흰 선으로 요일 구분, 본문 구분선은 검정. 7칸 높이는 하단 핸들로 한꺼번에 조절. */}
-                    <div className="grid grid-cols-7">
-                      {EXTRA_DAYS.map(([key, label], idx) => (
-                        <div key={key} className="flex flex-col min-w-0">
-                          <div className={`bg-gray-800 text-white text-center text-[11px] font-semibold py-0.5 ${idx > 0 ? "border-l border-white" : ""}`}>{label}</div>
-                          <textarea
-                            style={{ height: rowH }}
-                            className={`w-full border-0 border-t border-black px-1.5 py-1 text-[12px] leading-snug text-center resize-none outline-none focus:bg-blue-50/40 disabled:opacity-60 ${idx > 0 ? "border-l" : ""}`}
-                            value={ex[key] ?? ""}
-                            onChange={(e) => setField(key, e.target.value)}
-                            disabled={!isAdmin}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                    {isAdmin && (
-                      <div
-                        onPointerDown={(e) => startExtraResize(machine.id, e)}
-                        title="드래그하여 7칸 높이 조절"
-                        className="h-2 bg-gray-200 hover:bg-gray-300 cursor-row-resize flex items-center justify-center select-none touch-none"
-                      >
-                        <div className="w-8 h-0.5 bg-gray-400 rounded" />
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
+              {/* (제책 설비 하단 요일칸은 상단 공통 패널로 이동됨) */}
             </div>
           );
         })}
