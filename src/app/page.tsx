@@ -2084,9 +2084,10 @@ export default function ScheduleBoard() {
     return `${Math.ceil(max)}px`;
   }, [machines]);
 
-  // 인쇄용 작업명: "제품명(구성)소요시간" — 스케줄 출력물 기계 박스에서 사용
+  // 인쇄용 작업명: "제품명(구성)소요시간" — 스케줄 출력물 기계 박스에서 사용.
+  // 윤전은 설비 항목 component_part가 기준(구역 독립). 비었으면 주문 component('1대' 잔재)로 폴백하지 않는다.
   const jobLabel = (e: ScheduleEntry): string => {
-    const comp = e.component_part || e.component || "";
+    const comp = e.component_part || (isRoll ? "" : e.component) || "";
     const base = comp ? `${e.product_name}(${comp})` : e.product_name;
     const hours = e.duration_minutes ? Math.round((e.duration_minutes / 60) * 10) / 10 : "";
     return hours !== "" ? `${base}${hours}` : base;
@@ -2094,7 +2095,7 @@ export default function ScheduleBoard() {
 
   // 작업순서 출력물 첫 줄: "작업명 (공백) 소요시간" (비고는 다음 줄에 별도 렌더)
   const orderSheetLabel = (e: ScheduleEntry): string => {
-    const comp = e.component_part || e.component || "";
+    const comp = e.component_part || (isRoll ? "" : e.component) || "";
     const name = comp ? `${e.product_name}(${comp})` : e.product_name;
     const hours = e.duration_minutes ? Math.round((e.duration_minutes / 60) * 10) / 10 : "";
     return hours !== "" ? `${name} ${hours}` : name;
@@ -2585,7 +2586,8 @@ export default function ScheduleBoard() {
                                         {entry.special_process}
                                       </span>
                                     ) : null}
-                                    {entry.component ? (
+                                    {/* 윤전은 설비 항목의 component_part가 기준(구역 독립). 비었으면 주문 component('1대' 등 잔재)를 표시하지 않는다. */}
+                                    {!isRoll && entry.component ? (
                                       <span
                                         draggable={isAdmin}
                                         onDragStart={(e) => {
