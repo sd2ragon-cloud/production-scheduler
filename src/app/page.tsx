@@ -2211,6 +2211,10 @@ export default function ScheduleBoard() {
             {EXTRA_DAYS.map(([k]) => <col key={k} style={{ width: `${90 / 7}%` }} />)}
           </colgroup>
           <thead>
+            <tr className="jml-title">
+              <td className="jml-title-name" colSpan={4}>설비별 요일 근무체제</td>
+              <td className="jml-title-date" colSpan={4}>출력 {printStamp}</td>
+            </tr>
             <tr>
               <th className="jml-mc">설비</th>
               {EXTRA_DAYS.map(([k, l]) => <th key={k}>{l}</th>)}
@@ -2241,8 +2245,7 @@ export default function ScheduleBoard() {
           </colgroup>
           <thead>
             <tr className="jml-title">
-              <td className="jml-title-name" colSpan={5}>{processLine} 작업 계획</td>
-              <td className="jml-title-date">출력 {printStamp}</td>
+              <td className="jml-title-name" colSpan={6}>{processLine} 작업 계획</td>
             </tr>
             <tr>
               <th className="jml-mc">설비명</th>
