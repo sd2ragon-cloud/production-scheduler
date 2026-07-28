@@ -186,6 +186,9 @@ function FitEndTime({ text, className }: { text: string; className?: string }) {
 
 export default function ScheduleBoard() {
   const { processLine } = useProcess();
+  // 현재 선택된 라인을 항상 가리키는 ref(비동기 fetch 완료 시 '지금도 같은 라인인지' 판별용).
+  const processLineRef = useRef(processLine);
+  processLineRef.current = processLine;
   const { role } = useAuth();
   // 담당 라인만 편집 가능. 현재 보고 있는 공정 라인을 편집할 권한이 없으면 보기 전용(편집 UI 숨김).
   const isAdmin = roleCanEditLine(role, processLine);
@@ -207,6 +210,9 @@ export default function ScheduleBoard() {
   const [allOrders, setAllOrders] = useState<Order[]>([]);
   const [schedule, setSchedule] = useState<ScheduleEntry[]>([]);
   const [buckets, setBuckets] = useState<Bucket[]>([]);
+  // 현재 화면에 로드된 데이터가 어느 라인 것인지. processLine과 다르면(탭 전환 직후) 아직 이전 라인 데이터이므로
+  // 설비·물량을 렌더하지 않고 로딩 표시 → 탭 전환 시 엉뚱한 라인 데이터가 잠깐 보이는 문제 방지.
+  const [dataLine, setDataLine] = useState("");
   const [breaks, setBreaks] = useState<Break[]>([]);
   const [showBreaks, setShowBreaks] = useState(false);
   // [추가] 설비별 진행현황 요약(미리보기) 모달 표시 여부 — 기존 로직과 무관한 읽기 전용 화면.
@@ -271,7 +277,8 @@ export default function ScheduleBoard() {
   const wantPrint = useRef(false);
 
   const fetchAll = useCallback(async () => {
-    const qs = `?process_line=${encodeURIComponent(processLine)}`;
+    const line = processLine; // 이 fetch가 담당하는 라인
+    const qs = `?process_line=${encodeURIComponent(line)}`;
     // 식사시간(breaks)은 전 공정 공통이라 process_line 필터 없이 받는다.
     const [machRes, orderRes, schedRes, bucketRes, breakRes, dtRes, noteRes] = await Promise.all([
       fetch(`/api/machines${qs}`), fetch(`/api/orders${qs}`), fetch(`/api/schedule${qs}`), fetch(`/api/buckets${qs}`), fetch(`/api/breaks`), fetch(`/api/downtimes`), fetch(`/api/worknote${qs}`),
@@ -283,6 +290,8 @@ export default function ScheduleBoard() {
     const breakData = await breakRes.json();
     const dtData = await dtRes.json().catch(() => []);
     const noteData = await noteRes.json().catch(() => ({ note: "" }));
+    // 응답이 도착했을 때 사용자가 이미 다른 탭으로 옮겼다면(느린/순서 뒤바뀐 응답) 이 데이터는 폐기한다.
+    if (processLineRef.current !== line) return;
     setBreaks(Array.isArray(breakData) ? breakData : []);
     setDowntimes(Array.isArray(dtData) ? dtData : []);
     setWorkNote(typeof noteData?.note === "string" ? noteData.note : "");
@@ -333,9 +342,13 @@ export default function ScheduleBoard() {
       }
       return next;
     });
+    setDataLine(line); // 이 라인 데이터 로드 완료 → 렌더 허용
   }, [processLine]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  // 로드된 데이터가 현재 탭(라인)과 일치할 때만 설비·물량을 렌더한다(탭 전환 직후 이전 라인 데이터 노출 방지).
+  const linesReady = dataLine === processLine;
 
   // 드래그 중 화면 위/아래 가장자리에 커서가 가면 설비 목록을 자동 스크롤(맨 아래→맨 위 설비로도 옮길 수 있게).
   const listScrollRef = useRef<HTMLDivElement>(null);
@@ -2440,7 +2453,7 @@ export default function ScheduleBoard() {
         </div>
 
         {/* [제책] 설비별×요일 작업계획 입력 — 화면 맨 위 공통 패널(기존 설비 하단 요일칸을 대체) */}
-        {isJechae && jechaeShiftMachines.length > 0 && (
+        {isJechae && linesReady && jechaeShiftMachines.length > 0 && (
           <div className="border border-black bg-white mb-3">
             <div className="px-2 py-1.5 bg-gray-800 text-white text-sm font-bold">설비별 요일 근무체제</div>
             <table className="w-full table-fixed border-collapse">
@@ -2484,7 +2497,10 @@ export default function ScheduleBoard() {
           </div>
         )}
 
-        {machines.map((machine) => {
+        {!linesReady && (
+          <div className="text-center text-gray-400 text-sm py-16">불러오는 중…</div>
+        )}
+        {linesReady && machines.map((machine) => {
           const entries = getEntriesForMachine(machine.id);
           const isTarget = dropTarget === machine.id;
           const shiftToday = machineShiftToday(machine); // 오늘(기준일) 근무체제 — 설비명 옆 메모란 우측에 표기
@@ -2967,7 +2983,9 @@ export default function ScheduleBoard() {
         </div>
 
         <div className="divide-y divide-black">
-          {buckets.length === 0 ? (
+          {!linesReady ? (
+            <div className="text-center text-gray-400 text-sm py-8">불러오는 중…</div>
+          ) : buckets.length === 0 ? (
             <div className="text-center text-gray-400 text-sm py-8">
               위 + 칸 버튼으로 1차 배정 칸을 추가하세요
             </div>
@@ -3268,7 +3286,9 @@ export default function ScheduleBoard() {
         )}
 
         <div ref={waitListRef} className="flex-1 overflow-y-auto p-2 space-y-1">
-          {waitingOrders.length === 0 ? (
+          {!linesReady ? (
+            <div className="text-center text-gray-400 text-sm py-8">불러오는 중…</div>
+          ) : waitingOrders.length === 0 ? (
             <div className="text-center text-gray-400 text-sm py-8">
               대기 중인 주문이 없습니다
             </div>
