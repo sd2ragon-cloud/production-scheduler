@@ -1698,13 +1698,15 @@ export default function ScheduleBoard() {
       const tp: any = ws.getCell(r, 1); tp.value = `${processLine} 작업 계획`; tp.font = { bold: true, size: 12 }; tp.alignment = { vertical: "middle" };
       ws.getRow(r).height = 22; r++;
       const schedHdrRow = r;
+      // 헤더 테두리: 안쪽 구분선 흰색, 바깥만 검정.
+      const hdrBd = (first: boolean, last: boolean) => ({ top: thin, bottom: thin, left: first ? thin : wthin, right: last ? thin : wthin });
       // 헤더: 설비명(A:B) no.(C) 작업명(D:M) 시간(N) 예상완료(O:Q) 비고(R:AD)
-      cell(r, 1, r, 2, "설비명", { fill: NAVY, font: whiteBold, align: ctr });
-      cell(r, 3, r, 3, "no.", { fill: NAVY, font: whiteBold, align: ctr });
-      cell(r, 4, r, 13, "작업명", { fill: NAVY, font: whiteBold, align: ctr });
-      cell(r, 14, r, 14, "시간", { fill: NAVY, font: whiteBold, align: ctr });
-      cell(r, 15, r, 17, "예상완료", { fill: NAVY, font: whiteBold, align: ctr });
-      cell(r, 18, r, 30, "비고", { fill: NAVY, font: whiteBold, align: ctr });
+      cell(r, 1, r, 2, "설비명", { fill: NAVY, font: whiteBold, align: ctr, borderObj: hdrBd(true, false) });
+      cell(r, 3, r, 3, "no.", { fill: NAVY, font: whiteBold, align: ctr, borderObj: hdrBd(false, false) });
+      cell(r, 4, r, 13, "작업명", { fill: NAVY, font: whiteBold, align: ctr, borderObj: hdrBd(false, false) });
+      cell(r, 14, r, 14, "시간", { fill: NAVY, font: whiteBold, align: ctr, borderObj: hdrBd(false, false) });
+      cell(r, 15, r, 17, "예상완료", { fill: NAVY, font: whiteBold, align: ctr, borderObj: hdrBd(false, false) });
+      cell(r, 18, r, 30, "비고", { fill: NAVY, font: whiteBold, align: ctr, borderObj: hdrBd(false, true) });
       ws.getRow(r).height = 20; r++;
       // 설비별 블록: 배정 개수만큼 줄, 없으면 빈 줄 1개(설비명만).
       for (const { machine, rows } of jechaeMachineRows()) {
@@ -1713,13 +1715,14 @@ export default function ScheduleBoard() {
         const shiftLabel = machineShiftToday(machine).label; // 오늘 근무체제(설비명 아래 표기)
         rr.forEach((row, i) => {
           const mf = row ? markArgb(row.mark) : undefined; // 표시색(있으면 제품 행 배경 채움)
-          // 작업명: 설비 블록 내부의 행간 가로선 제거(첫 행만 top, 마지막 행만 bottom, 좌우는 유지).
-          const jobBd = { left: thin, right: thin, ...(i === 0 ? { top: thin } : {}), ...(i === rr.length - 1 ? { bottom: thin } : {}) };
-          cell(r, 3, r, 3, row ? i + 1 : "", { font: { size: 10 }, align: { vertical: "middle", horizontal: "center" }, fill: mf });
-          cell(r, 4, r, 13, row ? row.job : "", { font: { size: 10 }, align: { vertical: "middle", horizontal: "left", shrinkToFit: true }, fill: mf, borderObj: jobBd });
-          cell(r, 14, r, 14, row ? row.hours : "", { font: { size: 10 }, align: { vertical: "middle", horizontal: "center" }, fill: mf });
-          cell(r, 15, r, 17, row ? row.eta : "", { font: { size: 10 }, align: { vertical: "middle", horizontal: "center" }, fill: mf });
-          cell(r, 18, r, 30, row ? row.note : "", { font: { size: 10 }, align: { vertical: "middle", horizontal: "left", wrapText: true }, fill: mf });
+          // 데이터 열(no.·작업명·시간·예상완료·비고): 설비 블록 내부의 행간 가로선 제거
+          // (첫 행만 top, 마지막 행만 bottom, 좌우는 유지 → 설비별로 하나의 상자).
+          const rowBd = { left: thin, right: thin, ...(i === 0 ? { top: thin } : {}), ...(i === rr.length - 1 ? { bottom: thin } : {}) };
+          cell(r, 3, r, 3, row ? i + 1 : "", { font: { size: 10 }, align: { vertical: "middle", horizontal: "center" }, fill: mf, borderObj: rowBd });
+          cell(r, 4, r, 13, row ? row.job : "", { font: { size: 10 }, align: { vertical: "middle", horizontal: "left", shrinkToFit: true }, fill: mf, borderObj: rowBd });
+          cell(r, 14, r, 14, row ? row.hours : "", { font: { size: 10 }, align: { vertical: "middle", horizontal: "center" }, fill: mf, borderObj: rowBd });
+          cell(r, 15, r, 17, row ? row.eta : "", { font: { size: 10 }, align: { vertical: "middle", horizontal: "center" }, fill: mf, borderObj: rowBd });
+          cell(r, 18, r, 30, row ? row.note : "", { font: { size: 10 }, align: { vertical: "middle", horizontal: "left", wrapText: true }, fill: mf, borderObj: rowBd });
           r++;
         });
         // 설비명 세로 병합(A:B): 이름 + 오늘 근무체제
