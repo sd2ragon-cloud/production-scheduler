@@ -1630,13 +1630,14 @@ export default function ScheduleBoard() {
       const wb: any = new ExcelJS.Workbook();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const ws: any = wb.addWorksheet(processLine, { views: [{ showGridLines: false }] });
+      // 8열: 상단 근무체제(설비+월~일)와 하단 작업계획(설비명·no.·작업명[C:D]·시간·예상완료·비고[G:H])을 한 시트에.
       ws.columns = [
-        { width: 10.6 }, { width: 5.6 }, { width: 50.6 }, { width: 7.1 }, { width: 15.6 }, { width: 54.1 },
+        { width: 11 }, { width: 12 }, { width: 12 }, { width: 12 }, { width: 12 }, { width: 12 }, { width: 12 }, { width: 12 },
       ];
       ws.pageSetup = {
         orientation: "landscape", paperSize: 9,
         margins: { left: 0, right: 0, top: 0, bottom: 0, header: 0, footer: 0 },
-        horizontalCentered: true, printTitlesRow: "1:2",
+        horizontalCentered: true,
       };
       const NAVY = "FF002060";
       const thin = { style: "thin", color: { argb: "FF000000" } };
@@ -1656,18 +1657,47 @@ export default function ScheduleBoard() {
         cl.alignment = opts.align ?? { vertical: "middle" };
         return cl;
       };
-      // 1행: 제목 + 출력시각 (테두리 없음)
+      // 병합으로 가려지는 칸에도 테두리/배경을 칠해 박스가 온전히 보이게 한다.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const t1: any = ws.getCell(1, 1); t1.value = `${processLine} 작업 계획`; t1.font = { bold: true, size: 12 }; t1.alignment = { vertical: "middle" };
+      const deco = (rr: number, cc: number, borderObj: any, fill?: string) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const cl: any = ws.getCell(rr, cc);
+        cl.border = borderObj;
+        if (fill) cl.fill = { type: "pattern", pattern: "solid", fgColor: { argb: fill } };
+      };
+      const navyHdr = { fill: NAVY, font: { bold: true, size: 10, color: { argb: "FFFFFFFF" } }, align: { vertical: "middle", horizontal: "center" }, border: "white" };
+
+      let r = 1;
+      // ── 상단: 설비별 요일 근무체제 (출력물과 동일하게 맨 위) + 출력 일시 ──
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const t2: any = ws.getCell(1, 6); t2.value = `출력 ${printStamp}`; t2.font = { size: 10 }; t2.alignment = { vertical: "middle", horizontal: "right" };
-      ws.getRow(1).height = 22;
-      // 2행: 헤더 (남색 배경 흰 글씨)
-      ["설비명", "no.", "작업명", "시간", "예상완료", "비고"].forEach((h, i) =>
-        setc(2, i + 1, h, { fill: NAVY, font: { bold: true, size: 10, color: { argb: "FFFFFFFF" } }, align: { vertical: "middle", horizontal: "center" }, border: "white" }));
-      ws.getRow(2).height = 20;
+      const st1: any = ws.getCell(r, 1); st1.value = "설비별 요일 근무체제"; st1.font = { bold: true, size: 12 }; st1.alignment = { vertical: "middle" };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const st2: any = ws.getCell(r, 8); st2.value = `출력 ${printStamp}`; st2.font = { size: 10 }; st2.alignment = { vertical: "middle", horizontal: "right" };
+      ws.getRow(r).height = 22; r++;
+      ["설비", ...EXTRA_DAYS.map(([, l]) => l)].forEach((h, i) =>
+        setc(r, i + 1, h, navyHdr));
+      ws.getRow(r).height = 20; r++;
+      for (const sm of machines.filter((mm) => isShiftPanelMachine(mm.name))) {
+        const ex = parseExtraNotes(machineExtras[sm.id] ?? sm.extra_notes ?? "");
+        setc(r, 1, sm.name, { align: { vertical: "middle", horizontal: "center", wrapText: true }, font: { size: 10, bold: true } });
+        EXTRA_DAYS.forEach(([k], i) => setc(r, i + 2, ex[k] || "", { align: { vertical: "middle", horizontal: "center", wrapText: true }, font: { size: 10 } }));
+        ws.getRow(r).height = 20; r++;
+      }
+      r++; // 빈 줄 간격
+
+      // ── 하단: 제책 작업 계획 (작업명 C:D, 비고 G:H 병합) ──
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const sh1: any = ws.getCell(r, 1); sh1.value = `${processLine} 작업 계획`; sh1.font = { bold: true, size: 12 }; sh1.alignment = { vertical: "middle" };
+      ws.getRow(r).height = 22; r++;
+      const schedHdrRow = r;
+      setc(r, 1, "설비명", navyHdr);
+      setc(r, 2, "no.", navyHdr);
+      setc(r, 3, "작업명", navyHdr); deco(r, 4, allWhite, NAVY); ws.mergeCells(r, 3, r, 4);
+      setc(r, 5, "시간", navyHdr);
+      setc(r, 6, "예상완료", navyHdr);
+      setc(r, 7, "비고", navyHdr); deco(r, 8, allWhite, NAVY); ws.mergeCells(r, 7, r, 8);
+      ws.getRow(r).height = 20; r++;
       // 설비별 블록: 배정 개수만큼 줄, 없으면 빈 줄 1개(설비명만).
-      let r = 3;
       for (const { machine, rows } of jechaeMachineRows()) {
         const rr: (JmRow | null)[] = rows.length ? rows : [null];
         const start = r;
@@ -1681,20 +1711,20 @@ export default function ScheduleBoard() {
           const mf = row ? markArgb(row.mark) : undefined; // 표시색(있으면 제품 행 배경 채움)
           setc(r, 1, isFirst ? `${machine.name}${shiftLabel ? `\n[${shiftLabel}]` : ""}` : "", { align: { vertical: "middle", horizontal: "center", wrapText: true }, font: { size: 10 }, borderObj: mcBd });
           setc(r, 2, row ? i + 1 : "", { align: { vertical: "middle", horizontal: "center" }, font: { size: 10 }, borderObj: bd, fill: mf });
-          setc(r, 3, row ? row.job : "", { align: { vertical: "middle", horizontal: "left", shrinkToFit: true }, font: { size: 10 }, borderObj: bd, fill: mf });
-          setc(r, 4, row ? row.hours : "", { align: { vertical: "middle", horizontal: "center" }, font: { size: 10 }, borderObj: bd, fill: mf });
-          setc(r, 5, row ? row.eta : "", { align: { vertical: "middle", horizontal: "center" }, font: { size: 10 }, borderObj: bd, fill: mf });
-          setc(r, 6, row ? row.note : "", { align: { vertical: "middle", horizontal: "left", wrapText: true }, font: { size: 10 }, borderObj: bd, fill: mf });
+          setc(r, 3, row ? row.job : "", { align: { vertical: "middle", horizontal: "left", wrapText: true }, font: { size: 10 }, borderObj: bd, fill: mf }); deco(r, 4, bd, mf); ws.mergeCells(r, 3, r, 4);
+          setc(r, 5, row ? row.hours : "", { align: { vertical: "middle", horizontal: "center" }, font: { size: 10 }, borderObj: bd, fill: mf });
+          setc(r, 6, row ? row.eta : "", { align: { vertical: "middle", horizontal: "center" }, font: { size: 10 }, borderObj: bd, fill: mf });
+          setc(r, 7, row ? row.note : "", { align: { vertical: "middle", horizontal: "left", wrapText: true }, font: { size: 10 }, borderObj: bd, fill: mf }); deco(r, 8, bd, mf); ws.mergeCells(r, 7, r, 8);
           // 행 높이 자동: 비고가 여러 줄이면 그만큼 늘어난다(고정하지 않음).
           r++;
         });
         if (r - 1 > start) ws.mergeCells(start, 1, r - 1, 1); // 설비명 세로 병합
       }
-      // 배정 대기 (내용 길면 다음 장으로 이어짐 — 상단 제목·헤더는 반복). 6열 전체 병합 한 줄씩.
+      // 배정 대기 (내용 길면 다음 장으로 이어짐 — 상단 제목·헤더는 반복). 8열 전체 병합 한 줄씩.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const jbox = (r1: number, value: string, opts: any = {}) => {
-        ws.mergeCells(r1, 1, r1, 6);
-        for (let cc = 1; cc <= 6; cc++) {
+        ws.mergeCells(r1, 1, r1, 8);
+        for (let cc = 1; cc <= 8; cc++) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const cl: any = ws.getCell(r1, cc);
           cl.border = allThin;
@@ -1706,7 +1736,7 @@ export default function ScheduleBoard() {
         m.alignment = opts.align ?? { vertical: "middle", horizontal: "left" };
       };
       // 페이지 브레이크로 새 페이지 상단에서 시작 → 헤드글이 항상 제품명 위에 보인다.
-      if (r > 2) ws.getRow(r).addPageBreak();
+      if (r > schedHdrRow + 1) ws.getRow(r).addPageBreak();
       r++; // 간격
       const jwaits = waitingOrders.map((o) => waitLabel(o));
       const jwaitMin = locationMinutes(waitingOrders, undefined);
@@ -1716,35 +1746,8 @@ export default function ScheduleBoard() {
         jbox(r, w, { font: { size: 10 }, align: { vertical: "middle", horizontal: "left", shrinkToFit: true } });
         r++;
       }
-      // [제책] 설비별 요일 근무체제 — 별도 시트(설비 × 월~일). 화면 상단 패널과 동일 데이터.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const ws2: any = wb.addWorksheet("요일 근무체제", { views: [{ showGridLines: false }] });
-      ws2.columns = [{ width: 12 }, ...EXTRA_DAYS.map(() => ({ width: 20 }))];
-      ws2.pageSetup = { orientation: "landscape", paperSize: 9, margins: { left: 0, right: 0, top: 0, bottom: 0, header: 0, footer: 0 }, horizontalCentered: true, printTitlesRow: "1:2" };
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const setc2 = (r: number, c: number, value: string | number, opts: any = {}) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const cl: any = ws2.getCell(r, c);
-        cl.value = value;
-        cl.border = opts.border === "white" ? allWhite : allThin;
-        if (opts.fill) cl.fill = { type: "pattern", pattern: "solid", fgColor: { argb: opts.fill } };
-        if (opts.font) cl.font = opts.font;
-        cl.alignment = opts.align ?? { vertical: "middle" };
-      };
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const n1: any = ws2.getCell(1, 1); n1.value = `${processLine} 설비별 요일 근무체제`; n1.font = { bold: true, size: 12 }; n1.alignment = { vertical: "middle" };
-      ws2.getRow(1).height = 22;
-      ["설비", ...EXTRA_DAYS.map(([, l]) => l)].forEach((h, i) =>
-        setc2(2, i + 1, h, { fill: NAVY, font: { bold: true, size: 10, color: { argb: "FFFFFFFF" } }, align: { vertical: "middle", horizontal: "center" }, border: "white" }));
-      ws2.getRow(2).height = 20;
-      let r2 = 3;
-      for (const m of machines.filter((m) => isShiftPanelMachine(m.name))) {
-        const ex = parseExtraNotes(machineExtras[m.id] ?? m.extra_notes ?? "");
-        setc2(r2, 1, m.name, { align: { vertical: "middle", horizontal: "center", wrapText: true }, font: { size: 10, bold: true } });
-        EXTRA_DAYS.forEach(([k], i) => setc2(r2, i + 2, ex[k] || "", { align: { vertical: "top", horizontal: "left", wrapText: true }, font: { size: 10 } }));
-        ws2.getRow(r2).height = 44;
-        r2++;
-      }
+      // 스케줄 헤더가 페이지마다 반복되게(근무체제는 상단 1회만).
+      ws.pageSetup.printTitlesRow = `${schedHdrRow}:${schedHdrRow}`;
 
       const buf = await wb.xlsx.writeBuffer();
       const blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
