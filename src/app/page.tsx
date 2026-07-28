@@ -134,8 +134,8 @@ const PROCESS_COLORS: Record<string, string> = {
   "낙정": "bg-rose-100 text-rose-800 border-rose-200",
   "배접": "bg-teal-100 text-teal-800 border-teal-200",
 };
-// 제책 배정 대기 구분(공정 종류). special_process 컬럼을 재활용해 저장한다.
-const JECHAE_CATS = ["무선", "낙정", "배접"] as const;
+// 제책 배정 대기 구분(공정 종류). special_process 컬럼을 재활용해 저장한다. (낙정·배접 삭제 — 무선만)
+const JECHAE_CATS = ["무선"] as const;
 
 // 파트 목록의 구분(공정)을 중복 없이 구한다. 파트별 지정이 없으면 주문 기본 구분(fallback) 사용.
 function processesForParts(parts: string[], partProcessesJson: string, fallback: string): string[] {
@@ -1703,9 +1703,9 @@ export default function ScheduleBoard() {
         jbox(r, w, { font: { size: 10 }, align: { vertical: "middle", horizontal: "left", shrinkToFit: true } });
         r++;
       }
-      // [제책] 설비별 요일 작업 계획 — 별도 시트(설비 × 월~일). 화면 상단 패널과 동일 데이터.
+      // [제책] 설비별 요일 근무체제 — 별도 시트(설비 × 월~일). 화면 상단 패널과 동일 데이터.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const ws2: any = wb.addWorksheet("요일 작업계획", { views: [{ showGridLines: false }] });
+      const ws2: any = wb.addWorksheet("요일 근무체제", { views: [{ showGridLines: false }] });
       ws2.columns = [{ width: 12 }, ...EXTRA_DAYS.map(() => ({ width: 20 }))];
       ws2.pageSetup = { orientation: "landscape", paperSize: 9, margins: { left: 0, right: 0, top: 0, bottom: 0, header: 0, footer: 0 }, horizontalCentered: true, printTitlesRow: "1:2" };
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1719,7 +1719,7 @@ export default function ScheduleBoard() {
         cl.alignment = opts.align ?? { vertical: "middle" };
       };
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const n1: any = ws2.getCell(1, 1); n1.value = `${processLine} 설비별 요일 작업 계획`; n1.font = { bold: true, size: 12 }; n1.alignment = { vertical: "middle" };
+      const n1: any = ws2.getCell(1, 1); n1.value = `${processLine} 설비별 요일 근무체제`; n1.font = { bold: true, size: 12 }; n1.alignment = { vertical: "middle" };
       ws2.getRow(1).height = 22;
       ["설비", ...EXTRA_DAYS.map(([, l]) => l)].forEach((h, i) =>
         setc2(2, i + 1, h, { fill: NAVY, font: { bold: true, size: 10, color: { argb: "FFFFFFFF" } }, align: { vertical: "middle", horizontal: "center" }, border: "white" }));
@@ -2438,7 +2438,7 @@ export default function ScheduleBoard() {
         {/* [제책] 설비별×요일 작업계획 입력 — 화면 맨 위 공통 패널(기존 설비 하단 요일칸을 대체) */}
         {isJechae && machines.length > 0 && (
           <div className="border border-black bg-white mb-3">
-            <div className="px-2 py-1.5 bg-gray-800 text-white text-sm font-bold">설비별 요일 작업 계획</div>
+            <div className="px-2 py-1.5 bg-gray-800 text-white text-sm font-bold">설비별 요일 근무체제</div>
             <table className="w-full table-fixed border-collapse">
               <colgroup>
                 <col style={{ width: "96px" }} />
@@ -2446,9 +2446,10 @@ export default function ScheduleBoard() {
               </colgroup>
               <thead>
                 <tr>
-                  <th className="border border-black bg-gray-800 text-white text-[12px] font-semibold py-1">설비</th>
+                  {/* 헤더는 흰색 구분선으로 설비·요일 칸을 나눈다(어두운 배경에서 구분 잘 되게) */}
+                  <th className="border border-white bg-gray-800 text-white text-[12px] font-semibold py-1">설비</th>
                   {EXTRA_DAYS.map(([key, label]) => (
-                    <th key={key} className="border border-black bg-gray-800 text-white text-[12px] font-semibold py-1">{label}</th>
+                    <th key={key} className="border border-white bg-gray-800 text-white text-[12px] font-semibold py-1">{label}</th>
                   ))}
                 </tr>
               </thead>
@@ -2461,10 +2462,10 @@ export default function ScheduleBoard() {
                     <tr key={m.id}>
                       <td className="border border-black text-center text-[12px] font-semibold px-1 break-all">{m.name}</td>
                       {EXTRA_DAYS.map(([key]) => (
-                        <td key={key} className="border border-black p-0 align-top">
+                        <td key={key} className="border border-black p-0 align-middle">
                           <textarea
-                            rows={3}
-                            className="w-full border-0 px-1.5 py-1 text-[12px] leading-snug text-center resize-y outline-none focus:bg-blue-50/40 disabled:opacity-60"
+                            rows={1}
+                            className="w-full border-0 px-1.5 py-0.5 text-[12px] leading-snug text-center resize-y outline-none focus:bg-blue-50/40 disabled:opacity-60"
                             value={ex[key] ?? ""}
                             onChange={(e) => setField(key, e.target.value)}
                             disabled={!isAdmin}
