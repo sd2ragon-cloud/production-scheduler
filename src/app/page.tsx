@@ -1677,6 +1677,7 @@ export default function ScheduleBoard() {
       for (const { machine, rows } of jechaeMachineRows()) {
         const rr: (JmRow | null)[] = rows.length ? rows : [null];
         const start = r;
+        const shiftLabel = machineShiftToday(machine).label; // 오늘 근무체제(설비명 아래 표기)
         rr.forEach((row, i) => {
           // 세로선(left/right)은 항상. 가로선은 설비 첫 줄 위·마지막 줄 아래에만(제품끼리는 선 없음).
           const isFirst = i === 0, isLast = i === rr.length - 1;
@@ -1684,7 +1685,7 @@ export default function ScheduleBoard() {
           // 설비명(col1)은 세로 병합되며, 병합 후엔 master(첫 줄) 테두리만 유효 → master에 전체 박스.
           const mcBd = isFirst ? { left: thin, right: thin, top: thin, bottom: thin } : { left: thin, right: thin };
           const mf = row ? markArgb(row.mark) : undefined; // 표시색(있으면 제품 행 배경 채움)
-          setc(r, 1, isFirst ? machine.name : "", { align: { vertical: "middle", horizontal: "center" }, font: { size: 10 }, borderObj: mcBd });
+          setc(r, 1, isFirst ? `${machine.name}${shiftLabel ? `\n[${shiftLabel}]` : ""}` : "", { align: { vertical: "middle", horizontal: "center", wrapText: true }, font: { size: 10 }, borderObj: mcBd });
           setc(r, 2, row ? i + 1 : "", { align: { vertical: "middle", horizontal: "center" }, font: { size: 10 }, borderObj: bd, fill: mf });
           setc(r, 3, row ? row.job : "", { align: { vertical: "middle", horizontal: "left", shrinkToFit: true }, font: { size: 10 }, borderObj: bd, fill: mf });
           setc(r, 4, row ? row.hours : "", { align: { vertical: "middle", horizontal: "center" }, font: { size: 10 }, borderObj: bd, fill: mf });
@@ -1810,13 +1811,14 @@ export default function ScheduleBoard() {
         const entries = getEntriesForMachine(m.id);
         const total = entries.reduce((s, e) => s + (e.duration_minutes || 0), 0);
         const memo = (machineMemos[m.id] ?? m.memo ?? "").trim();
-        return { m, entries, total, memo };
+        const shift = machineShiftToday(m).label; // 오늘 근무체제
+        return { m, entries, total, memo, shift };
       });
       sides.forEach((m, si) => {
         const base = si === 0 ? 1 : 6;
         const md = meta[si];
         if (!md) { box(r, base, r, base + 3, "", {}); return; }
-        box(r, base, r, base + 2, `${md.m.name}${md.memo ? `   ${md.memo}` : ""}`,
+        box(r, base, r, base + 2, `${md.m.name}${md.shift ? `  [${md.shift}]` : ""}${md.memo ? `   ${md.memo}` : ""}`,
           { fill: hdrFill, font: hdrFont(10), align: { vertical: "middle", horizontal: "left" } });
         cset(r, base + 3, fmtH(md.total), { fill: hdrFill, font: hdrFont(9), align: { vertical: "middle", horizontal: "right" } });
       });
@@ -2255,11 +2257,12 @@ export default function ScheduleBoard() {
             const memo = (machineMemos[m.id] ?? m.memo ?? "").trim();
             // 윤전 전용: 헤더 메모(memo)와 별개로 '맨 위 제품 아래'에 추가되는 메모(extra_notes 재사용)
             const rollMemo = isRoll ? (machineExtras[m.id] ?? m.extra_notes ?? "").trim() : "";
+            const shift = machineShiftToday(m); // 오늘(기준일) 근무체제 — 출력물 설비명 옆에 표기
             return (
               <div className="pf-mbox" key={m.id}>
                 <div className="pf-mname">
-                  {/* 헤더 메모(설비명 우측)는 매엽·윤전 공통 유지 */}
-                  <span className="pf-mname-l">{m.name}{overflowCount > 0 ? <span className="pf-more"> 외 {overflowCount}건</span> : null}{memo ? <span className="pf-memo-inline"> {memo}</span> : null}</span>
+                  {/* 헤더 메모(설비명 우측)는 매엽·윤전 공통 유지 + 오늘 근무체제 표기 */}
+                  <span className="pf-mname-l">{m.name}{shift.label ? <span className="pf-shift"> [{shift.label}]</span> : null}{overflowCount > 0 ? <span className="pf-more"> 외 {overflowCount}건</span> : null}{memo ? <span className="pf-memo-inline"> {memo}</span> : null}</span>
                   <span className="pf-mtime">{fmtH(total)}</span>
                 </div>
                 {entries.length === 0 ? (

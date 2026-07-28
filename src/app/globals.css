@@ -192,6 +192,8 @@ input[type="number"]::-webkit-outer-spin-button {
   .pf-more { font-weight: normal; font-size: 7pt; }
   /* 설비 메모(헤더 메모란 입력값) — 설비명 옆에 작게 표기 */
   .pf-memo-inline { font-weight: normal; font-size: 7.5pt; color: #fff; }
+  /* 오늘 근무체제 — 설비명 옆에 작게(흰색) 표기 */
+  .pf-shift { font-weight: normal; font-size: 7.5pt; color: #fff; }
   .pf-list { margin: 0; padding: 1mm 4mm 1mm 3mm; overflow: hidden; }
   .pf-list li { font-size: 7pt; line-height: 1.25; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   /* 배정 내역: 번호 · 제품명(넓게) · 비고 · 완료시간 (각 칸 넘치면 JS가 폰트 유동 축소) */
