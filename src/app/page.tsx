@@ -2454,8 +2454,9 @@ export default function ScheduleBoard() {
 
         {/* [제책] 설비별×요일 작업계획 입력 — 화면 맨 위 공통 패널(기존 설비 하단 요일칸을 대체) */}
         {isJechae && linesReady && jechaeShiftMachines.length > 0 && (
-          <div className="border border-black bg-white mb-3">
-            <div className="px-2 py-1.5 bg-gray-800 text-white text-sm font-bold">설비별 요일 근무체제</div>
+          <div className="bg-white mb-3">
+            {/* 외곽 테두리는 표(1px)로만 그린다. 제목줄은 표와 같은 굵기의 좌/우/상 테두리만(이중선 방지). */}
+            <div className="px-2 py-1.5 bg-gray-800 text-white text-sm font-bold border-x border-t border-black">설비별 요일 근무체제</div>
             <table className="w-full table-fixed border-collapse">
               <colgroup>
                 <col style={{ width: "96px" }} />
@@ -2463,10 +2464,10 @@ export default function ScheduleBoard() {
               </colgroup>
               <thead>
                 <tr>
-                  {/* 헤더는 흰색 구분선으로 설비·요일 칸을 나눈다(어두운 배경에서 구분 잘 되게) */}
-                  <th className="border border-white bg-gray-800 text-white text-[12px] font-semibold py-1">설비</th>
-                  {EXTRA_DAYS.map(([key, label]) => (
-                    <th key={key} className="border border-white bg-gray-800 text-white text-[12px] font-semibold py-1">{label}</th>
+                  {/* 칸 사이 구분선은 흰색, 바깥쪽(설비 좌측·일 우측)은 표 테두리와 같은 검정 */}
+                  <th className="border border-white border-l-black bg-gray-800 text-white text-[12px] font-semibold py-1">설비</th>
+                  {EXTRA_DAYS.map(([key, label], idx) => (
+                    <th key={key} className={`border border-white bg-gray-800 text-white text-[12px] font-semibold py-1 ${idx === EXTRA_DAYS.length - 1 ? "border-r-black" : ""}`}>{label}</th>
                   ))}
                 </tr>
               </thead>
