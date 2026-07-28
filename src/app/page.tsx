@@ -1621,8 +1621,10 @@ export default function ScheduleBoard() {
     const d = new Date();
     const ymd = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
     if (isJechae) {
-      // 제책 양식: 설비명 | no. | 작업명 | 소요시간 | 예상완료 | 비고. 설비마다 배정 개수만큼 줄(유동 높이),
-      // 내용 길면 다음 장으로(1·2행 제목·헤더는 페이지마다 반복). 가로 용지.
+      // 제책 양식(첨부 파일 기준): 30열 세밀 그리드에 셀 병합으로 두 표를 같은 격자에 정렬.
+      //  · 상단 '설비별 요일 근무체제' : 설비(A:B) + 각 요일 4열씩 균등(월 C:F … 일 AA:AD), 네이비 헤더.
+      //  · '제책 작업 계획' : 설비명(A:B) no.(C) 작업명(D:M) 시간(N) 예상완료(O:Q) 비고(R:AD).
+      //  · 배정 대기 : A:AD 전체 병합. 헤더 행은 페이지마다 반복(printTitlesRow). 가로 A4.
       const xlmod = await import("exceljs");
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const ExcelJS: any = (xlmod as any).default ?? xlmod;
@@ -1630,96 +1632,74 @@ export default function ScheduleBoard() {
       const wb: any = new ExcelJS.Workbook();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const ws: any = wb.addWorksheet(processLine, { views: [{ showGridLines: false }] });
-      // 작업 계획은 원래 6열 그대로. 근무체제는 열 너비 충돌을 피하려 '이미지'로 상단에 삽입.
-      ws.columns = [
-        { width: 10.6 }, { width: 5.6 }, { width: 50.6 }, { width: 7.1 }, { width: 15.6 }, { width: 54.1 },
-      ];
+      ws.columns = Array.from({ length: 30 }, (_, i) => ({ width: i < 2 ? 7.6 : 5.6 }));
       ws.pageSetup = {
         orientation: "landscape", paperSize: 9,
-        margins: { left: 0, right: 0, top: 0, bottom: 0, header: 0, footer: 0 },
+        fitToPage: true, fitToWidth: 1, fitToHeight: 0,
+        margins: { left: 0.2, right: 0.2, top: 0.2, bottom: 0.2, header: 0, footer: 0 },
         horizontalCentered: true,
       };
       const NAVY = "FF002060";
       const thin = { style: "thin", color: { argb: "FF000000" } };
-      const allThin = { top: thin, left: thin, bottom: thin, right: thin };
-      const wthin = { style: "thin", color: { argb: "FFFFFFFF" } };
-      const allWhite = { top: wthin, left: wthin, bottom: wthin, right: wthin };
+      const box = { top: thin, left: thin, bottom: thin, right: thin };
+      // 병합 논리셀: r1..r2 × c1..c2 병합, 값·글꼴·정렬은 좌상단, 테두리·채움은 구성 셀 전체에 적용
+      // (엑셀은 병합영역 내부선을 숨기고 바깥 테두리만 그리므로 전 셀에 box를 줘도 깔끔한 외곽선이 됨).
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const setc = (r: number, c: number, value: string | number, opts: any = {}) => {
+      const cell = (r1: number, c1: number, r2: number, c2: number, value: string | number, opts: any = {}) => {
+        if (r1 !== r2 || c1 !== c2) ws.mergeCells(r1, c1, r2, c2);
+        for (let rr = r1; rr <= r2; rr++)
+          for (let cc = c1; cc <= c2; cc++) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const cl: any = ws.getCell(rr, cc);
+            if (opts.border !== false) cl.border = box;
+            if (opts.fill) cl.fill = { type: "pattern", pattern: "solid", fgColor: { argb: opts.fill } };
+          }
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const cl: any = ws.getCell(r, c);
-        cl.value = value;
-        if (opts.borderObj) cl.border = opts.borderObj;
-        else if (opts.border === "white") cl.border = allWhite;
-        else if (opts.border !== false) cl.border = allThin;
-        if (opts.fill) cl.fill = { type: "pattern", pattern: "solid", fgColor: { argb: opts.fill } };
-        if (opts.font) cl.font = opts.font;
-        cl.alignment = opts.align ?? { vertical: "middle" };
-        return cl;
+        const m: any = ws.getCell(r1, c1);
+        m.value = value;
+        if (opts.font) m.font = opts.font;
+        m.alignment = opts.align ?? { vertical: "middle" };
+        return m;
       };
+      const whiteBold = { bold: true, size: 11, color: { argb: "FFFFFFFF" } };
+      const ctr = { vertical: "middle", horizontal: "center", wrapText: true };
 
-      // ── 상단: 설비별 요일 근무체제 — 캔버스로 그려 PNG 이미지로 삽입(열 너비와 무관하게 배치) ──
+      let r = 1;
+      // ── 상단: 설비별 요일 근무체제 (낙정·배접 제외) ──
       const shiftMachines = machines.filter((mm) => isShiftPanelMachine(mm.name));
-      let imgRows = 0;
       if (shiftMachines.length > 0) {
-        const days = EXTRA_DAYS;
-        const nameW = 100, dayW = 116, titleH = 28, headH = 26, rowH = 30;
-        const W = nameW + dayW * days.length;
-        const Ht = titleH + headH + rowH * shiftMachines.length;
-        const scale = 2;
-        const canvas = document.createElement("canvas");
-        canvas.width = Math.round(W * scale); canvas.height = Math.round(Ht * scale);
+        // 제목(좌) + 출력 일시(우)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const cx: any = canvas.getContext("2d");
-        cx.scale(scale, scale);
-        cx.fillStyle = "#fff"; cx.fillRect(0, 0, W, Ht);
-        cx.textBaseline = "middle";
-        const colLeft = (i: number) => (i === 0 ? 0 : nameW + (i - 1) * dayW);
-        const colWid = (i: number) => (i === 0 ? nameW : dayW);
-        const FF = "'Malgun Gothic','맑은 고딕',sans-serif";
-        // 제목 + 출력 일시
-        cx.fillStyle = "#000"; cx.font = `bold 15px ${FF}`; cx.textAlign = "left";
-        cx.fillText("설비별 요일 근무체제", 2, titleH / 2);
-        cx.font = `11px ${FF}`; cx.textAlign = "right";
-        cx.fillText(`출력 ${printStamp}`, W - 2, titleH / 2);
-        // 헤더(남색 배경 흰 글씨)
-        cx.fillStyle = "#002060"; cx.fillRect(0, titleH, W, headH);
-        cx.fillStyle = "#fff"; cx.font = `bold 12px ${FF}`; cx.textAlign = "center";
-        ["설비", ...days.map(([, l]) => l)].forEach((h, i) => cx.fillText(h, colLeft(i) + colWid(i) / 2, titleH + headH / 2));
-        // 설비 행
-        shiftMachines.forEach((m, ri) => {
-          const y = titleH + headH + ri * rowH;
+        const tt: any = ws.getCell(r, 1); tt.value = "설비별 요일 근무체제"; tt.font = { bold: true, size: 12 }; tt.alignment = { vertical: "middle" };
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const ts: any = ws.getCell(r, 30); ts.value = `출력 ${printStamp}`; ts.font = { size: 10 }; ts.alignment = { vertical: "middle", horizontal: "right" };
+        ws.getRow(r).height = 20; r++;
+        // 헤더: 설비(A:B) + 7요일(각 4열)
+        cell(r, 1, r, 2, "설비", { fill: NAVY, font: whiteBold, align: ctr });
+        EXTRA_DAYS.forEach(([, l], i) => cell(r, 3 + i * 4, r, 6 + i * 4, l, { fill: NAVY, font: whiteBold, align: ctr }));
+        ws.getRow(r).height = 20; r++;
+        // 설비 행: 이름 + 요일별 근무체제
+        for (const m of shiftMachines) {
           const ex = parseExtraNotes(machineExtras[m.id] ?? m.extra_notes ?? "");
-          cx.fillStyle = "#000"; cx.font = `bold 12px ${FF}`; cx.textAlign = "center";
-          cx.fillText(m.name, nameW / 2, y + rowH / 2);
-          cx.font = `12px ${FF}`;
-          days.forEach(([k], ci) => cx.fillText((ex[k] || "").replace(/\n/g, " "), colLeft(ci + 1) + colWid(ci + 1) / 2, y + rowH / 2));
-        });
-        // 격자선(헤더~본문). 검정 1px.
-        cx.strokeStyle = "#000"; cx.lineWidth = 1;
-        for (let i = 0; i <= days.length + 1; i++) {
-          const x = Math.round(i === 0 ? 0 : nameW + (i - 1) * dayW) + 0.5;
-          cx.beginPath(); cx.moveTo(x, titleH); cx.lineTo(x, Ht); cx.stroke();
+          cell(r, 1, r, 2, m.name, { font: { bold: true, size: 11 }, align: ctr });
+          EXTRA_DAYS.forEach(([k], i) => cell(r, 3 + i * 4, r, 6 + i * 4, (ex[k] || "").replace(/\n/g, " "), { font: { size: 11 }, align: ctr }));
+          ws.getRow(r).height = 22; r++;
         }
-        const ys = [titleH, titleH + headH];
-        for (let k = 1; k <= shiftMachines.length; k++) ys.push(titleH + headH + k * rowH);
-        ys.forEach((yy) => { const y = Math.round(yy) + 0.5; cx.beginPath(); cx.moveTo(0, y); cx.lineTo(W, y); cx.stroke(); });
-        const dataUrl = canvas.toDataURL("image/png");
-        const imgId = wb.addImage({ base64: dataUrl.split(",")[1], extension: "png" });
-        ws.addImage(imgId, { tl: { col: 0, row: 0 }, ext: { width: W, height: Ht } });
-        imgRows = Math.ceil(Ht / 20) + 2; // 이미지 아래로 스케줄 시작(대략 행높이 20px 기준) + 여유
+        r++; // 빈 줄 간격
       }
 
-      // ── 하단: 제책 작업 계획 (원래 6열 그대로) ──
-      let r = imgRows + 1;
+      // ── 제책 작업 계획 ──
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const t1: any = ws.getCell(r, 1); t1.value = `${processLine} 작업 계획`; t1.font = { bold: true, size: 12 }; t1.alignment = { vertical: "middle" };
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const t2: any = ws.getCell(r, 6); t2.value = `출력 ${printStamp}`; t2.font = { size: 10 }; t2.alignment = { vertical: "middle", horizontal: "right" };
+      const tp: any = ws.getCell(r, 1); tp.value = `${processLine} 작업 계획`; tp.font = { bold: true, size: 12 }; tp.alignment = { vertical: "middle" };
       ws.getRow(r).height = 22; r++;
       const schedHdrRow = r;
-      ["설비명", "no.", "작업명", "시간", "예상완료", "비고"].forEach((h, i) =>
-        setc(r, i + 1, h, { fill: NAVY, font: { bold: true, size: 10, color: { argb: "FFFFFFFF" } }, align: { vertical: "middle", horizontal: "center" }, border: "white" }));
+      // 헤더: 설비명(A:B) no.(C) 작업명(D:M) 시간(N) 예상완료(O:Q) 비고(R:AD)
+      cell(r, 1, r, 2, "설비명", { fill: NAVY, font: whiteBold, align: ctr });
+      cell(r, 3, r, 3, "no.", { fill: NAVY, font: whiteBold, align: ctr });
+      cell(r, 4, r, 13, "작업명", { fill: NAVY, font: whiteBold, align: ctr });
+      cell(r, 14, r, 14, "시간", { fill: NAVY, font: whiteBold, align: ctr });
+      cell(r, 15, r, 17, "예상완료", { fill: NAVY, font: whiteBold, align: ctr });
+      cell(r, 18, r, 30, "비고", { fill: NAVY, font: whiteBold, align: ctr });
       ws.getRow(r).height = 20; r++;
       // 설비별 블록: 배정 개수만큼 줄, 없으면 빈 줄 1개(설비명만).
       for (const { machine, rows } of jechaeMachineRows()) {
@@ -1727,46 +1707,29 @@ export default function ScheduleBoard() {
         const start = r;
         const shiftLabel = machineShiftToday(machine).label; // 오늘 근무체제(설비명 아래 표기)
         rr.forEach((row, i) => {
-          const isFirst = i === 0, isLast = i === rr.length - 1;
-          const bd = { left: thin, right: thin, ...(isFirst ? { top: thin } : {}), ...(isLast ? { bottom: thin } : {}) };
-          const mcBd = isFirst ? { left: thin, right: thin, top: thin, bottom: thin } : { left: thin, right: thin };
           const mf = row ? markArgb(row.mark) : undefined; // 표시색(있으면 제품 행 배경 채움)
-          setc(r, 1, isFirst ? `${machine.name}${shiftLabel ? `\n[${shiftLabel}]` : ""}` : "", { align: { vertical: "middle", horizontal: "center", wrapText: true }, font: { size: 10 }, borderObj: mcBd });
-          setc(r, 2, row ? i + 1 : "", { align: { vertical: "middle", horizontal: "center" }, font: { size: 10 }, borderObj: bd, fill: mf });
-          setc(r, 3, row ? row.job : "", { align: { vertical: "middle", horizontal: "left", shrinkToFit: true }, font: { size: 10 }, borderObj: bd, fill: mf });
-          setc(r, 4, row ? row.hours : "", { align: { vertical: "middle", horizontal: "center" }, font: { size: 10 }, borderObj: bd, fill: mf });
-          setc(r, 5, row ? row.eta : "", { align: { vertical: "middle", horizontal: "center" }, font: { size: 10 }, borderObj: bd, fill: mf });
-          setc(r, 6, row ? row.note : "", { align: { vertical: "middle", horizontal: "left", wrapText: true }, font: { size: 10 }, borderObj: bd, fill: mf });
+          cell(r, 3, r, 3, row ? i + 1 : "", { font: { size: 10 }, align: { vertical: "middle", horizontal: "center" }, fill: mf });
+          cell(r, 4, r, 13, row ? row.job : "", { font: { size: 10 }, align: { vertical: "middle", horizontal: "left", shrinkToFit: true }, fill: mf });
+          cell(r, 14, r, 14, row ? row.hours : "", { font: { size: 10 }, align: { vertical: "middle", horizontal: "center" }, fill: mf });
+          cell(r, 15, r, 17, row ? row.eta : "", { font: { size: 10 }, align: { vertical: "middle", horizontal: "center" }, fill: mf });
+          cell(r, 18, r, 30, row ? row.note : "", { font: { size: 10 }, align: { vertical: "middle", horizontal: "left", wrapText: true }, fill: mf });
           r++;
         });
-        if (r - 1 > start) ws.mergeCells(start, 1, r - 1, 1); // 설비명 세로 병합
+        // 설비명 세로 병합(A:B): 이름 + 오늘 근무체제
+        cell(start, 1, r - 1, 2, `${machine.name}${shiftLabel ? `\n[${shiftLabel}]` : ""}`, { font: { size: 10 }, align: { vertical: "middle", horizontal: "center", wrapText: true } });
       }
-      // 배정 대기 (6열 전체 병합 한 줄씩).
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const jbox = (r1: number, value: string, opts: any = {}) => {
-        ws.mergeCells(r1, 1, r1, 6);
-        for (let cc = 1; cc <= 6; cc++) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const cl: any = ws.getCell(r1, cc);
-          cl.border = allThin;
-          if (opts.fill) cl.fill = { type: "pattern", pattern: "solid", fgColor: { argb: opts.fill } };
-        }
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const m: any = ws.getCell(r1, 1);
-        m.value = value; m.font = opts.font ?? { size: 10 };
-        m.alignment = opts.align ?? { vertical: "middle", horizontal: "left" };
-      };
+      // 배정 대기(A:AD 전체 병합, 한 줄씩).
       if (r > schedHdrRow + 1) ws.getRow(r).addPageBreak();
       r++; // 간격
       const jwaits = waitingOrders.map((o) => waitLabel(o));
       const jwaitMin = locationMinutes(waitingOrders, undefined);
-      jbox(r, `배정 대기   (${jwaits.length}건)   합계 ${fmtH(jwaitMin)}`, { fill: "FFE5E7EB", font: { bold: true, size: 10 } });
+      cell(r, 1, r, 30, `배정 대기   (${jwaits.length}건)   합계 ${fmtH(jwaitMin)}`, { fill: "FFE5E7EB", font: { bold: true, size: 10 }, align: { vertical: "middle", horizontal: "left" } });
       r++;
       for (const w of (jwaits.length ? jwaits : ["-"])) {
-        jbox(r, w, { font: { size: 10 }, align: { vertical: "middle", horizontal: "left", shrinkToFit: true } });
+        cell(r, 1, r, 30, w, { font: { size: 10 }, align: { vertical: "middle", horizontal: "left", shrinkToFit: true } });
         r++;
       }
-      // 스케줄 헤더만 페이지마다 반복(근무체제 이미지는 상단 1회).
+      // 스케줄 헤더 행만 페이지마다 반복.
       ws.pageSetup.printTitlesRow = `${schedHdrRow}:${schedHdrRow}`;
 
       const buf = await wb.xlsx.writeBuffer();
