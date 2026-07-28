@@ -1641,9 +1641,11 @@ export default function ScheduleBoard() {
       };
       const NAVY = "FF002060";
       const thin = { style: "thin", color: { argb: "FF000000" } };
+      const wthin = { style: "thin", color: { argb: "FFFFFFFF" } }; // 흰색 얇은선(근무체제 헤더 안쪽 구분선)
       const box = { top: thin, left: thin, bottom: thin, right: thin };
       // 병합 논리셀: r1..r2 × c1..c2 병합, 값·글꼴·정렬은 좌상단, 테두리·채움은 구성 셀 전체에 적용
       // (엑셀은 병합영역 내부선을 숨기고 바깥 테두리만 그리므로 전 셀에 box를 줘도 깔끔한 외곽선이 됨).
+      // opts.borderObj로 변(邊)별 테두리를 직접 지정 가능(헤더 안쪽 흰선, 작업명 행간 제거 등).
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const cell = (r1: number, c1: number, r2: number, c2: number, value: string | number, opts: any = {}) => {
         if (r1 !== r2 || c1 !== c2) ws.mergeCells(r1, c1, r2, c2);
@@ -1651,7 +1653,7 @@ export default function ScheduleBoard() {
           for (let cc = c1; cc <= c2; cc++) {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const cl: any = ws.getCell(rr, cc);
-            if (opts.border !== false) cl.border = box;
+            if (opts.border !== false) cl.border = opts.borderObj ?? box;
             if (opts.fill) cl.fill = { type: "pattern", pattern: "solid", fgColor: { argb: opts.fill } };
           }
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1661,7 +1663,7 @@ export default function ScheduleBoard() {
         m.alignment = opts.align ?? { vertical: "middle" };
         return m;
       };
-      const whiteBold = { bold: true, size: 11, color: { argb: "FFFFFFFF" } };
+      const whiteBold = { bold: true, size: 10, color: { argb: "FFFFFFFF" } };
       const ctr = { vertical: "middle", horizontal: "center", wrapText: true };
 
       let r = 1;
@@ -1674,15 +1676,18 @@ export default function ScheduleBoard() {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const ts: any = ws.getCell(r, 30); ts.value = `출력 ${printStamp}`; ts.font = { size: 10 }; ts.alignment = { vertical: "middle", horizontal: "right" };
         ws.getRow(r).height = 20; r++;
-        // 헤더: 설비(A:B) + 7요일(각 4열)
-        cell(r, 1, r, 2, "설비", { fill: NAVY, font: whiteBold, align: ctr });
-        EXTRA_DAYS.forEach(([, l], i) => cell(r, 3 + i * 4, r, 6 + i * 4, l, { fill: NAVY, font: whiteBold, align: ctr }));
+        // 헤더: 설비(A:B) + 7요일(각 4열). 안쪽 구분선은 흰색, 바깥 테두리만 검정.
+        cell(r, 1, r, 2, "설비", { fill: NAVY, font: whiteBold, align: ctr, borderObj: { top: thin, bottom: thin, left: thin, right: wthin } });
+        EXTRA_DAYS.forEach(([, l], i) => {
+          const last = i === EXTRA_DAYS.length - 1;
+          cell(r, 3 + i * 4, r, 6 + i * 4, l, { fill: NAVY, font: whiteBold, align: ctr, borderObj: { top: thin, bottom: thin, left: wthin, right: last ? thin : wthin } });
+        });
         ws.getRow(r).height = 20; r++;
         // 설비 행: 이름 + 요일별 근무체제
         for (const m of shiftMachines) {
           const ex = parseExtraNotes(machineExtras[m.id] ?? m.extra_notes ?? "");
-          cell(r, 1, r, 2, m.name, { font: { bold: true, size: 11 }, align: ctr });
-          EXTRA_DAYS.forEach(([k], i) => cell(r, 3 + i * 4, r, 6 + i * 4, (ex[k] || "").replace(/\n/g, " "), { font: { size: 11 }, align: ctr }));
+          cell(r, 1, r, 2, m.name, { font: { bold: true, size: 10 }, align: ctr });
+          EXTRA_DAYS.forEach(([k], i) => cell(r, 3 + i * 4, r, 6 + i * 4, (ex[k] || "").replace(/\n/g, " "), { font: { size: 10 }, align: ctr }));
           ws.getRow(r).height = 22; r++;
         }
         r++; // 빈 줄 간격
@@ -1708,8 +1713,10 @@ export default function ScheduleBoard() {
         const shiftLabel = machineShiftToday(machine).label; // 오늘 근무체제(설비명 아래 표기)
         rr.forEach((row, i) => {
           const mf = row ? markArgb(row.mark) : undefined; // 표시색(있으면 제품 행 배경 채움)
+          // 작업명: 설비 블록 내부의 행간 가로선 제거(첫 행만 top, 마지막 행만 bottom, 좌우는 유지).
+          const jobBd = { left: thin, right: thin, ...(i === 0 ? { top: thin } : {}), ...(i === rr.length - 1 ? { bottom: thin } : {}) };
           cell(r, 3, r, 3, row ? i + 1 : "", { font: { size: 10 }, align: { vertical: "middle", horizontal: "center" }, fill: mf });
-          cell(r, 4, r, 13, row ? row.job : "", { font: { size: 10 }, align: { vertical: "middle", horizontal: "left", shrinkToFit: true }, fill: mf });
+          cell(r, 4, r, 13, row ? row.job : "", { font: { size: 10 }, align: { vertical: "middle", horizontal: "left", shrinkToFit: true }, fill: mf, borderObj: jobBd });
           cell(r, 14, r, 14, row ? row.hours : "", { font: { size: 10 }, align: { vertical: "middle", horizontal: "center" }, fill: mf });
           cell(r, 15, r, 17, row ? row.eta : "", { font: { size: 10 }, align: { vertical: "middle", horizontal: "center" }, fill: mf });
           cell(r, 18, r, 30, row ? row.note : "", { font: { size: 10 }, align: { vertical: "middle", horizontal: "left", wrapText: true }, fill: mf });
