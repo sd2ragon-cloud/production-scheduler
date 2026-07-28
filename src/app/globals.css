@@ -270,6 +270,7 @@ input[type="number"]::-webkit-outer-spin-button {
   .jml tbody tr:first-child td { border-top: 0.3mm solid #000; }   /* 표 상단(첫 설비 위) */
   .jml-row-end td { border-bottom: 0.3mm solid #000; }             /* 설비 마지막 줄 아래 = 설비 경계(작업명~비고) */
   .jml-mc { text-align: center; font-weight: bold; border-bottom: 0.3mm solid #000; } /* 설비명 칸 아래 = 설비 경계(첫 열) */
+  .jml-shift { font-weight: normal; font-size: 8pt; margin-top: 0.5mm; } /* 설비명 아래 오늘 근무체제 */
   /* 설비명 칸은 표시색을 칠하지 않음(제품 행만 칠함 — 엑셀과 동일) */
   .jml tbody td.jml-mc { background: #fff; }
   .jml-no { text-align: center; }

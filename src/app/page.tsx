@@ -2203,12 +2203,13 @@ export default function ScheduleBoard() {
               각 설비는 실제 배정 수만큼만 표기하고, 배정이 없으면 1행 공백으로 둔다(빈 행 채움 없음). */}
           {data.map(({ machine, rows }) => {
             const rr: (JmRow | null)[] = rows.length ? rows : [null];
+            const shift = machineShiftToday(machine).label; // 오늘 근무체제(설비명 아래)
             return (
               <tbody key={machine.id} className="jml-mgroup">
                 {rr.map((row, i) => (
                   <tr key={i} className={i === rr.length - 1 ? "jml-row-end" : undefined}
                     style={row && row.mark ? { background: MARK_BG[row.mark] } : undefined}>
-                    {i === 0 && <td className="jml-mc" rowSpan={rr.length}>{machine.name}</td>}
+                    {i === 0 && <td className="jml-mc" rowSpan={rr.length}>{machine.name}{shift ? <div className="jml-shift">[{shift}]</div> : null}</td>}
                     <td className="jml-no">{row ? i + 1 : ""}</td>
                     <td className="jml-job">{row ? row.job : ""}</td>
                     <td className="jml-dur">{row ? row.hours : ""}</td>
