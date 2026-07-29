@@ -199,7 +199,7 @@ input[type="number"]::-webkit-outer-spin-button {
   /* 배정 내역: 번호 · 제품명(넓게) · 비고 · 완료시간 (각 칸 넘치면 JS가 폰트 유동 축소) */
   /* 완료예정일시(마지막 열)를 좁히고 제품명·비고를 넓힘(매엽·윤전 공통). 완료 글자는 JS가 이 칸 폭에
      맞춰 자동 축소(pf-eta도 대상). 비율은 아래 useEffect JOB/NOTE/ETA_W와 일치해야 함. */
-  .pf-li { display: grid; grid-template-columns: auto 48fr 17.7fr 14.3fr; gap: 1.5mm; align-items: baseline; }
+  .pf-li { display: grid; grid-template-columns: auto 48fr 16.4fr 15.6fr; gap: 1.5mm; align-items: baseline; }
   .pf-num { color: #000; font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
   .pf-job { overflow: hidden; word-break: break-all; }
   .pf-note { overflow: hidden; word-break: break-all; color: #000; }

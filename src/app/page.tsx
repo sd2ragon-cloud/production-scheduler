@@ -428,8 +428,8 @@ export default function ScheduleBoard() {
     const SAFETY = 1.5 * PXMM;       // 반올림 줄바꿈 방지 여백
     const NUM_W = 5 * PXMM;          // 맨 앞 번호 칸(≈5mm)
     const usable = LIST_W - NUM_W - 3 * GAP; // 번호+제품명+비고+완료 4칸·3간격
-    // 열 비율은 CSS .pf-li(매엽·윤전 공통=48/17.7/14.3)와 일치시킨다. (예상완료 칸 ~5px 확대: 비고에서 1.3fr 이동)
-    const R = { job: 48, note: 17.7, eta: 14.3, tot: 80 };
+    // 열 비율은 CSS .pf-li(매엽·윤전 공통=48/16.4/15.6)와 일치시킨다. (예상완료 칸 추가 ~5px 확대: 비고에서 1.3fr 더 이동)
+    const R = { job: 48, note: 16.4, eta: 15.6, tot: 80 };
     const JOB_W = usable * R.job / R.tot - SAFETY;   // 제품명 칸
     const NOTE_W = usable * R.note / R.tot - SAFETY; // 비고 칸
     const ETA_W = usable * R.eta / R.tot - SAFETY;   // 완료 칸(좁음 → 글자 자동 축소)
