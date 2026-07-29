@@ -422,14 +422,14 @@ export default function ScheduleBoard() {
     if (!lis.length && !rows.length && !bkItems.length) return;
     const PXMM = 96 / 25.4;          // 1mm → px (96dpi)
     const BASE_PT = 7;               // 배정 내역 기본 폰트(축소)
-    const ETA_PT = BASE_PT + 2;      // 예상완료(완료시간)만 2pt 크게(요청) = 9pt
+    const ETA_PT = BASE_PT + 3;      // 예상완료(완료시간)만 크게(요청) = 10pt
     const LIST_W = 90 * PXMM;        // 인쇄 시 박스 내부(작업 목록) 가용 폭 ≈ 90mm 고정
     const GAP = 1.5 * PXMM;          // 칸 사이 간격
     const SAFETY = 1.5 * PXMM;       // 반올림 줄바꿈 방지 여백
     const NUM_W = 5 * PXMM;          // 맨 앞 번호 칸(≈5mm)
     const usable = LIST_W - NUM_W - 3 * GAP; // 번호+제품명+비고+완료 4칸·3간격
-    // 열 비율은 CSS .pf-li(매엽·윤전 공통=48/18.5/13.5)와 일치시킨다. (예상완료 칸 ~2px 확대: 비고에서 0.5fr 이동)
-    const R = { job: 48, note: 18.5, eta: 13.5, tot: 80 };
+    // 열 비율은 CSS .pf-li(매엽·윤전 공통=48/17.7/14.3)와 일치시킨다. (예상완료 칸 ~5px 확대: 비고에서 1.3fr 이동)
+    const R = { job: 48, note: 17.7, eta: 14.3, tot: 80 };
     const JOB_W = usable * R.job / R.tot - SAFETY;   // 제품명 칸
     const NOTE_W = usable * R.note / R.tot - SAFETY; // 비고 칸
     const ETA_W = usable * R.eta / R.tot - SAFETY;   // 완료 칸(좁음 → 글자 자동 축소)
