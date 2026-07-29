@@ -2696,7 +2696,7 @@ export default function ScheduleBoard() {
                           </td>
                           <td className="px-1.5 py-0">
                             <div className="flex items-center gap-1 overflow-x-auto jobscroll">
-                            <span className={`font-medium shrink-0 ${isJechae ? "text-[13px] text-black" : "text-[12px]"}`}>{entry.product_name}{rollTag(entry.quantity_sheets)}</span>
+                            <span className={`font-medium shrink-0 ${isJechae ? "text-[13px] text-black" : "text-[12px]"}`}>{isRoll ? (() => { const comp = entry.component_part || entry.component || ""; return `${entry.product_name}${comp ? `(${comp})` : ""}`; })() : entry.product_name}{rollTag(entry.quantity_sheets)}</span>
                             {(() => {
                               // 윤전은 제품명 * 수량만 표기(요청) — 구성 칩/구분 칩을 표시하지 않는다.
                               if (isRoll) return null;
