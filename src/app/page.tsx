@@ -422,6 +422,7 @@ export default function ScheduleBoard() {
     if (!lis.length && !rows.length && !bkItems.length) return;
     const PXMM = 96 / 25.4;          // 1mm → px (96dpi)
     const BASE_PT = 7;               // 배정 내역 기본 폰트(축소)
+    const ETA_PT = BASE_PT + 2;      // 예상완료(완료시간)만 2pt 크게(요청) = 9pt
     const LIST_W = 90 * PXMM;        // 인쇄 시 박스 내부(작업 목록) 가용 폭 ≈ 90mm 고정
     const GAP = 1.5 * PXMM;          // 칸 사이 간격
     const SAFETY = 1.5 * PXMM;       // 반올림 줄바꿈 방지 여백
@@ -442,18 +443,20 @@ export default function ScheduleBoard() {
     meas.style.fontWeight = cs.fontWeight;
     meas.style.fontSize = `${(BASE_PT * 96) / 72}px`;
     document.body.appendChild(meas);
-    const fit = (el: HTMLElement | null, colW: number) => {
+    // basePt: 측정·축소 기준 폰트(기본 BASE_PT). eta만 ETA_PT(=BASE_PT+2)로 크게 표기.
+    const fit = (el: HTMLElement | null, colW: number, basePt = BASE_PT) => {
       if (!el) return;
+      meas.style.fontSize = `${(basePt * 96) / 72}px`;
       meas.textContent = el.textContent || "";
       const w = meas.getBoundingClientRect().width;
       el.style.fontSize = w > colW && colW > 0
-        ? `${Math.max(3, Math.round((BASE_PT * colW) / w * 10) / 10)}pt`
-        : "";
+        ? `${Math.max(3, Math.round((basePt * colW) / w * 10) / 10)}pt`
+        : (basePt === BASE_PT ? "" : `${basePt}pt`);
     };
     lis.forEach((li) => {
       fit(li.querySelector<HTMLElement>(".pf-job"), JOB_W);
       fit(li.querySelector<HTMLElement>(".pf-note"), NOTE_W);
-      fit(li.querySelector<HTMLElement>(".pf-eta"), ETA_W);
+      fit(li.querySelector<HTMLElement>(".pf-eta"), ETA_W, ETA_PT);
     });
     rows.forEach((el) => fit(el, WAIT_W));
     bkItems.forEach((el) => fit(el, BK_W));
@@ -2113,9 +2116,11 @@ export default function ScheduleBoard() {
   const jobLabel = (e: ScheduleEntry): string => {
     const hours = e.duration_minutes ? Math.round((e.duration_minutes / 60) * 10) / 10 : "";
     if (isRoll) {
-      // 윤전은 구성 표기 없이 '제품명 * 수량'(요청).
+      // 윤전: '제품명(구성) * 부수 시간' (요청). 구성 없으면 '제품명 * 부수'.
       const q = Number(e.quantity_sheets) || 0;
-      const base = q > 0 ? `${e.product_name} * ${q.toLocaleString()}부` : e.product_name;
+      const comp = e.component_part || e.component || "";
+      const nm = comp ? `${e.product_name}(${comp})` : e.product_name;
+      const base = q > 0 ? `${nm} * ${q.toLocaleString()}부` : nm;
       return hours !== "" ? `${base} ${hours}` : base;
     }
     const comp = e.component_part || e.component || "";
@@ -2128,7 +2133,9 @@ export default function ScheduleBoard() {
     const hours = e.duration_minutes ? Math.round((e.duration_minutes / 60) * 10) / 10 : "";
     if (isRoll) {
       const q = Number(e.quantity_sheets) || 0;
-      const name = q > 0 ? `${e.product_name} * ${q.toLocaleString()}부` : e.product_name;
+      const comp = e.component_part || e.component || "";
+      const nm = comp ? `${e.product_name}(${comp})` : e.product_name;
+      const name = q > 0 ? `${nm} * ${q.toLocaleString()}부` : nm;
       return hours !== "" ? `${name} ${hours}` : name;
     }
     const comp = e.component_part || e.component || "";
