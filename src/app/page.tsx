@@ -422,7 +422,7 @@ export default function ScheduleBoard() {
     if (!lis.length && !rows.length && !bkItems.length) return;
     const PXMM = 96 / 25.4;          // 1mm → px (96dpi)
     const BASE_PT = 7;               // 배정 내역 기본 폰트(축소)
-    const ETA_PT = BASE_PT + 2;      // 예상완료(완료시간)만 2pt 크게(요청) = 9pt
+    const ETA_PT = BASE_PT + 4;      // 예상완료(완료시간)만 크게(요청) = 11pt
     const LIST_W = 90 * PXMM;        // 인쇄 시 박스 내부(작업 목록) 가용 폭 ≈ 90mm 고정
     const GAP = 1.5 * PXMM;          // 칸 사이 간격
     const SAFETY = 1.5 * PXMM;       // 반올림 줄바꿈 방지 여백
