@@ -20,7 +20,7 @@ interface Machine {
 
 const DAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
 // 달력 셀에 짧게 표기할 근무체제 약칭
-const SHIFT_ABBR: Record<string, string> = { "정상(주)": "주", "정상(야)": "야", "정시(주)": "정주", "정시(야)": "정야", "단부정시": "단부" };
+const SHIFT_ABBR: Record<string, string> = { "정상(주)": "주", "정상(야)": "야", "정시(주)": "정주", "정시(야)": "정야", "단부정시": "단부", "정시(20시)": "20시", "정시(21시)": "21시", "정시(22시)": "22시", "정시(23시)": "23시", "정시(24시)": "24시" };
 const abbrShifts = (names: string[]): string => (names.length ? names.map((n) => SHIFT_ABBR[n] ?? n).join("+") : "휴무");
 function parseOff(json: string | undefined): number[] {
   try { const a = JSON.parse(json || "[]"); return Array.isArray(a) ? a.map(Number).filter((n) => n >= 0 && n <= 6) : []; } catch { return []; }
