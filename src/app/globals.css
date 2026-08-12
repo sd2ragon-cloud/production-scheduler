@@ -144,17 +144,26 @@ input[type="number"]::-webkit-outer-spin-button {
     padding: 6mm;
     display: flex;
     flex-direction: column;
+    --pf-accent: #002060;   /* 라인 구분 색(기본=매엽: 남색) */
   }
+  .pf-page.pf-roll { --pf-accent: #b45309; } /* 윤전: 주황(남색과 색·명도가 확연히 달라 흑백에서도 구분) */
+  /* 헤더를 라인 색 배너로 — 라인명을 크게 반전 표기해 매엽/윤전을 한눈에 구분(높이는 기존과 비슷하게 유지) */
   .pf-head {
     flex: 0 0 auto;
-    font-size: 13pt;
+    background: var(--pf-accent);
+    color: #fff;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    font-size: 11pt;
     font-weight: bold;
     text-align: left;
-    margin-bottom: 3mm;
+    padding: 0.4mm 2.5mm;
+    margin-bottom: 1.8mm;
   }
+  .pf-line { font-size: 14pt; font-weight: 800; letter-spacing: 0.5px; }
   /* 스케줄 출력 헤더: 제목은 좌측, 출력 시각은 우측 상단에 */
   .pf-head-rel { position: relative; }
-  .pf-head-time { position: absolute; right: 0; top: 0; font-size: 8pt; font-weight: normal; white-space: nowrap; }
+  .pf-head-time { position: absolute; right: 2.5mm; top: 1mm; font-size: 8pt; font-weight: normal; white-space: nowrap; color: rgba(255,255,255,0.9); }
   /* 기계 박스: 2열. 박스 높이(grid-auto-rows)를 인라인으로 동적 지정해, 설비 그리드 + 하단
      1차 배정(80mm)이 충분한 여백을 두고 한 장에 들어가게 한다(실제 인쇄에서 가장자리 잘림 방지). */
   .pf-machines {
@@ -176,7 +185,7 @@ input[type="number"]::-webkit-outer-spin-button {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    background: #002060;
+    background: var(--pf-accent);
     color: #fff;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
