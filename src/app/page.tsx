@@ -2272,7 +2272,9 @@ export default function ScheduleBoard() {
                 {rr.map((row, i) => (
                   <tr key={i} className={i === rr.length - 1 ? "jml-row-end" : undefined}
                     style={row && row.mark ? { background: MARK_BG[row.mark] } : undefined}>
-                    {i === 0 && <td className="jml-mc" rowSpan={rr.length}>{machine.name}{shift ? <div className="jml-shift">[{shift}]</div> : null}</td>}
+                    {/* 설비명: rowSpan(세로 병합)을 쓰면 병합 셀 때문에 페이지 중간 분할이 막혀 블록이 통째로
+                        다음 장으로 넘어간다(첫 장 공백 원인). rowSpan 없이 첫 줄에만 표기해 페이지가 채워지게 한다. */}
+                    <td className="jml-mc">{i === 0 ? <>{machine.name}{shift ? <div className="jml-shift">[{shift}]</div> : null}</> : null}</td>
                     <td className="jml-no">{row ? i + 1 : ""}</td>
                     <td className="jml-job">{row ? row.job : ""}</td>
                     <td className="jml-dur">{row ? row.hours : ""}</td>
