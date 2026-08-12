@@ -267,12 +267,18 @@ input[type="number"]::-webkit-outer-spin-button {
   .jml-print { page: jmland; }
   .jml { width: 100%; border-collapse: collapse; table-layout: fixed; }
   .jml thead { display: table-header-group; } /* 페이지마다 제목+헤더 반복 */
-  /* 설비 블록(tbody)은 페이지 중간에 쪼개지 않는다 → 설비명(병합칸)·하단선이 통째로 다음 장으로 넘어가 표기됨 */
+  /* 근무체제 표(tbody)는 작아서 통째로 유지 */
   .jml tbody { break-inside: avoid; page-break-inside: avoid; }
-  /* 제책 작업계획: 설비 블록이 길면 페이지 경계에서 나뉘어 공백 없이 이어지게(요청).
-     단, 작업 한 줄(tr)은 중간에서 쪼개지지 않게 유지한다. (근무체제 표 tbody는 위 규칙대로 통째 유지) */
-  .jml tbody.jml-mgroup { break-inside: auto; page-break-inside: auto; }
-  .jml-mgroup tr { break-inside: avoid; page-break-inside: avoid; }
+  /* 제책 작업계획은 설비마다 '별도 표(.jml-mtbl)'로 만든다:
+     - thead(설비명+열머리)=table-header-group → 페이지 넘어가면 넘어간 장 상단에 설비명 재표기
+     - tfoot(.jml-foot)=table-footer-group → 페이지 하단마다 마감선 반복(경계에서 선으로 닫힘)
+     - tbody=break-inside:auto → 공백 없이 페이지 채움. 단 한 줄(tr)은 안 쪼개짐 */
+  .jml-sched-title { font-size: 13pt; font-weight: bold; padding: 1mm 1.5mm 2mm; }
+  .jml-mtbl { margin-bottom: 1.5mm; }
+  .jml-mtbl tbody { break-inside: auto; page-break-inside: auto; }
+  .jml-mtbl tbody tr { break-inside: avoid; page-break-inside: avoid; }
+  .jml-mtbl tfoot { display: table-footer-group; }
+  .jml-foot td { border-top: 0.3mm solid #000; border-left: 0.3mm solid #000; border-right: 0.3mm solid #000; height: 0; padding: 0; line-height: 0; font-size: 0; }
   .jml-title td { border: none; padding: 1mm 1.5mm 2mm; vertical-align: middle; }
   .jml-title-name { font-size: 13pt; font-weight: bold; }
   .jml-title-date { font-size: 10pt; text-align: right; white-space: nowrap; }

@@ -2240,41 +2240,43 @@ export default function ScheduleBoard() {
             })}
           </tbody>
         </table>
-        <table className="jml">
-          <colgroup>
-            <col style={{ width: "7.4%" }} />
-            <col style={{ width: "3.9%" }} />
-            <col style={{ width: "35.2%" }} />
-            <col style={{ width: "4.9%" }} />
-            <col style={{ width: "10.9%" }} />
-            <col style={{ width: "37.7%" }} />
-          </colgroup>
-          <thead>
-            <tr className="jml-title">
-              <td className="jml-title-name" colSpan={6}>{processLine} 작업 계획</td>
-            </tr>
-            <tr>
-              <th className="jml-mc">설비명</th>
-              <th className="jml-no">no.</th>
-              <th className="jml-job">작업명</th>
-              <th className="jml-dur">시간</th>
-              <th className="jml-eta">예상완료</th>
-              <th className="jml-note">비고</th>
-            </tr>
-          </thead>
-          {/* 설비마다 별도 tbody → break-inside:avoid로 페이지가 넘어가도 블록(설비명·테두리)이 통째로 유지된다.
-              각 설비는 실제 배정 수만큼만 표기하고, 배정이 없으면 1행 공백으로 둔다(빈 행 채움 없음). */}
-          {data.map(({ machine, rows }) => {
-            const rr: (JmRow | null)[] = rows.length ? rows : [null];
-            const shift = machineShiftToday(machine).label; // 오늘 근무체제(설비명 아래)
-            return (
-              <tbody key={machine.id} className="jml-mgroup">
+        <div className="jml-sched-title">{processLine} 작업 계획</div>
+        {/* 설비마다 '별도의 표'로 만든다.
+            - thead(설비명 + 열 머리글)는 display:table-header-group → 표가 페이지를 넘어가면
+              넘어간 장 상단에 설비명이 '자동으로 다시' 표기된다.
+            - tfoot(마감선)는 display:table-footer-group → 페이지 하단마다 반복되어, 설비가
+              페이지 경계에서 잘려도 그 장 아래가 '선으로 마무리'된다(열린 채 끊기지 않음).
+            - 본문 행 사이에는 가로선을 두지 않아 기존의 깔끔한 모양을 유지한다. */}
+        {data.map(({ machine, rows }) => {
+          const rr: (JmRow | null)[] = rows.length ? rows : [null];
+          const shift = machineShiftToday(machine).label; // 오늘 근무체제(설비명 아래)
+          return (
+            <table className="jml jml-mtbl" key={machine.id}>
+              <colgroup>
+                <col style={{ width: "7.4%" }} />
+                <col style={{ width: "3.9%" }} />
+                <col style={{ width: "35.2%" }} />
+                <col style={{ width: "4.9%" }} />
+                <col style={{ width: "10.9%" }} />
+                <col style={{ width: "37.7%" }} />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th className="jml-mc">{machine.name}{shift ? <div className="jml-shift">[{shift}]</div> : null}</th>
+                  <th className="jml-no">no.</th>
+                  <th className="jml-job">작업명</th>
+                  <th className="jml-dur">시간</th>
+                  <th className="jml-eta">예상완료</th>
+                  <th className="jml-note">비고</th>
+                </tr>
+              </thead>
+              <tfoot>
+                <tr className="jml-foot"><td colSpan={6} /></tr>
+              </tfoot>
+              <tbody>
                 {rr.map((row, i) => (
-                  <tr key={i} className={i === rr.length - 1 ? "jml-row-end" : undefined}
-                    style={row && row.mark ? { background: MARK_BG[row.mark] } : undefined}>
-                    {/* 설비명: rowSpan(세로 병합)을 쓰면 병합 셀 때문에 페이지 중간 분할이 막혀 블록이 통째로
-                        다음 장으로 넘어간다(첫 장 공백 원인). rowSpan 없이 첫 줄에만 표기해 페이지가 채워지게 한다. */}
-                    <td className="jml-mc">{i === 0 ? <>{machine.name}{shift ? <div className="jml-shift">[{shift}]</div> : null}</> : null}</td>
+                  <tr key={i} style={row && row.mark ? { background: MARK_BG[row.mark] } : undefined}>
+                    <td className="jml-mc" />
                     <td className="jml-no">{row ? i + 1 : ""}</td>
                     <td className="jml-job">{row ? row.job : ""}</td>
                     <td className="jml-dur">{row ? row.hours : ""}</td>
@@ -2283,9 +2285,9 @@ export default function ScheduleBoard() {
                   </tr>
                 ))}
               </tbody>
-            );
-          })}
-        </table>
+            </table>
+          );
+        })}
       </div>
     );
   };
