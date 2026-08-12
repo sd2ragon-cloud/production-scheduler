@@ -1814,14 +1814,15 @@ export default function ScheduleBoard() {
       if (opts.borderObj) m.border = opts.borderObj; // 병합 범위 테두리는 마스터 셀이 정의
       return m;
     };
-    // 라인 구분 색(출력물과 동일): 매엽=남색 / 윤전=주황. 제목 배너·설비 헤더에 사용.
+    // 라인 구분 색(출력물과 동일): 매엽=남색 / 윤전=주황. 설비 헤더에 사용.
     const ACCENT = isRoll ? "FFB45309" : "FF002060";
-    // 상단: 라인 색 배너(전 열 채움) + 라인명(좌, 크게) + 출력일시(우) — 흰 글씨.
-    for (let cc = 1; cc <= 9; cc++) ws.getCell(1, cc).fill = { type: "pattern", pattern: "solid", fgColor: { argb: ACCENT } };
+    // 상단 제목: 윤전은 라인 색 배너(전 열 채움)+흰 글씨, 매엽은 색상바 없이 일반 텍스트(요청).
+    const bannerText = isRoll ? "FFFFFFFF" : undefined; // 배너 없는 매엽은 기본(검정)
+    if (isRoll) for (let cc = 1; cc <= 9; cc++) ws.getCell(1, cc).fill = { type: "pattern", pattern: "solid", fgColor: { argb: ACCENT } };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const tL: any = ws.getCell(1, 1); tL.value = `${processLine} 작업 계획`; tL.font = { bold: true, size: 14, color: { argb: "FFFFFFFF" } }; tL.alignment = { vertical: "middle" };
+    const tL: any = ws.getCell(1, 1); tL.value = `${processLine} 작업 계획`; tL.font = { bold: true, size: 14, ...(bannerText ? { color: { argb: bannerText } } : {}) }; tL.alignment = { vertical: "middle" };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const tR: any = ws.getCell(1, 9); tR.value = `출력 ${printStamp}`; tR.font = { size: 10, color: { argb: "FFFFFFFF" } }; tR.alignment = { vertical: "middle", horizontal: "right" };
+    const tR: any = ws.getCell(1, 9); tR.value = `출력 ${printStamp}`; tR.font = { size: 10, ...(bannerText ? { color: { argb: bannerText } } : {}) }; tR.alignment = { vertical: "middle", horizontal: "right" };
     ws.getRow(1).height = 24;
     // 하단(1차배정/배정대기) 없이 설비 박스 2열 그리드만. 각 줄: 번호 | 제품명 | 완료시간.
     // 제품명(47)·완료(15)는 너비를 넘치면 '셀에 맞춤'(shrinkToFit)으로 자동 축소. 좌:1~3열 / 우:5~7열.
