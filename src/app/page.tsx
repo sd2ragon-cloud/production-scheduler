@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef, useMemo, Fragment } from "rea
 import { useProcess } from "./components/ProcessContext";
 import { useAuth } from "./components/AuthContext";
 import { parseParts, parsePartDurations, parsePartProcesses, partTotals, parsePartBuckets } from "@/lib/parts";
-import { parseDayShifts, parseDateShifts } from "@/lib/shifts";
+import { parseDayShifts, parseDateShifts, isShiftMarker } from "@/lib/shifts";
 import { isDoubleSided } from "@/lib/print";
 import { roleCanEditLine } from "@/lib/factory-config";
 
@@ -2084,19 +2084,31 @@ export default function ScheduleBoard() {
   // 기준일(로컬 '오늘') — 날짜가 바뀌면 자동으로 그 날 기준으로 근무체제를 가져온다.
   const todayYmd = `${now.getFullYear()}-${p2x(now.getMonth() + 1)}-${p2x(now.getDate())}`;
   const todayWeekday = now.getDay(); // 0=일 ~ 6=토
+  // 다음날(로컬) — '완료' 근무체제일 때 대시보드에 대신 표기할 근무체제를 여기서 가져온다.
+  const tmr = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+  const tomorrowYmd = `${tmr.getFullYear()}-${p2x(tmr.getMonth() + 1)}-${p2x(tmr.getDate())}`;
+  const tomorrowWeekday = tmr.getDay();
   // 설비의 '오늘' 근무체제(설비관리에서 설정). 일자별 예외 > 요일별 순으로 적용.
-  // 반환: {label, dim}. 미설정이면 label="" , 그 날 휴무(빈 배열)면 "휴무".
+  // 반환: {label, dim}. 미설정이면 label="", 그 날 휴무(빈 배열/'휴무')면 "휴무".
+  //  '완료'(오늘 작업 완료) 선택 시 → '다음날'의 근무체제를 대신 표기(다음날 계획을 미리 보기 위함).
   const machineShiftToday = (m: Machine): { label: string; dim: boolean } => {
     const dateMap = parseDateShifts(m.date_shifts);
-    let arr: string[] | null = null;
-    if (todayYmd in dateMap) arr = dateMap[todayYmd];
-    else {
-      const dayMap = parseDayShifts(m.day_shifts);
-      if (todayWeekday in dayMap) arr = dayMap[todayWeekday];
+    const dayMap = parseDayShifts(m.day_shifts);
+    const resolve = (ymd: string, weekday: number): string[] | null =>
+      ymd in dateMap ? dateMap[ymd] : (weekday in dayMap ? dayMap[weekday] : null);
+    const labelOf = (arr: string[] | null): { label: string; dim: boolean } => {
+      if (arr === null) return { label: "", dim: true };
+      const real = arr.filter((s) => !isShiftMarker(s));
+      if (real.length === 0) return { label: "휴무", dim: true }; // 빈 배열·'휴무' 등 → 휴무
+      return { label: real.join("/"), dim: false };
+    };
+    const today = resolve(todayYmd, todayWeekday);
+    if (today && today.includes("완료")) {
+      const next = resolve(tomorrowYmd, tomorrowWeekday);
+      if (next === null || next.includes("완료")) return { label: "완료", dim: true }; // 다음날 미설정/또 완료 → '완료' 표기
+      return labelOf(next); // 다음날 근무체제(휴무면 '휴무') 표기
     }
-    if (arr === null) return { label: "", dim: true };
-    if (arr.length === 0) return { label: "휴무", dim: true };
-    return { label: arr.join("/"), dim: false };
+    return labelOf(today);
   };
 
   // 제책 '설비별 요일 근무체제' 패널·출력·엑셀에서 제외할 설비(요청: 낙정·배접 설비는 표기 안 함).

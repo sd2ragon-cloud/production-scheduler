@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { PROCESS_LINES, roleCanEditLine } from "@/lib/factory-config";
-import { SHIFT_NAMES, parseDayShifts, parseDateShifts } from "@/lib/shifts";
+import { SHIFT_NAMES, parseDayShifts, parseDateShifts, isShiftMarker } from "@/lib/shifts";
 import { todayLocal } from "@/lib/date";
 import { useAuth } from "../components/AuthContext";
 
@@ -20,7 +20,7 @@ interface Machine {
 
 const DAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
 // 달력 셀에 짧게 표기할 근무체제 약칭
-const SHIFT_ABBR: Record<string, string> = { "정상(주)": "주", "정상(야)": "야", "정시(주)": "정주", "정시(야)": "정야", "단부정시": "단부", "야업(20시)": "20시", "야업(21시)": "21시", "야업(22시)": "22시", "야업(23시)": "23시", "야업(24시)": "24시" };
+const SHIFT_ABBR: Record<string, string> = { "정상(주)": "주", "정상(야)": "야", "정시(주)": "정주", "정시(야)": "정야", "단부정시": "단부", "야업(20시)": "20시", "야업(21시)": "21시", "야업(22시)": "22시", "야업(23시)": "23시", "야업(24시)": "24시", "휴무": "휴무", "완료": "완료" };
 const abbrShifts = (names: string[]): string => (names.length ? names.map((n) => SHIFT_ABBR[n] ?? n).join("+") : "휴무");
 function parseOff(json: string | undefined): number[] {
   try { const a = JSON.parse(json || "[]"); return Array.isArray(a) ? a.map(Number).filter((n) => n >= 0 && n <= 6) : []; } catch { return []; }
@@ -161,7 +161,13 @@ function MachineColumn({ processLine, isAdmin }: { processLine: string; isAdmin:
   // 선택한 날짜에서 근무체제 칩 토글(요일 기본값에서 출발해도 그 날짜 지정으로 전환).
   const toggleDateShift = (date: string, weekday: number, name: string) => {
     const cur = effShiftsOf(date, weekday);
-    setDateShiftsFor(date, cur.includes(name) ? cur.filter((s) => s !== name) : [...cur, name]);
+    // 마커(휴무/완료)는 배타 선택(그 마커만). 실제 근무 선택 시엔 마커를 제거하고 추가.
+    const next = cur.includes(name)
+      ? cur.filter((s) => s !== name)
+      : isShiftMarker(name)
+        ? [name]
+        : [...cur.filter((s) => !isShiftMarker(s)), name];
+    setDateShiftsFor(date, next);
   };
   // 이 날짜 지정 지우기(직접 지정 삭제 → 기본 근무로 복귀).
   const resetDateToDefault = (date: string) => setEditDateEx((prev) => prev.filter((x) => x.date !== date));

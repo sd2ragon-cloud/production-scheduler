@@ -27,8 +27,20 @@ export const SHIFTS: Record<string, ShiftDef> = {
   "야업(24시)": { start: 8 * 60 + 30, end: 24 * 60 },
 };
 
-// 칩 표시 순서
-export const SHIFT_NAMES: string[] = ["정상(주)", "정상(야)", "정시(주)", "정시(야)", "단부정시", "야업(20시)", "야업(21시)", "야업(22시)", "야업(23시)", "야업(24시)"];
+// 특수 근무체제 마커(실제 근무시간 없음 → 스케줄상 무근무).
+//  휴무: 그 날 쉼(대시보드에 '휴무' 그대로 표기).
+//  완료: 오늘 작업 완료 — 대시보드엔 '다음날'의 근무체제를 대신 표기(다음날 계획을 미리 보기 위함).
+export const SHIFT_MARKERS = ["휴무", "완료"] as const;
+export function isShiftMarker(name: string): boolean {
+  return (SHIFT_MARKERS as readonly string[]).includes(name);
+}
+// 저장/파싱에서 허용하는 근무체제명(실제 교대 + 마커).
+export function isValidShiftName(name: string): boolean {
+  return name in SHIFTS || isShiftMarker(name);
+}
+
+// 칩 표시 순서 (실제 교대 + 마커)
+export const SHIFT_NAMES: string[] = ["정상(주)", "정상(야)", "정시(주)", "정시(야)", "단부정시", "야업(20시)", "야업(21시)", "야업(22시)", "야업(23시)", "야업(24시)", "휴무", "완료"];
 
 // 요일별 근무체제 JSON 파싱. { "1": ["정상(주)","정상(야)"], ... } (키=요일 0=일~6=토).
 export function parseDayShifts(json: string | undefined | null): Record<number, string[]> {
@@ -41,7 +53,7 @@ export function parseDayShifts(json: string | undefined | null): Record<number, 
         const d = Number(k);
         const arr = (o as Record<string, unknown>)[k];
         if (d >= 0 && d <= 6 && Array.isArray(arr)) {
-          const names = arr.filter((x): x is string => typeof x === "string" && x in SHIFTS);
+          const names = arr.filter((x): x is string => typeof x === "string" && isValidShiftName(x));
           if (names.length) out[d] = names;
         }
       }
@@ -69,7 +81,7 @@ export function parseDateShifts(json: string | undefined | null): Record<string,
         if (!/^\d{4}-\d{2}-\d{2}$/.test(k)) continue;
         const arr = (o as Record<string, unknown>)[k];
         if (Array.isArray(arr)) {
-          out[k] = arr.filter((x): x is string => typeof x === "string" && x in SHIFTS);
+          out[k] = arr.filter((x): x is string => typeof x === "string" && isValidShiftName(x));
         }
       }
     }

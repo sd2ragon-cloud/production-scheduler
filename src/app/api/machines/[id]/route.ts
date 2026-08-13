@@ -3,7 +3,7 @@ import { todayLocal } from '@/lib/date';
 import { getDb } from '@/lib/db';
 import { guardMachine } from '@/lib/permits';
 import { recalcMachine } from '@/lib/calc';
-import { SHIFTS } from '@/lib/shifts';
+import { isValidShiftName } from '@/lib/shifts';
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -88,7 +88,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     for (const [k, v] of Object.entries(body.day_shifts as Record<string, unknown>)) {
       const d = Number(k);
       if (d >= 0 && d <= 6 && Array.isArray(v)) {
-        const names = v.filter((x): x is string => typeof x === 'string' && x in SHIFTS);
+        const names = v.filter((x): x is string => typeof x === 'string' && isValidShiftName(x));
         if (names.length) clean[d] = names;
       }
     }
@@ -102,7 +102,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     for (const [k, v] of Object.entries(body.date_shifts as Record<string, unknown>)) {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(k)) continue;
       if (Array.isArray(v)) {
-        clean[k] = v.filter((x): x is string => typeof x === 'string' && x in SHIFTS); // 빈 배열=휴무 유지
+        clean[k] = v.filter((x): x is string => typeof x === 'string' && isValidShiftName(x)); // 빈 배열=휴무 유지
       }
     }
     await db.execute({ sql: 'UPDATE machines SET date_shifts = ? WHERE id = ?', args: [JSON.stringify(clean), id] });
