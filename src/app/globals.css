@@ -146,7 +146,7 @@ input[type="number"]::-webkit-outer-spin-button {
     flex-direction: column;
     --pf-accent: #002060;   /* 라인 구분 색(기본=매엽: 남색) */
   }
-  .pf-page.pf-roll { --pf-accent: #b45309; } /* 윤전: 주황(남색과 색·명도가 확연히 달라 흑백에서도 구분) */
+  .pf-page.pf-roll { --pf-accent: #002060; } /* 윤전: 원래 색(남색)으로 복원 */
   /* 헤더: 매엽은 색상바 없이 일반 텍스트(요청), 윤전만 라인 색 배너로 반전 표기해 구분 */
   .pf-head {
     flex: 0 0 auto;

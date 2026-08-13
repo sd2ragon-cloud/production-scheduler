@@ -1814,8 +1814,8 @@ export default function ScheduleBoard() {
       if (opts.borderObj) m.border = opts.borderObj; // 병합 범위 테두리는 마스터 셀이 정의
       return m;
     };
-    // 라인 구분 색(출력물과 동일): 매엽=남색 / 윤전=주황. 설비 헤더에 사용.
-    const ACCENT = isRoll ? "FFB45309" : "FF002060";
+    // 설비 헤더 색: 원래 색(남색)으로 통일(매엽·윤전 동일).
+    const ACCENT = "FF002060";
     // 상단 제목: 윤전은 라인 색 배너(전 열 채움)+흰 글씨, 매엽은 색상바 없이 일반 텍스트(요청).
     const bannerText = isRoll ? "FFFFFFFF" : undefined; // 배너 없는 매엽은 기본(검정)
     if (isRoll) for (let cc = 1; cc <= 9; cc++) ws.getCell(1, cc).fill = { type: "pattern", pattern: "solid", fgColor: { argb: ACCENT } };
