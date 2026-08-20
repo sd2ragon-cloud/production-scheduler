@@ -2401,7 +2401,12 @@ export default function ScheduleBoard() {
           <div className="pf-sect">
             <div className="pf-secttl">배정 대기 <span className="pf-secsum">{fmtH(locationMinutes(waitingOrders, undefined))} · {fmtDays(locationMinutes(waitingOrders, undefined))}</span></div>
             <div className="pf-secbody">
-              {waitingOrders.map((o) => <div key={o.id} className="pf-row">{ov(o)}</div>)}
+              {waitingOrders.map((o) => (
+                <div key={o.id} className="pf-row">
+                  <span className="pf-row-lbl">{ov(o)}</span>
+                  <span className="pf-row-dur">{fmtH(locationMinutes([o], undefined))}</span>
+                </div>
+              ))}
             </div>
           </div>
         </div>

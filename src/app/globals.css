@@ -340,7 +340,10 @@ input[type="number"]::-webkit-outer-spin-button {
   /* 배정 대기: 2열로 나눠 더 많은 물량 표기 */
   .pf-secbody { padding: 1mm 1.5mm; flex: 1 1 0; min-height: 0; overflow: hidden; column-count: 2; column-gap: 2.5mm; }
   /* 배정 대기 칩: 한 줄(넘치면 JS가 너비에 맞춰 폰트 유동 축소) */
-  .pf-row { font-size: 7pt; line-height: 1.5; overflow: hidden; white-space: nowrap; break-inside: avoid; }
+  /* 배정 대기 항목: 좌측 라벨 + 우측 총 소요시간(공란 채움) */
+  .pf-row { display: flex; justify-content: space-between; align-items: baseline; gap: 1.5mm; font-size: 7pt; line-height: 1.5; overflow: hidden; white-space: nowrap; break-inside: avoid; }
+  .pf-row-lbl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .pf-row-dur { flex: 0 0 auto; font-variant-numeric: tabular-nums; }
 
   /* 1차 배정: 1열로 칸을 세로 분할(행 수는 칸 개수에 맞춰 page.tsx 인라인이 지정).
      칸 안의 제품명은 .pf-bk-items에서 2열로 흐른다(배정 대기처럼). */
