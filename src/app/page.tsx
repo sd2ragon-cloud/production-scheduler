@@ -99,12 +99,12 @@ interface ScheduleEntry {
 
 const DAY_NAMES = ["일", "월", "화", "수", "목", "금", "토"];
 
-// 표시색(mark_color)은 '자동'으로만 칠해진다(여러 관리자 공유, ''=표시 없음):
-//   rose(핑크) = 설비 간 이동(다른 기계로 옮김)  /  amber(노랑) = 설비 내 순서변경
-// #번호 클릭은 '표시 지우기(초기화)' 용도로만 쓴다(수동으로 색을 칠하지 않음).
+// 표시색(mark_color) — 여러 관리자 공유, ''=표시 없음:
+//   rose(핑크) = 설비 간 이동(자동) + #번호 클릭 수동 표시  /  amber(노랑) = 설비 내 순서변경(자동)
+// #번호 클릭 시 rose(핑크) 켜기/끄기 토글.
 const MARK_BG: Record<string, string> = {
   amber: "#fde68a", // 노랑(설비 내 순서변경 자동)
-  rose: "#fbcfe8",  // 핑크(설비 간 이동 자동)
+  rose: "#fbcfe8",  // 핑크(설비 간 이동 자동 + # 클릭 수동)
 };
 // 표시색을 엑셀 fill용 ARGB로 (#fde68a → FFFDE68A). 없으면 undefined.
 const markArgb = (c?: string): string | undefined => (c && MARK_BG[c] ? "FF" + MARK_BG[c].slice(1).toUpperCase() : undefined);
@@ -571,14 +571,16 @@ export default function ScheduleBoard() {
   };
 
   // #번호 클릭 → 표시 색상 토글(없음 ↔ 노랑). DB 저장으로 여러 관리자 공유.
-  // #번호 클릭: 자동으로 칠해진 표시색을 '지운다'(초기화). 수동으로 색을 칠하지는 않는다.
-  const clearMark = async (entry: ScheduleEntry) => {
-    if (!isAdmin || !entry.mark_color) return; // 표시 없으면 동작 안 함
-    setSchedule((prev) => prev.map((e) => (e.id === entry.id ? { ...e, mark_color: "" } : e)));
+  // #번호 클릭: 표시색 rose(핑크) 켜기/끄기 토글(수동 표시 — 모든 관리자 공유).
+  // 이미 핑크면 지우고, 그 외(표시 없음·노랑)면 핑크로 칠한다.
+  const cycleMark = async (entry: ScheduleEntry) => {
+    if (!isAdmin) return;
+    const next = entry.mark_color === "rose" ? "" : "rose";
+    setSchedule((prev) => prev.map((e) => (e.id === entry.id ? { ...e, mark_color: next } : e)));
     await fetch("/api/schedule/mark", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ entry_id: entry.id, color: "" }),
+      body: JSON.stringify({ entry_id: entry.id, color: next }),
     });
   };
 
@@ -2712,10 +2714,10 @@ export default function ScheduleBoard() {
                           }}
                         >
                           <td
-                            className={`px-1.5 py-0 text-[10px] select-none ${entry.mark_color ? "text-gray-700 font-bold" : "text-gray-400"} ${isAdmin && entry.mark_color ? "cursor-pointer hover:bg-black/10" : ""}`}
-                            title={isAdmin && entry.mark_color ? "클릭: 변경 표시 지우기" : ""}
+                            className={`px-1.5 py-0 text-[10px] select-none ${entry.mark_color ? "text-gray-700 font-bold" : "text-gray-400"} ${isAdmin ? "cursor-pointer hover:bg-black/10" : ""}`}
+                            title={isAdmin ? "클릭: 표시색(분홍) 켜기/끄기 — 모든 관리자 공유" : ""}
                             draggable={false}
-                            onClick={(e) => { e.stopPropagation(); clearMark(entry); }}
+                            onClick={(e) => { e.stopPropagation(); cycleMark(entry); }}
                           >
                             {idx + 1}
                           </td>
