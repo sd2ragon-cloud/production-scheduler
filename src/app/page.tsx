@@ -99,12 +99,12 @@ interface ScheduleEntry {
 
 const DAY_NAMES = ["일", "월", "화", "수", "목", "금", "토"];
 
-// #번호 클릭 시 표시 색상 토글(없음 ↔ 노랑). 여러 관리자가 수정 표시를 공유. ''=표시 없음.
-// rose(핑크)는 이동·수정 시 자동으로 칠해진다(관리자가 옮긴 것 식별용).
-const MARK_CYCLE = ["", "amber"];
+// 표시색(mark_color)은 '자동'으로만 칠해진다(여러 관리자 공유, ''=표시 없음):
+//   rose(핑크) = 설비 간 이동(다른 기계로 옮김)  /  amber(노랑) = 설비 내 순서변경
+// #번호 클릭은 '표시 지우기(초기화)' 용도로만 쓴다(수동으로 색을 칠하지 않음).
 const MARK_BG: Record<string, string> = {
-  amber: "#fde68a", // 노랑(# 클릭 수동)
-  rose: "#fbcfe8",  // 핑크(이동·수정 자동)
+  amber: "#fde68a", // 노랑(설비 내 순서변경 자동)
+  rose: "#fbcfe8",  // 핑크(설비 간 이동 자동)
 };
 // 표시색을 엑셀 fill용 ARGB로 (#fde68a → FFFDE68A). 없으면 undefined.
 const markArgb = (c?: string): string | undefined => (c && MARK_BG[c] ? "FF" + MARK_BG[c].slice(1).toUpperCase() : undefined);
@@ -571,15 +571,14 @@ export default function ScheduleBoard() {
   };
 
   // #번호 클릭 → 표시 색상 토글(없음 ↔ 노랑). DB 저장으로 여러 관리자 공유.
-  const cycleMark = async (entry: ScheduleEntry) => {
-    if (!isAdmin) return;
-    const cur = entry.mark_color || "";
-    const next = MARK_CYCLE[(MARK_CYCLE.indexOf(cur) + 1) % MARK_CYCLE.length];
-    setSchedule((prev) => prev.map((e) => (e.id === entry.id ? { ...e, mark_color: next } : e)));
+  // #번호 클릭: 자동으로 칠해진 표시색을 '지운다'(초기화). 수동으로 색을 칠하지는 않는다.
+  const clearMark = async (entry: ScheduleEntry) => {
+    if (!isAdmin || !entry.mark_color) return; // 표시 없으면 동작 안 함
+    setSchedule((prev) => prev.map((e) => (e.id === entry.id ? { ...e, mark_color: "" } : e)));
     await fetch("/api/schedule/mark", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ entry_id: entry.id, color: next }),
+      body: JSON.stringify({ entry_id: entry.id, color: "" }),
     });
   };
 
@@ -596,17 +595,18 @@ export default function ScheduleBoard() {
     });
   };
 
-  // 이동·수정한 항목을 핑크(rose)로 자동 표시 — 관리자가 옮긴 것 식별용.
-  // 그 주문이 대상 설비에 만든/바뀐 엔트리를 핑크로 칠한다(이동은 새 엔트리가 생기므로 다시 조회해 찾는다).
-  const markMoved = async (orderId: number | null, machineId: number) => {
+  // 변경된 항목을 자동으로 표시색으로 칠한다(관리자 식별용).
+  //   color="rose"(핑크)=설비 간 이동(기본)  /  color="amber"(노랑)=설비 내 순서변경
+  // 그 주문이 대상 설비에 만든/바뀐 엔트리를 칠한다(이동은 새 엔트리가 생기므로 다시 조회해 찾는다).
+  const markMoved = async (orderId: number | null, machineId: number, color: string = "rose") => {
     if (!isAdmin || orderId == null) return;
     try {
       const sch = await fetch(`/api/schedule?process_line=${encodeURIComponent(processLine)}`).then((r) => r.json());
       if (!Array.isArray(sch)) return;
       const ids = (sch as ScheduleEntry[]).filter((e) => e.order_id === orderId && e.machine_id === machineId).map((e) => e.id);
       if (!ids.length) return;
-      setSchedule((prev) => prev.map((e) => (ids.includes(e.id) ? { ...e, mark_color: "rose" } : e)));
-      await Promise.all(ids.map((id) => fetch("/api/schedule/mark", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ entry_id: id, color: "rose" }) })));
+      setSchedule((prev) => prev.map((e) => (ids.includes(e.id) ? { ...e, mark_color: color } : e)));
+      await Promise.all(ids.map((id) => fetch("/api/schedule/mark", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ entry_id: id, color }) })));
     } catch { /* 무시 */ }
   };
 
@@ -762,7 +762,8 @@ export default function ScheduleBoard() {
       }),
     });
     await fetchAll();
-    await markMoved(movedOid, targetMachineId);
+    // 같은 설비 내 재배치=순서변경(노랑), 다른 설비로 이동=이동(분홍).
+    await markMoved(movedOid, targetMachineId, srcMachineId === targetMachineId ? "amber" : "rose");
     setLoading(false);
   };
 
@@ -993,7 +994,7 @@ export default function ScheduleBoard() {
       body: JSON.stringify({ machine_id: machineId, entry_ids: entryIds }),
     });
     await fetchAll();
-    await markMoved(movedOid, machineId);
+    await markMoved(movedOid, machineId, "amber"); // 설비 내 순서변경 = 노랑
   };
 
   // 배정 대기 카드 순서 변경(위/아래 드래그). orderedIds = 재정렬 대상 주문 id들의 새 순서.
@@ -2706,10 +2707,10 @@ export default function ScheduleBoard() {
                           }}
                         >
                           <td
-                            className={`px-1.5 py-0 text-[10px] select-none ${entry.mark_color ? "text-gray-700 font-bold" : "text-gray-400"} ${isAdmin ? "cursor-pointer hover:bg-black/10" : ""}`}
-                            title={isAdmin ? "클릭: 표시 색상 변경 (수정 표시 — 모든 관리자 공유)" : ""}
+                            className={`px-1.5 py-0 text-[10px] select-none ${entry.mark_color ? "text-gray-700 font-bold" : "text-gray-400"} ${isAdmin && entry.mark_color ? "cursor-pointer hover:bg-black/10" : ""}`}
+                            title={isAdmin && entry.mark_color ? "클릭: 변경 표시 지우기" : ""}
                             draggable={false}
-                            onClick={(e) => { e.stopPropagation(); cycleMark(entry); }}
+                            onClick={(e) => { e.stopPropagation(); clearMark(entry); }}
                           >
                             {idx + 1}
                           </td>
