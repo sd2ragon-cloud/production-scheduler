@@ -208,8 +208,6 @@ input[type="number"]::-webkit-outer-spin-button {
   /* 오늘 근무체제 — 설비명 옆에 작게(흰색) 표기 */
   .pf-shift { font-weight: normal; font-size: 7.5pt; color: #fff; }
   .pf-list { margin: 0; padding: 1mm 4mm 1mm 3mm; overflow: hidden; }
-  /* 윤전: 제품 줄을 박스 높이에 맞춰 세로로 균등 분배(9줄이 균형있게 채워지고 마지막 줄이 잘리지 않게) */
-  .pf-roll .pf-list { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; justify-content: space-between; }
   .pf-list li { font-size: 7pt; line-height: 1.25; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   /* 배정 내역: 번호 · 제품명(넓게) · 비고 · 완료시간 (각 칸 넘치면 JS가 폰트 유동 축소) */
   /* 완료예정일시(마지막 열)를 좁히고 제품명·비고를 넓힘(매엽·윤전 공통). 완료 글자는 JS가 이 칸 폭에
