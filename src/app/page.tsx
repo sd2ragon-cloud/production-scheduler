@@ -210,6 +210,14 @@ export default function ScheduleBoard() {
   const [allOrders, setAllOrders] = useState<Order[]>([]);
   const [schedule, setSchedule] = useState<ScheduleEntry[]>([]);
   const [buckets, setBuckets] = useState<Bucket[]>([]);
+  // 되돌리기(Undo, 세션 방식): 각 라인별로 '변경 직전 상태' 스냅샷을 브라우저에 쌓아둔다.
+  // fetchAll에서 상태가 실제로 바뀌면 직전 상태를 push하고, 되돌리기 시 서버로 복원한다.
+  type UndoSnap = { orders: Order[]; entries: ScheduleEntry[]; buckets: Bucket[] };
+  const undoStacksRef = useRef<Record<string, UndoSnap[]>>({});
+  const committedRef = useRef<{ line: string; sig: string; orders: Order[]; entries: ScheduleEntry[]; buckets: Bucket[] } | null>(null);
+  const suppressUndoPushRef = useRef(false); // 되돌리기로 인한 fetchAll에선 스냅샷을 쌓지 않게
+  const [undoCount, setUndoCount] = useState(0); // 현재 라인의 되돌리기 가능 단계 수(버튼 활성화용)
+  const UNDO_MAX = 30;
   // 현재 화면에 로드된 데이터가 어느 라인 것인지. processLine과 다르면(탭 전환 직후) 아직 이전 라인 데이터이므로
   // 설비·물량을 렌더하지 않고 로딩 표시 → 탭 전환 시 엉뚱한 라인 데이터가 잠깐 보이는 문제 방지.
   const [dataLine, setDataLine] = useState("");
@@ -315,10 +323,24 @@ export default function ScheduleBoard() {
       if (isRoll) return parts.some((p) => !present.has(p));
       return parts.some((p) => { const t = Number(totals[p]) || 0; return t > 0 ? (alloc[p] || 0) < t : !present.has(p); });
     };
+    // 되돌리기 스냅샷: 이 fetch로 상태가 실제로 바뀌면 '직전 상태'를 스택에 저장(세션 방식).
+    const safeOrders: Order[] = Array.isArray(orderData) ? orderData : [];
+    const safeBuckets: Bucket[] = Array.isArray(bucketData) ? bucketData : [];
+    const newSig = JSON.stringify({ o: safeOrders, e: schedData, b: safeBuckets });
+    const prevSnap = committedRef.current;
+    if (suppressUndoPushRef.current) {
+      suppressUndoPushRef.current = false; // 되돌리기가 유발한 fetch는 저장하지 않음(핑퐁 방지)
+    } else if (prevSnap && prevSnap.line === line && prevSnap.sig !== newSig) {
+      const stack = (undoStacksRef.current[line] = undoStacksRef.current[line] || []);
+      stack.push({ orders: prevSnap.orders, entries: prevSnap.entries, buckets: prevSnap.buckets });
+      if (stack.length > UNDO_MAX) stack.shift();
+    }
+    committedRef.current = { line, sig: newSig, orders: safeOrders, entries: schedData as ScheduleEntry[], buckets: safeBuckets };
+    setUndoCount(undoStacksRef.current[line]?.length || 0);
     setOrders(orderData.filter((o: Order) => o.status === "pending" || orderHasRemaining(o)));
-    setAllOrders(Array.isArray(orderData) ? orderData : []);
+    setAllOrders(safeOrders);
     setSchedule(schedData);
-    setBuckets(Array.isArray(bucketData) ? bucketData : []);
+    setBuckets(safeBuckets);
     setMachineStartTimes((prev) => {
       const next = { ...prev };
       for (const m of activeMachines) {
@@ -611,6 +633,48 @@ export default function ScheduleBoard() {
       await Promise.all(ids.map((id) => fetch("/api/schedule/mark", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ entry_id: id, color }) })));
     } catch { /* 무시 */ }
   };
+
+  // 되돌리기(Undo): 현재 라인의 스택에서 '직전 상태'를 꺼내 서버로 복원한다.
+  const undo = async () => {
+    if (!isAdmin) return;
+    const line = processLine;
+    const stack = undoStacksRef.current[line];
+    if (!stack || stack.length === 0) return;
+    const snap = stack.pop()!;
+    setUndoCount(stack.length);
+    setLoading(true);
+    suppressUndoPushRef.current = true; // 복원 후의 fetchAll이 되돌린 상태를 다시 쌓지 않게
+    try {
+      const res = await fetch("/api/schedule/restore", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ process_line: line, orders: snap.orders, entries: snap.entries, buckets: snap.buckets }),
+      });
+      if (!res.ok) { suppressUndoPushRef.current = false; stack.push(snap); setUndoCount(stack.length); }
+      await fetchAll();
+    } catch {
+      suppressUndoPushRef.current = false;
+    } finally {
+      setLoading(false);
+    }
+  };
+  const undoRef = useRef(undo);
+  undoRef.current = undo;
+  // Ctrl+Z 되돌리기 (입력창에 포커스된 경우는 브라우저 기본 실행취소를 방해하지 않음)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.key.toLowerCase() !== "z") return;
+      const t = e.target as HTMLElement | null;
+      const tag = t?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || t?.isContentEditable) return;
+      e.preventDefault();
+      undoRef.current();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+  // 탭(라인) 전환 시 그 라인의 되돌리기 가능 단계 수를 즉시 반영
+  useEffect(() => { setUndoCount(undoStacksRef.current[processLine]?.length || 0); }, [processLine]);
 
   // 식사시간 추가/수정/삭제. 변경 시 서버가 전 설비 일정을 재계산하므로, 끝나면 fetchAll로 갱신한다.
   const addBreak = async () => {
@@ -2436,6 +2500,16 @@ export default function ScheduleBoard() {
             <p className="text-xs text-gray-500">{dateStr}</p>
           </div>
           <div className="flex items-center gap-1.5 flex-wrap justify-end">
+            {isAdmin && (
+              <button
+                onClick={undo}
+                disabled={undoCount === 0}
+                className={`text-xs border px-2 py-1 whitespace-nowrap ${undoCount === 0 ? "border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed" : "border-amber-500 bg-amber-50 text-amber-700 font-medium hover:bg-amber-100"}`}
+                title={undoCount === 0 ? "되돌릴 변경이 없습니다 (새로고침하면 이력이 초기화됩니다)" : `직전 변경 되돌리기 (Ctrl+Z) · ${undoCount}단계 가능`}
+              >
+                ↩ 되돌리기{undoCount > 0 ? ` (${undoCount})` : ""}
+              </button>
+            )}
             <button
               onClick={openNote}
               className={`text-xs border px-2 py-1 whitespace-nowrap ${workNote.trim() ? "border-green-400 bg-green-50 text-green-700 font-medium" : "border-gray-300 bg-white text-gray-700 hover:bg-gray-100"}`}
