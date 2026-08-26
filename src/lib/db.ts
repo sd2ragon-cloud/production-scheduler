@@ -320,12 +320,22 @@ async function initializeDb(db: Client) {
     { name: 'entry_notes', def: "TEXT NOT NULL DEFAULT ''" },
     { name: 'entry_quantity', def: 'REAL NOT NULL DEFAULT 0' },
     { name: 'entry_edited', def: 'INTEGER NOT NULL DEFAULT 0' },
+    // 비고(entry_notes) 전용 오버라이드 플래그: 1이면 이 항목은 자체 비고를 쓴다(같은 주문의 다른 배정과 분리).
+    // entry_edited(제품명·수량 오버라이드, 윤전)와 별개로 두어, 매엽·제책에서도 '비고만' 항목별로 저장 가능.
+    { name: 'entry_notes_edited', def: 'INTEGER NOT NULL DEFAULT 0' },
   ]) {
     try {
       await db.execute(`ALTER TABLE schedule_entries ADD COLUMN ${col.name} ${col.def}`);
     } catch {
       // column already exists
     }
+  }
+  // 기존 윤전 편집 항목(entry_edited=1)은 비고도 이미 '항목별'이었으므로, 새 비고 플래그를 켜
+  // 배포 후에도 그 항목들의 비고가 그대로 유지되게 한다(멱등 — 이미 켜진 건 건드리지 않음).
+  try {
+    await db.execute(`UPDATE schedule_entries SET entry_notes_edited = 1 WHERE entry_edited = 1 AND entry_notes_edited = 0`);
+  } catch {
+    // 컬럼 없음(구버전) 등 → 무시
   }
 
   // 관리자 비밀번호 역할 분리 마이그레이션: 기존 단일 admin_pw가 있으면 매엽·윤전 관리자(admin_pw_sheet)로 이관.

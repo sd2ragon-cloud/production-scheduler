@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
       o.special_process,
       o.part_processes,
       o.priority,
-      CASE WHEN se.entry_edited = 1 THEN se.entry_notes ELSE o.notes END as order_notes,
+      CASE WHEN se.entry_notes_edited = 1 THEN se.entry_notes ELSE o.notes END as order_notes,
       o.extra_notes as order_extra,
       m.name as machine_name
     FROM schedule_entries se

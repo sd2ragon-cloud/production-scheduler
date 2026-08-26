@@ -263,6 +263,8 @@ export default function ScheduleBoard() {
   const [editEntryParts, setEditEntryParts] = useState<string[]>([]);
   // 윤전 전용: 설비 배정 항목을 그 항목만(주문·다른 구역과 분리) 수정 중일 때의 엔트리 id.
   const [editRollEntryId, setEditRollEntryId] = useState<number | null>(null);
+  // 매엽·제책: 설비 배정 항목에서 수정할 때 그 항목 id(비고를 '항목별'로 저장해 같은 주문의 다른 배정과 분리).
+  const [editNotesEntryId, setEditNotesEntryId] = useState<number | null>(null);
   const [newOrder, setNewOrder] = useState({
     order_code: "", product_name: "", component: "", quantity_sheets: 0,
     deadline: "", special_process: "일반", priority: 5, notes: "", extra_notes: "", duration_hours: 0,
@@ -1178,6 +1180,7 @@ export default function ScheduleBoard() {
     setEditEntryId(null);
     setEditEntryParts([]);
     setEditRollEntryId(null);
+    setEditNotesEntryId(null);
   };
 
   // 대기 주문 편집 시작: 폼을 해당 주문 값으로 채운다
@@ -1212,6 +1215,7 @@ export default function ScheduleBoard() {
       setEditEntryId(null);
       setEditEntryParts([]);
       setEditRollEntryId(entry.id);
+      setEditNotesEntryId(null); // 윤전은 entry-fields가 비고까지 항목별로 저장
       setShowAddForm(true);
       return;
     }
@@ -1238,7 +1242,8 @@ export default function ScheduleBoard() {
       deadline: order.deadline || "",
       special_process: order.special_process ?? "일반",
       priority: order.priority || 5,
-      notes: order.notes || "",
+      // 설비 항목에서 수정하면 그 '항목의 비고'를 폼에 채운다(entry.order_notes). 대기 주문 편집이면 주문 비고.
+      notes: entry != null ? (entry.order_notes || "") : (order.notes || ""),
       extra_notes: order.extra_notes || "",
       duration_hours: parts.length >= 2 ? 0 : (scoped ? Math.round((Number(pd[parts[0]]) || 0) / 60 * 2) / 2 : Math.round((order.duration_minutes || 0) / 60 * 2) / 2),
       // 생산성은 부수 ÷ 소요시간으로 역산(저장 없이 복원)
@@ -1254,6 +1259,8 @@ export default function ScheduleBoard() {
     setEditMachineId(asCopy ? null : fromMachineId);
     setEditEntryId(scoped ? entry!.id : null);
     setEditEntryParts(scoped ? parts : []);
+    // 설비 항목에서 수정하면 비고를 '그 항목'에 저장(같은 주문의 다른 배정과 분리). 복사/대기 편집이면 주문 비고.
+    setEditNotesEntryId(!asCopy && entry != null ? entry.id : null);
     setShowAddForm(true);
   };
 
@@ -1377,6 +1384,8 @@ export default function ScheduleBoard() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...newOrder,
+          // 설비 항목에서 수정 시 비고는 '주문'을 건드리지 않는다(항목별 저장). 대기 편집이면 폼값 사용.
+          notes: editNotesEntryId != null ? (origOrder?.notes ?? "") : newOrder.notes,
           component: mergedComp.join(", "),
           special_process: specialProcess,
           quantity_sheets: mergedQty,
@@ -1392,14 +1401,25 @@ export default function ScheduleBoard() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ entry_id: editEntryId, parts: parts.map((p) => ({ name: p, minutes: minutesOf(p) })) }),
       });
+      // 비고는 이 설비 항목에만 저장(같은 주문의 다른 배정과 분리).
+      if (editNotesEntryId != null) {
+        await fetch("/api/schedule/entry-notes", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ entry_id: editNotesEntryId, notes: newOrder.notes }),
+        });
+      }
     } else if (editingOrderId !== null) {
       // 배정 완료된 작업을 설비 화면에서 수정해도 상태가 대기로 바뀌지 않도록 기존 상태 유지
-      const existingStatus = allOrders.find((o) => o.id === editingOrderId)?.status || "pending";
+      const origOrderFull = allOrders.find((o) => o.id === editingOrderId);
+      const existingStatus = origOrderFull?.status || "pending";
       await fetch(`/api/orders/${editingOrderId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...newOrder,
+          // 설비 항목에서 수정 시 비고는 '주문'을 건드리지 않는다(항목별 저장). 대기 편집이면 폼값 사용.
+          notes: editNotesEntryId != null ? (origOrderFull?.notes ?? "") : newOrder.notes,
           special_process: specialProcess,
           quantity_sheets: qtyTotal,
           duration_minutes: durationMinutes,
@@ -1409,6 +1429,14 @@ export default function ScheduleBoard() {
           status: existingStatus,
         }),
       });
+      // 비고는 이 설비 항목에만 저장(같은 주문의 다른 배정과 분리).
+      if (editNotesEntryId != null) {
+        await fetch("/api/schedule/entry-notes", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ entry_id: editNotesEntryId, notes: newOrder.notes }),
+        });
+      }
       // 설비 행에서 수정한 경우: 새로 추가된 구성(아직 어느 설비에도 배정 안 됨)을 그 설비에 바로 병합 배정.
       if (editMachineId !== null && parts.length >= 2) {
         const assigned = new Set<string>();

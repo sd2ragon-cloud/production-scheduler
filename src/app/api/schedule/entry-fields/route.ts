@@ -22,8 +22,8 @@ export async function POST(req: NextRequest) {
   if (!src) return NextResponse.json({ error: 'not found' }, { status: 404 });
   const oldParts = parseParts(src.component_part || '');
 
-  // 표시값(제품명·비고·수량) + entry_edited=1(이 항목은 주문값 대신 자체값 사용)
-  let setSql = 'entry_product_name = ?, entry_notes = ?, entry_quantity = ?, entry_edited = 1';
+  // 표시값(제품명·비고·수량) + entry_edited=1(제품명·수량 자체값) + entry_notes_edited=1(비고 자체값)
+  let setSql = 'entry_product_name = ?, entry_notes = ?, entry_quantity = ?, entry_edited = 1, entry_notes_edited = 1';
   const args: (string | number)[] = [String(product_name ?? ''), String(notes ?? ''), Number(quantity_sheets) || 0];
 
   // 구성(파트) 목록이 오면 이 설비 항목의 구성·파트별 소요시간을 반영한다(추가/삭제 포함).
