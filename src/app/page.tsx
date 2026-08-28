@@ -2179,13 +2179,10 @@ export default function ScheduleBoard() {
   // 기준일(로컬 '오늘') — 날짜가 바뀌면 자동으로 그 날 기준으로 근무체제를 가져온다.
   const todayYmd = `${now.getFullYear()}-${p2x(now.getMonth() + 1)}-${p2x(now.getDate())}`;
   const todayWeekday = now.getDay(); // 0=일 ~ 6=토
-  // 다음날(로컬) — '완료' 근무체제일 때 대시보드에 대신 표기할 근무체제를 여기서 가져온다.
-  const tmr = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-  const tomorrowYmd = `${tmr.getFullYear()}-${p2x(tmr.getMonth() + 1)}-${p2x(tmr.getDate())}`;
-  const tomorrowWeekday = tmr.getDay();
   // 설비의 '오늘' 근무체제(설비관리에서 설정). 일자별 예외 > 요일별 순으로 적용.
   // 반환: {label, dim}. 미설정이면 label="", 그 날 휴무(빈 배열/'휴무')면 "휴무".
-  //  '완료'(오늘 작업 완료) 선택 시 → '다음날'의 근무체제를 대신 표기(다음날 계획을 미리 보기 위함).
+  //  '완료'(오늘 작업 완료) 선택 시 → 앞으로 나아가며 '첫 실제 근무일'의 근무체제를 대신 표기한다.
+  //  (예: 금·토=완료, 일=휴무면 → 완료·휴무일을 건너뛰고 '월요일' 근무체제를 표기)
   const machineShiftToday = (m: Machine): { label: string; dim: boolean } => {
     const dateMap = parseDateShifts(m.date_shifts);
     const dayMap = parseDayShifts(m.day_shifts);
@@ -2199,9 +2196,17 @@ export default function ScheduleBoard() {
     };
     const today = resolve(todayYmd, todayWeekday);
     if (today && today.includes("완료")) {
-      const next = resolve(tomorrowYmd, tomorrowWeekday);
-      if (next === null || next.includes("완료")) return { label: "완료", dim: true }; // 다음날 미설정/또 완료 → '완료' 표기
-      return labelOf(next); // 다음날 근무체제(휴무면 '휴무') 표기
+      // 완료·휴무·미설정일을 건너뛰고 앞으로 '첫 실제 근무일'을 찾아 그 근무체제를 표기.
+      for (let d = 1; d <= 14; d++) {
+        const day = new Date(now.getFullYear(), now.getMonth(), now.getDate() + d);
+        const ymd = `${day.getFullYear()}-${p2x(day.getMonth() + 1)}-${p2x(day.getDate())}`;
+        const arr = resolve(ymd, day.getDay());
+        if (arr === null || arr.includes("완료")) continue;      // 미설정·완료 → 건너뜀
+        const real = arr.filter((s) => !isShiftMarker(s));
+        if (real.length === 0) continue;                         // 휴무·빈 배열 → 건너뜀
+        return { label: real.join("/"), dim: false };            // 첫 실제 근무일의 근무체제
+      }
+      return { label: "완료", dim: true }; // 앞으로 근무일이 없으면(전부 완료·휴무) '완료' 표기
     }
     return labelOf(today);
   };
