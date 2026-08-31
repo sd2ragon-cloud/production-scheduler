@@ -2229,17 +2229,16 @@ export default function ScheduleBoard() {
     };
     const today = resolve(todayYmd, todayWeekday);
     if (today && today.includes("완료")) {
-      // 완료·휴무·미설정일을 건너뛰고 앞으로 '첫 실제 근무일'을 찾아 그 근무체제를 표기.
+      // '완료'·'미설정(정기 휴무 등)'일은 건너뛰고, 앞으로 '설정된 첫 날'을 표기한다.
+      //  · 그 날이 실제 근무면 근무체제를, 명시적 '휴무'면 '휴무'를 그대로 표기(휴무는 건너뛰지 않음).
       for (let d = 1; d <= 14; d++) {
         const day = new Date(now.getFullYear(), now.getMonth(), now.getDate() + d);
         const ymd = `${day.getFullYear()}-${p2x(day.getMonth() + 1)}-${p2x(day.getDate())}`;
         const arr = resolve(ymd, day.getDay());
-        if (arr === null || arr.includes("완료")) continue;      // 미설정·완료 → 건너뜀
-        const real = arr.filter((s) => !isShiftMarker(s));
-        if (real.length === 0) continue;                         // 휴무·빈 배열 → 건너뜀
-        return { label: real.join("/"), dim: false };            // 첫 실제 근무일의 근무체제
+        if (arr === null || arr.includes("완료")) continue; // 미설정·완료 → 건너뜀
+        return labelOf(arr);                                // 설정된 첫 날: 근무체제, 또는 명시적 휴무면 '휴무'
       }
-      return { label: "완료", dim: true }; // 앞으로 근무일이 없으면(전부 완료·휴무) '완료' 표기
+      return { label: "완료", dim: true }; // 앞으로 설정된 날이 없으면(전부 완료·미설정) '완료' 표기
     }
     return labelOf(today);
   };
