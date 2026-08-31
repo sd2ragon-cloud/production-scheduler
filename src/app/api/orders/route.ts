@@ -42,7 +42,8 @@ export async function POST(req: NextRequest) {
   const nextSort = Number((maxRes.rows[0] as unknown as { m: number }).m) + 1;
 
   const result = await db.execute({
-    sql: `INSERT INTO orders (order_code, product_name, component, quantity_sheets, deadline, special_process, priority, notes, duration_minutes, part_durations, part_processes, part_quantities, extra_notes, factory, process_line, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    // 신규 주문은 배정대기에서 분홍(rose)으로 표시 → 다른 사용자가 새로 추가된 걸 바로 알아보게 함.
+    sql: `INSERT INTO orders (order_code, product_name, component, quantity_sheets, deadline, special_process, priority, notes, duration_minutes, part_durations, part_processes, part_quantities, extra_notes, factory, process_line, sort_order, mark_color) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       body.order_code || '',
       body.product_name,
@@ -60,6 +61,7 @@ export async function POST(req: NextRequest) {
       body.factory || '본공장',
       body.process_line || '매엽',
       nextSort,
+      'rose',
     ],
   });
 

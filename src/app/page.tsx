@@ -43,6 +43,7 @@ interface Order {
   part_quantities: string; // 윤전: 구성별 수량(부) JSON {"표지": 5000, ...}
   bucket_id: number | null;
   part_buckets: string; // 구성별 1차 배정 칸 매핑 JSON {"표지": 3, ...}
+  mark_color?: string; // 신규 주문 배정대기 표시색(rose). 확인 후 지움. 여러 사용자 공유.
 }
 
 interface Bucket {
@@ -605,6 +606,18 @@ export default function ScheduleBoard() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ entry_id: entry.id, color: next }),
+    });
+  };
+
+  // 신규 주문(배정대기) 분홍 표시 '확인'(지우기) — 여러 사용자 공유. 낙관적 갱신 후 서버 반영.
+  const clearOrderMark = async (order: Order) => {
+    if (!isAdmin || !order.mark_color) return;
+    setOrders((prev) => prev.map((o) => (o.id === order.id ? { ...o, mark_color: "" } : o)));
+    setAllOrders((prev) => prev.map((o) => (o.id === order.id ? { ...o, mark_color: "" } : o)));
+    await fetch(`/api/orders/${order.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mark_color: "" }),
     });
   };
 
@@ -2086,11 +2099,22 @@ export default function ScheduleBoard() {
         className={`p-2.5 border transition hover:shadow-sm cursor-grab active:cursor-grabbing ${
           dragOrderId === order.id && !dragPart ? "opacity-40" : ""
         } ${waitReorderId === order.id ? (waitReorderAfter ? "border-b-2 border-b-blue-500" : "border-t-2 border-t-blue-500") : "border-gray-200"} bg-white`}
+        style={order.mark_color && MARK_BG[order.mark_color] ? { background: MARK_BG[order.mark_color] } : undefined}
       >
         <div>
           <div className="flex items-center justify-between">
             <p className="font-medium text-xs leading-tight min-w-0 flex-1 break-all">{order.product_name}{rollTag(order.quantity_sheets)}</p>
             <div className="flex items-center gap-1.5 shrink-0 ml-2">
+              {isAdmin && order.mark_color && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); clearOrderMark(order); }}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  className="text-rose-600 hover:text-rose-800 text-sm leading-none px-1 py-0.5 border border-rose-300 bg-white/70"
+                  title="신규 주문 확인 (분홍 표시 지우기)"
+                >
+                  ✓
+                </button>
+              )}
               {isAdmin && (<>
               <button
                 onClick={(e) => { e.stopPropagation(); startEditOrder(order); }}

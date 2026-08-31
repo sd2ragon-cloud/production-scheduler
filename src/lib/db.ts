@@ -189,6 +189,13 @@ async function initializeDb(db: Client) {
     // column already exists
   }
 
+  // Migrate orders: add mark_color (신규 주문 배정대기 표시색; 여러 사용자 공유) column if missing.
+  try {
+    await db.execute(`ALTER TABLE orders ADD COLUMN mark_color TEXT NOT NULL DEFAULT ''`);
+  } catch {
+    // column already exists
+  }
+
   // Migrate schedule_entries: add component_part column if missing
   try {
     await db.execute(`ALTER TABLE schedule_entries ADD COLUMN component_part TEXT NOT NULL DEFAULT ''`);

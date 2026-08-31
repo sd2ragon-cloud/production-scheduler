@@ -2,6 +2,20 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { guardOrder } from '@/lib/permits';
 
+// 주문 표시색(mark_color)만 변경 — 신규 주문 분홍 표시를 '확인' 후 지우는 용도(여러 사용자 공유).
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const deny = await guardOrder(req, id);
+  if (deny) return deny;
+  const body = await req.json();
+  const db = await getDb();
+  if (typeof body.mark_color === 'string') {
+    const c = ['', 'rose', 'amber'].includes(body.mark_color) ? body.mark_color : '';
+    await db.execute({ sql: 'UPDATE orders SET mark_color = ? WHERE id = ?', args: [c, id] });
+  }
+  return NextResponse.json({ success: true });
+}
+
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const deny = await guardOrder(req, id);
