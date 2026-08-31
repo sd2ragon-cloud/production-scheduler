@@ -1442,6 +1442,15 @@ export default function ScheduleBoard() {
           status: existingStatus,
         }),
       });
+      // 배정대기에서 '기존 주문'을 수정하면 노랑(amber)으로 표시 → 다른 사용자가 '수정됨'을 알아보게.
+      // (설비 항목에서 수정한 경우 editMachineId가 있으므로 제외 — 그건 주문 자체 편집이 아님)
+      if (editMachineId === null) {
+        await fetch(`/api/orders/${editingOrderId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mark_color: "amber" }),
+        });
+      }
       // 비고는 이 설비 항목에만 저장(같은 주문의 다른 배정과 분리).
       if (editNotesEntryId != null) {
         await fetch("/api/schedule/entry-notes", {
@@ -2109,8 +2118,8 @@ export default function ScheduleBoard() {
                 <button
                   onClick={(e) => { e.stopPropagation(); clearOrderMark(order); }}
                   onMouseDown={(e) => e.stopPropagation()}
-                  className="text-rose-600 hover:text-rose-800 text-sm leading-none px-1 py-0.5 border border-rose-300 bg-white/70"
-                  title="신규 주문 확인 (분홍 표시 지우기)"
+                  className="text-gray-600 hover:text-gray-900 text-sm leading-none px-1 py-0.5 border border-gray-300 bg-white/70"
+                  title="확인 — 표시 지우기 (분홍=신규 / 노랑=수정)"
                 >
                   ✓
                 </button>
