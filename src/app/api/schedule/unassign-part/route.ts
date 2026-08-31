@@ -20,7 +20,8 @@ export async function POST(req: NextRequest) {
 
   const srcResult = await db.execute({ sql: 'SELECT * FROM schedule_entries WHERE id = ?', args: [entry_id] });
   const src = srcResult.rows[0] as unknown as
-    | { id: number; order_id: number; machine_id: number; sequence: number; component_part: string; part_durations: string; print_mode: string }
+    | { id: number; order_id: number; machine_id: number; sequence: number; component_part: string; part_durations: string; print_mode: string;
+        entry_product_name?: string; entry_quantity?: number; entry_notes?: string; entry_edited?: number; entry_notes_edited?: number }
     | undefined;
   if (!src) {
     return NextResponse.json({ error: 'not found' }, { status: 404 });
@@ -55,6 +56,17 @@ export async function POST(req: NextRequest) {
   }
 
   if (remaining.length === 0) {
+    // 항목이 통째로 대기 복귀 → 편집한 자체 표시값(제품명·수량·비고)을 주문에 반영(삭제로 사라지지 않게).
+    const setParts: string[] = [];
+    const setArgs: (string | number)[] = [];
+    if (Number(src.entry_edited) === 1) {
+      if (String(src.entry_product_name ?? '').trim()) { setParts.push('product_name = ?'); setArgs.push(String(src.entry_product_name)); }
+      setParts.push('quantity_sheets = ?'); setArgs.push(Number(src.entry_quantity) || 0);
+    }
+    if (Number(src.entry_notes_edited) === 1) { setParts.push('notes = ?'); setArgs.push(String(src.entry_notes ?? '')); }
+    if (setParts.length) {
+      await db.execute({ sql: `UPDATE orders SET ${setParts.join(', ')} WHERE id = ?`, args: [...setArgs, orderId] });
+    }
     await db.execute({ sql: 'DELETE FROM schedule_entries WHERE id = ?', args: [Number(src.id)] });
     await db.execute({
       sql: 'UPDATE schedule_entries SET sequence = sequence - 1 WHERE machine_id = ? AND sequence > ?',
