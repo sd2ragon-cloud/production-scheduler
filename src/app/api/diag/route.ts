@@ -69,10 +69,17 @@ export async function GET(req: NextRequest) {
   ));
   try { out.watchdogTask = JSON.parse(taskJson.trim()); } catch { out.watchdogTask = { error: taskJson.slice(0, 200) }; }
 
-  // 5) 감시 로그 마지막 줄들
+  // 5) 감시 로그: 마지막 줄들 + '실제 끊김 이력'만 별도 추출
+  //    ?lines=N 으로 tail 길이 조절(기본 12, 최대 500).
+  const nParam = Number(new URL(req.url).searchParams.get('lines'));
+  const tailN = Number.isFinite(nParam) && nParam > 0 ? Math.min(nParam, 500) : 12;
   try {
     const log = await readFile(`${PROJ}\\funnel-watchdog.log`, 'utf8');
-    out.watchdogLogTail = log.trim().split(/\r?\n/).slice(-12);
+    const all = log.trim().split(/\r?\n/);
+    out.watchdogLogTail = all.slice(-tailN);
+    // 앱 keepalive가 Tailscale 끊김을 감지해 재연결한 이력(신뢰 가능한 신호). 정상이면 'up' 라인이 없다.
+    out.tailscaleDropEvents = all.filter((l) => l.includes('[app]') && l.includes('-> tailscale up')).slice(-50);
+    out.appKeepaliveLines = all.filter((l) => l.includes('[app]')).slice(-50);
   } catch { out.watchdogLogTail = null; }
 
   return NextResponse.json(out);
