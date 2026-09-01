@@ -54,3 +54,11 @@ if ($url) {
 } else {
   Write-Host "[funnel] could not determine the Tailscale URL. Is Tailscale 'up' and Funnel enabled?"
 }
+
+# Also run the funnel watchdog once. It self-registers a 5-min Scheduled Task that keeps
+# Tailscale + Funnel alive, so external access self-heals without needing a reboot.
+$wd = Join-Path $PSScriptRoot "funnel-watchdog.ps1"
+if (Test-Path $wd) {
+  try { & powershell -NoProfile -ExecutionPolicy Bypass -File $wd 2>&1 | Out-Host }
+  catch { Write-Host "[funnel] watchdog launch error: $($_.Exception.Message)" }
+}
