@@ -48,29 +48,43 @@ $script:tsErrLogged = $false
 $script:tsRawLogged = $false
 $script:tsLastRaw = ""
 function TsJson($cliArgs) {
-  $errFile = Join-Path $env:TEMP ("ts-" + [guid]::NewGuid().ToString("N") + ".err")
+  # Read the output through a FILE, decoded as UTF-8 -- never through the console.
+  # Root cause of the long-standing backend='' : PowerShell decodes native-command output using
+  # the console code page (CP949 on this Korean Windows), but tailscale emits UTF-8. The status
+  # JSON carries non-ASCII text (the Tailscale account display name), so those bytes were
+  # mangled in transit and ConvertFrom-Json failed with a syntax error right at that spot --
+  # while the JSON tailscale actually produced was perfectly valid.
+  $tmp     = Join-Path $env:TEMP ("ts-" + [guid]::NewGuid().ToString("N"))
+  $outFile = $tmp + ".out"
+  $errFile = $tmp + ".err"
   try {
-    $out = & cmd.exe /c ('"' + $ts + '" ' + $cliArgs + ' 2>"' + $errFile + '"') | Out-String
+    & cmd.exe /c ('"' + $ts + '" ' + $cliArgs + ' >"' + $outFile + '" 2>"' + $errFile + '"') | Out-Null
+    $out = ""
+    if (Test-Path $outFile) { $out = [System.IO.File]::ReadAllText($outFile, [System.Text.Encoding]::UTF8) }
     $script:tsLastRaw = $out
     # -ErrorAction Stop is essential: ConvertFrom-Json fails as a NON-terminating error under
     # $ErrorActionPreference = "Continue", so without it a parse failure skips catch{}, returns
-    # nothing, and the caller just sees an empty state with no clue why. That is exactly what
-    # kept backend='' unexplained for days.
+    # nothing, and the caller just sees an empty state with no clue why.
     if ($out -and $out.Trim()) { return ($out | ConvertFrom-Json -ErrorAction Stop) }
     if (-not $script:tsErrLogged) {
       $script:tsErrLogged = $true
       $e = ""
-      try { if (Test-Path $errFile) { $e = (Get-Content $errFile -Raw).Trim() } } catch {}
+      try { if (Test-Path $errFile) { $e = [System.IO.File]::ReadAllText($errFile).Trim() } } catch {}
       if (-not $e) { $e = "(no stderr)" }
-      Log ("tailscale '" + $cliArgs + "' gave no JSON -- stderr: " + $e)
+      Log ("tailscale '" + $cliArgs + "' gave no output -- stderr: " + $e.Substring(0, [Math]::Min(300, $e.Length)))
     }
   } catch {
     if (-not $script:tsErrLogged) {
       $script:tsErrLogged = $true
-      Log ("tailscale '" + $cliArgs + "' parse error: " + $_.Exception.Message)
+      # ConvertFrom-Json appends the whole input to its message; cap it so a failure cannot
+      # dump a hundred lines of JSON into this log.
+      $m = [string]$_.Exception.Message
+      Log ("tailscale '" + $cliArgs + "' parse error: " + $m.Substring(0, [Math]::Min(300, $m.Length)))
     }
   } finally {
-    try { if (Test-Path $errFile) { Remove-Item $errFile -Force -ErrorAction SilentlyContinue } } catch {}
+    foreach ($f in @($outFile, $errFile)) {
+      try { if (Test-Path $f) { Remove-Item $f -Force -ErrorAction SilentlyContinue } } catch {}
+    }
   }
   return $null
 }
