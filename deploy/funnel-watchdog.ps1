@@ -52,7 +52,11 @@ function TsJson($cliArgs) {
   try {
     $out = & cmd.exe /c ('"' + $ts + '" ' + $cliArgs + ' 2>"' + $errFile + '"') | Out-String
     $script:tsLastRaw = $out
-    if ($out -and $out.Trim()) { return ($out | ConvertFrom-Json) }
+    # -ErrorAction Stop is essential: ConvertFrom-Json fails as a NON-terminating error under
+    # $ErrorActionPreference = "Continue", so without it a parse failure skips catch{}, returns
+    # nothing, and the caller just sees an empty state with no clue why. That is exactly what
+    # kept backend='' unexplained for days.
+    if ($out -and $out.Trim()) { return ($out | ConvertFrom-Json -ErrorAction Stop) }
     if (-not $script:tsErrLogged) {
       $script:tsErrLogged = $true
       $e = ""
@@ -63,7 +67,7 @@ function TsJson($cliArgs) {
   } catch {
     if (-not $script:tsErrLogged) {
       $script:tsErrLogged = $true
-      Log ("tailscale '" + $cliArgs + "' error: " + $_.Exception.Message)
+      Log ("tailscale '" + $cliArgs + "' parse error: " + $_.Exception.Message)
     }
   } finally {
     try { if (Test-Path $errFile) { Remove-Item $errFile -Force -ErrorAction SilentlyContinue } } catch {}
@@ -96,7 +100,7 @@ try {
 
 # 2) Ensure the Tailscale backend is Running; reconnect if not.
 $state = ""
-$st = TsJson "status --json"
+$st = TsJson "status --json --peers=false"
 if ($st) { $state = [string]$st.BackendState }
 # backend keeps reading as '' even after the elevation fix, and no stderr line is logged either,
 # which means the JSON parsed but BackendState came back empty. Log the head of the raw output
@@ -116,7 +120,7 @@ if ($state -ne "Running") {
   Log ("tailscale backend='" + $state + "' -> running 'tailscale up'")
   try { & cmd.exe /c ('"' + $ts + '" up 2>NUL') | Out-Null } catch { Log ("tailscale up error: " + $_.Exception.Message) }
   Start-Sleep -Seconds 3
-  $st = TsJson "status --json"
+  $st = TsJson "status --json --peers=false"
   if ($st) { $state = [string]$st.BackendState }
 }
 
@@ -125,7 +129,7 @@ try { & cmd.exe /c ('"' + $ts + '" funnel --bg 3000 2>NUL') | Out-Null } catch {
 
 # 4) Refresh tunnel-url.txt with the current public URL.
 $url = ""
-$st2 = TsJson "status --json"
+$st2 = TsJson "status --json --peers=false"
 if ($st2 -and $st2.Self -and $st2.Self.DNSName) { $url = "https://" + ([string]$st2.Self.DNSName).TrimEnd('.') }
 if ($url) {
   # A changed public URL means every shared bookmark just died - make that loud in the log.
