@@ -899,6 +899,13 @@ export default function ScheduleBoard() {
 
   // 완료된 구성(칩) 영구 삭제: 엔트리에서 제거 + 주문 사양에서도 제거(대기로 복귀하지 않음)
   const handleCompletePart = async (entryId: number, part: string) => {
+    // 완료 처리는 '영구 제거'(배정 대기로도 돌아오지 않음)라 실수로 드래그하면 조용히 사라진다 → 확인받는다.
+    const e = schedule.find((x) => x.id === entryId);
+    const who = e ? `${e.product_name}(${part})` : part;
+    if (!window.confirm(`'${who}' 구성을 완료 처리할까요?
+
+완료 처리하면 이 구성은 설비에서 빠지고 주문에서도 영구히 없어집니다.
+(배정 대기로 돌아오지 않습니다)`)) return;
     setLoading(true);
     await fetch("/api/schedule/complete-part", {
       method: "POST",

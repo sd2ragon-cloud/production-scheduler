@@ -5,6 +5,7 @@ import { recalcMachine } from '@/lib/calc';
 import { parseParts, parsePartDurations, parsePartProcesses, parsePartBuckets, sumDurations, partTotals } from '@/lib/parts';
 import { effectiveMinutes } from '@/lib/print';
 import { guardEntry } from '@/lib/permits';
+import { logAudit } from '@/lib/audit';
 
 // 완료된 구성(칩) 영구 삭제: 해당 엔트리에서 파트를 빼고, 주문 사양에서도 그 구성을 제거한다.
 // (배정 대기로 복귀하지 않음 = 완료 처리)
@@ -26,6 +27,19 @@ export async function POST(req: NextRequest) {
   const srcMachine = Number(src.machine_id);
 
   // 1) 엔트리에서 파트 제거 (마지막 파트면 행 삭제 + 순서 보정)
+  {
+    const d = await db.execute({
+      sql: `SELECT o.product_name, o.process_line, m.name AS mname
+            FROM schedule_entries se JOIN orders o ON se.order_id=o.id JOIN machines m ON se.machine_id=m.id
+            WHERE se.id = ?`, args: [Number(src.id)] });
+    const v = d.rows[0] as Record<string, unknown> | undefined;
+    await logAudit(req, {
+      action: 'complete',
+      line: String(v?.process_line ?? ''),
+      target: `완료 처리(영구 제거): ${v?.product_name ?? '(?)'}(${partStr}) @${v?.mname ?? '?'}`,
+      detail: { entry_id: Number(src.id), part: partStr },
+    });
+  }
   const srcParts = parseParts(String(src.component_part));
   if (srcParts.includes(partStr)) {
     const remaining = srcParts.filter((p) => p !== partStr);
