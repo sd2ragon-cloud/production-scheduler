@@ -217,6 +217,8 @@ export default function ScheduleBoard() {
   const undoStacksRef = useRef<Record<string, UndoSnap[]>>({});
   const committedRef = useRef<{ line: string; sig: string; orders: Order[]; entries: ScheduleEntry[]; buckets: Bucket[] } | null>(null);
   const suppressUndoPushRef = useRef(false); // 되돌리기로 인한 fetchAll에선 스냅샷을 쌓지 않게
+  // 수정창을 연 시점의 서버 주문 값. 저장할 때 함께 보내 '그 사이 남이 바꿨는지'를 서버가 판정한다.
+  const editBaseRef = useRef<Record<string, unknown> | null>(null);
   const [undoCount, setUndoCount] = useState(0); // 현재 라인의 되돌리기 가능 단계 수(버튼 활성화용)
   const UNDO_MAX = 30;
   // 현재 화면에 로드된 데이터가 어느 라인 것인지. processLine과 다르면(탭 전환 직후) 아직 이전 라인 데이터이므로
@@ -1204,12 +1206,25 @@ export default function ScheduleBoard() {
     setEditEntryParts([]);
     setEditRollEntryId(null);
     setEditNotesEntryId(null);
+    editBaseRef.current = null;
   };
 
   // 대기 주문 편집 시작: 폼을 해당 주문 값으로 채운다
   // asCopy=true면 같은 사양으로 '새 주문'을 만든다(값만 채우고 editingOrderId는 비움 → 저장 시 신규 생성).
   // 한 제품을 생산하다 중단·다른 제품 후 이어서 생산하는 계획에서, 다시 입력하지 않고 분량만 고쳐 배정할 수 있다.
-  const startEditOrder = (order: Order, asCopy = false, fromMachineId: number | null = null, entry: ScheduleEntry | null = null) => {
+  const startEditOrder = async (orderArg: Order, asCopy = false, fromMachineId: number | null = null, entry: ScheduleEntry | null = null) => {
+    // 수정창을 열 때 그 주문만 서버에서 다시 읽는다. 화면이 자동 갱신되지 않으므로 목록의 값은
+    // 낡아 있을 수 있고, 낡은 값으로 폼을 채우면 저장할 때 다른 사용자의 수정을 덮어쓰게 된다.
+    let order = orderArg;
+    try {
+      const r = await fetch(`/api/orders/${orderArg.id}`);
+      if (r.ok) {
+        const fresh = await r.json();
+        if (fresh && typeof fresh === "object" && fresh.id) order = { ...orderArg, ...fresh } as Order;
+      }
+    } catch {
+      // 서버를 못 읽으면 화면에 있는 값으로 진행(기존 동작 유지)
+    }
     // 윤전: 설비 행에서 수정하면 '그 설비 배정 항목'만 고친다(주문·1차배정·대기와 분리). 자체 표시값(제품명·비고·수량·소요)만 편집.
     if (isRoll && !asCopy && entry != null) {
       // 이 항목이 실제로 가진 구성(entry.component_part)만 보여준다. 구성 없으면 통째(단일 소요시간).
@@ -1238,6 +1253,7 @@ export default function ScheduleBoard() {
       setEditEntryId(null);
       setEditEntryParts([]);
       setEditRollEntryId(entry.id);
+      editBaseRef.current = null; // 윤전 항목 수정은 entry-fields로 저장(주문 PUT 아님)
       setEditNotesEntryId(null); // 윤전은 entry-fields가 비고까지 항목별로 저장
       setShowAddForm(true);
       return;
@@ -1282,9 +1298,51 @@ export default function ScheduleBoard() {
     setEditMachineId(asCopy ? null : fromMachineId);
     setEditEntryId(scoped ? entry!.id : null);
     setEditEntryParts(scoped ? parts : []);
+    // 동시 편집 충돌 검사의 기준값 = '이 창을 연 시점'의 서버 값.
+    // 저장 시 서버가 이 값과 현재 DB를 비교해, 그 사이 남이 바꾼 필드를 내가 다른 값으로
+    // 덮어쓰려는 경우에만 막는다. (복사 저장은 새 주문이므로 검사 대상이 아니다)
+    editBaseRef.current = asCopy ? null : {
+      product_name: order.product_name ?? "",
+      quantity_sheets: order.quantity_sheets ?? 0,
+      deadline: order.deadline ?? "",
+      special_process: order.special_process ?? "",
+      priority: order.priority ?? 5,
+      extra_notes: order.extra_notes ?? "",
+      // 설비 항목 수정은 구성을 '병합' 저장하므로 구성은 충돌 검사에서 제외한다.
+      ...(scoped ? {} : { component: order.component ?? "" }),
+      // 비고는 설비 항목 수정 시 그 항목에만 저장되므로 주문 비고는 검사에서 제외한다.
+      ...(entry == null ? { notes: order.notes ?? "" } : {}),
+    };
     // 설비 항목에서 수정하면 비고를 '그 항목'에 저장(같은 주문의 다른 배정과 분리). 복사/대기 편집이면 주문 비고.
     setEditNotesEntryId(!asCopy && entry != null ? entry.id : null);
     setShowAddForm(true);
+  };
+
+  // 주문 저장(동시 편집 덮어쓰기 방지 포함).
+  // 화면이 자동 갱신되지 않는데 저장은 전체 필드를 통째로 덮어쓰기 때문에, 제품명을 건드리지도 않은
+  // 사람의 저장이 다른 사람의 제품명 수정을 되돌리는 일이 있었다. 서버가 409로 막으면 무엇이 충돌했는지
+  // 보여주고, 사용자가 명시적으로 원할 때만 덮어쓴다(force). 반환값 false면 저장하지 않은 것.
+  const saveOrderPut = async (orderId: number, payload: Record<string, unknown>): Promise<boolean> => {
+    const send = (extra: Record<string, unknown>) =>
+      fetch(`/api/orders/${orderId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...payload, base: editBaseRef.current, ...extra }),
+      });
+    let res = await send({});
+    if (res.status === 409) {
+      let msg = "다른 사용자가 이 주문을 먼저 수정했습니다.\n\n";
+      try {
+        const j = await res.json();
+        for (const c of (j.conflicts ?? []) as { label: string; theirs: string; mine: string }[]) {
+          msg += `· ${c.label}\n    다른 사용자: ${c.theirs || "(비어 있음)"}\n    내 화면: ${c.mine || "(비어 있음)"}\n`;
+        }
+      } catch { /* 본문 파싱 실패해도 안내는 띄운다 */ }
+      msg += "\n[확인] 내 값으로 덮어쓰기 — 다른 사용자의 수정이 사라집니다\n[취소] 저장하지 않고 최신 내용 불러오기";
+      if (!window.confirm(msg)) { await fetchAll(); return false; }
+      res = await send({ force: true });
+    }
+    return res.ok;
   };
 
   const handleAddOrder = async (e: React.FormEvent) => {
@@ -1402,23 +1460,21 @@ export default function ScheduleBoard() {
         for (const p of parts) mergedPQ[p] = parts.length >= 2 ? (Number(newOrder.partQuantities[p]) || 0) : (newOrder.quantity_sheets || 0);
       }
       const mergedQty = isJechae ? Object.values(mergedPQ).reduce((a, b) => a + b, 0) : newOrder.quantity_sheets;
-      await fetch(`/api/orders/${editingOrderId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...newOrder,
-          // 설비 항목에서 수정 시 비고는 '주문'을 건드리지 않는다(항목별 저장). 대기 편집이면 폼값 사용.
-          notes: editNotesEntryId != null ? (origOrder?.notes ?? "") : newOrder.notes,
-          component: mergedComp.join(", "),
-          special_process: specialProcess,
-          quantity_sheets: mergedQty,
-          duration_minutes: Object.values(mergedPD).reduce((a, b) => a + b, 0),
-          part_durations: mergedPD,
-          part_processes: mergedPP,
-          part_quantities: isJechae ? mergedPQ : {},
-          status: existingStatus,
-        }),
+      const savedScoped = await saveOrderPut(editingOrderId, {
+        ...newOrder,
+        // 설비 항목에서 수정 시 비고는 '주문'을 건드리지 않는다(항목별 저장). 대기 편집이면 폼값 사용.
+        notes: editNotesEntryId != null ? (origOrder?.notes ?? "") : newOrder.notes,
+        component: mergedComp.join(", "),
+        special_process: specialProcess,
+        quantity_sheets: mergedQty,
+        duration_minutes: Object.values(mergedPD).reduce((a, b) => a + b, 0),
+        part_durations: mergedPD,
+        part_processes: mergedPP,
+        part_quantities: isJechae ? mergedPQ : {},
+        status: existingStatus,
       });
+      // 충돌로 저장을 취소했으면 뒤따르는 구성·비고 저장도 하지 않는다(부분 저장 방지).
+      if (!savedScoped) return;
       await fetch("/api/schedule/set-entry-parts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1436,22 +1492,20 @@ export default function ScheduleBoard() {
       // 배정 완료된 작업을 설비 화면에서 수정해도 상태가 대기로 바뀌지 않도록 기존 상태 유지
       const origOrderFull = allOrders.find((o) => o.id === editingOrderId);
       const existingStatus = origOrderFull?.status || "pending";
-      await fetch(`/api/orders/${editingOrderId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...newOrder,
-          // 설비 항목에서 수정 시 비고는 '주문'을 건드리지 않는다(항목별 저장). 대기 편집이면 폼값 사용.
-          notes: editNotesEntryId != null ? (origOrderFull?.notes ?? "") : newOrder.notes,
-          special_process: specialProcess,
-          quantity_sheets: qtyTotal,
-          duration_minutes: durationMinutes,
-          part_durations: partDurations,
-          part_processes: partProcesses,
-          part_quantities: partQuantities,
-          status: existingStatus,
-        }),
+      const savedWhole = await saveOrderPut(editingOrderId, {
+        ...newOrder,
+        // 설비 항목에서 수정 시 비고는 '주문'을 건드리지 않는다(항목별 저장). 대기 편집이면 폼값 사용.
+        notes: editNotesEntryId != null ? (origOrderFull?.notes ?? "") : newOrder.notes,
+        special_process: specialProcess,
+        quantity_sheets: qtyTotal,
+        duration_minutes: durationMinutes,
+        part_durations: partDurations,
+        part_processes: partProcesses,
+        part_quantities: partQuantities,
+        status: existingStatus,
       });
+      // 충돌로 저장을 취소했으면 표시색·비고 저장도 하지 않는다(부분 저장 방지).
+      if (!savedWhole) return;
       // 배정대기에서 '기존 주문'을 수정하면 노랑(amber)으로 표시 → 다른 사용자가 '수정됨'을 알아보게.
       // (설비 항목에서 수정한 경우 editMachineId가 있으므로 제외 — 그건 주문 자체 편집이 아님)
       if (editMachineId === null) {

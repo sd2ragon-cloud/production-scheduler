@@ -13,7 +13,9 @@ export type AuditAction =
   | 'unassign'          // 배정 취소(대기로 되돌림)
   | 'unassign_part'     // 구성 일부 배정 취소
   | 'complete'          // 완료 처리로 제거
-  | 'undo_restore';     // 되돌리기(Undo)로 스냅샷 이후 항목 제거
+  | 'undo_restore'      // 되돌리기(Undo)로 스냅샷 이후 항목 제거
+  | 'order_edit'        // 주문 수정(무엇이 무엇으로 바뀌었는지)
+  | 'order_edit_force'; // 다른 사용자의 수정과 충돌하는데도 덮어쓴 수정
 
 export interface AuditInput {
   action: AuditAction;
