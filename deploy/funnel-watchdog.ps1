@@ -38,9 +38,45 @@ foreach ($c in @("C:\Program Files\Tailscale\tailscale.exe","C:\Program Files (x
   if (Test-Path $c) { $ts = $c; break }
 }
 
+# Read `tailscale ... --json`, and SAY WHY when it fails.
+# The previous version swallowed stderr (2>$null) and every exception, so when
+# `tailscale status --json` returned nothing the log only showed backend='' with no reason --
+# the watchdog then ran 'tailscale up' every 5 minutes and never refreshed tunnel-url.txt.
+# Tailscale's local API rejects callers that are not elevated, which is the usual cause here
+# (see the -RunLevel Highest task registration below).
+$script:tsErrLogged = $false
+function TsJson($cliArgs) {
+  $errFile = Join-Path $env:TEMP ("ts-" + [guid]::NewGuid().ToString("N") + ".err")
+  try {
+    $out = & cmd.exe /c ('"' + $ts + '" ' + $cliArgs + ' 2>"' + $errFile + '"') | Out-String
+    if ($out -and $out.Trim()) { return ($out | ConvertFrom-Json) }
+    if (-not $script:tsErrLogged) {
+      $script:tsErrLogged = $true
+      $e = ""
+      try { if (Test-Path $errFile) { $e = (Get-Content $errFile -Raw).Trim() } } catch {}
+      if (-not $e) { $e = "(no stderr)" }
+      Log ("tailscale '" + $cliArgs + "' gave no JSON -- stderr: " + $e)
+    }
+  } catch {
+    if (-not $script:tsErrLogged) {
+      $script:tsErrLogged = $true
+      Log ("tailscale '" + $cliArgs + "' error: " + $_.Exception.Message)
+    }
+  } finally {
+    try { if (Test-Path $errFile) { Remove-Item $errFile -Force -ErrorAction SilentlyContinue } } catch {}
+  }
+  return $null
+}
+
 # 1) Self-register the scheduled task (every 5 min) if it is missing.
 try {
   $existing = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+  # Re-register an existing task that runs unelevated: `tailscale status --json` needs elevation,
+  # and without it this watchdog is blind (backend always reads as '').
+  if ($existing -and $existing.Principal.RunLevel -ne "Highest") {
+    Log "existing task is not elevated -> re-registering with RunLevel Highest"
+    $existing = $null
+  }
   if (-not $existing) {
     $action  = New-ScheduledTaskAction -Execute "powershell.exe" `
                  -Argument ("-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"" + $selfPath + "`"")
@@ -49,40 +85,38 @@ try {
                  -RepetitionDuration (New-TimeSpan -Days 3650)
     $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
     Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Settings $settings `
+      -User $env:USERNAME -RunLevel Highest `
       -Description "Keep Tailscale Funnel alive for production-scheduler (external access self-heal)" -Force | Out-Null
-    Log "registered scheduled task '$taskName' (every 5 min)"
+    Log "registered scheduled task '$taskName' (every 5 min, elevated)"
   }
 } catch { Log ("task register error: " + $_.Exception.Message) }
 
 # 2) Ensure the Tailscale backend is Running; reconnect if not.
 $state = ""
-try {
-  $json = & $ts status --json 2>$null | Out-String
-  if ($json) { $state = ($json | ConvertFrom-Json).BackendState }
-} catch {}
+$st = TsJson "status --json"
+if ($st) { $state = [string]$st.BackendState }
 if ($state -ne "Running") {
   Log ("tailscale backend='" + $state + "' -> running 'tailscale up'")
-  try { & $ts up 2>&1 | Out-Null } catch { Log ("tailscale up error: " + $_.Exception.Message) }
+  try { & cmd.exe /c ('"' + $ts + '" up 2>NUL') | Out-Null } catch { Log ("tailscale up error: " + $_.Exception.Message) }
   Start-Sleep -Seconds 3
-  try {
-    $json = & $ts status --json 2>$null | Out-String
-    if ($json) { $state = ($json | ConvertFrom-Json).BackendState }
-  } catch {}
+  $st = TsJson "status --json"
+  if ($st) { $state = [string]$st.BackendState }
 }
 
 # 3) (Re)assert the funnel on port 3000 (idempotent; persisted by tailscaled).
-try { & $ts funnel --bg 3000 2>&1 | Out-Null } catch { Log ("funnel assert error: " + $_.Exception.Message) }
+try { & cmd.exe /c ('"' + $ts + '" funnel --bg 3000 2>NUL') | Out-Null } catch { Log ("funnel assert error: " + $_.Exception.Message) }
 
 # 4) Refresh tunnel-url.txt with the current public URL.
 $url = ""
-try {
-  $json = & $ts status --json 2>$null | Out-String
-  if ($json) {
-    $dns = ($json | ConvertFrom-Json).Self.DNSName
-    if ($dns) { $url = "https://" + $dns.TrimEnd('.') }
-  }
-} catch {}
-if ($url) { try { Set-Content -Path $urlFile -Value $url -Encoding ascii } catch {} }
+$st2 = TsJson "status --json"
+if ($st2 -and $st2.Self -and $st2.Self.DNSName) { $url = "https://" + ([string]$st2.Self.DNSName).TrimEnd('.') }
+if ($url) {
+  # A changed public URL means every shared bookmark just died - make that loud in the log.
+  $prev = ""
+  try { if (Test-Path $urlFile) { $prev = (Get-Content $urlFile -Raw -ErrorAction Stop).Trim() } } catch {}
+  if ($prev -and $prev -ne $url) { Log ("PUBLIC URL CHANGED: " + $prev + " -> " + $url + " (old bookmarks are dead)") }
+  try { Set-Content -Path $urlFile -Value $url -Encoding ascii } catch {}
+}
 
 # 5) Record (do not restart) if the app server is not listening on port 3000.
 $serverUp = $true
