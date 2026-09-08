@@ -4,6 +4,7 @@ import { getDb } from '@/lib/db';
 import { recalcMachine } from '@/lib/calc';
 import { parseParts, parsePartDurations, parsePartProcesses, parsePartBuckets } from '@/lib/parts';
 import { guardEntry } from '@/lib/permits';
+import { logAudit } from '@/lib/audit';
 
 // 설비 배정 항목(엔트리) 하나만 삭제한다. 그 설비의 배정만 없애고, 그 항목이 담당하던 구성은
 // 다른 엔트리(다른 설비)에 없으면 주문 사양에서도 제거(배정 대기로 복귀하지 않음).
@@ -25,6 +26,19 @@ export async function POST(req: NextRequest) {
   const entryParts = parseParts(String(src.component_part));
 
   // 1) 이 엔트리 삭제 + 같은 설비 순서 보정
+  {
+    const d = await db.execute({
+      sql: `SELECT o.product_name, o.process_line, se.component_part, m.name AS mname
+            FROM schedule_entries se JOIN orders o ON se.order_id=o.id JOIN machines m ON se.machine_id=m.id
+            WHERE se.id = ?`, args: [Number(src.id)] });
+    const v = d.rows[0] as Record<string, unknown> | undefined;
+    await logAudit(req, {
+      action: 'entry_delete',
+      line: String(v?.process_line ?? ''),
+      target: `배정 삭제: ${v?.product_name ?? '(?)'}${v?.component_part ? `(${v.component_part})` : ''} @${v?.mname ?? '?'}`,
+      detail: { entry_id: Number(src.id) },
+    });
+  }
   await db.execute({ sql: 'DELETE FROM schedule_entries WHERE id = ?', args: [Number(src.id)] });
   await db.execute({
     sql: 'UPDATE schedule_entries SET sequence = sequence - 1 WHERE machine_id = ? AND sequence > ?',

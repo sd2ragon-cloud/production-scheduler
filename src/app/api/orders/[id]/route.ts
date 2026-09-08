@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { guardOrder } from '@/lib/permits';
+import { logAudit } from '@/lib/audit';
 
 // 주문 표시색(mark_color)만 변경 — 신규 주문 분홍 표시를 '확인' 후 지우는 용도(여러 사용자 공유).
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -62,6 +63,14 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const deny = await guardOrder(req, id);
   if (deny) return deny;
   const db = await getDb();
+  const info = await db.execute({ sql: 'SELECT product_name, component, process_line FROM orders WHERE id = ?', args: [id] });
+  const oi = info.rows[0] as Record<string, unknown> | undefined;
+  await logAudit(req, {
+    action: 'order_delete',
+    line: String(oi?.process_line ?? ''),
+    target: `주문 삭제: ${oi?.product_name ?? '(?)'}${oi?.component ? `(${oi.component})` : ''}`,
+    detail: { order_id: Number(id) },
+  });
   await db.execute({ sql: 'DELETE FROM orders WHERE id = ?', args: [id] });
   return NextResponse.json({ success: true });
 }

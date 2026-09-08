@@ -655,7 +655,23 @@ export default function ScheduleBoard() {
     const line = processLine;
     const stack = undoStacksRef.current[line];
     if (!stack || stack.length === 0) return;
-    const snap = stack.pop()!;
+    const snap = stack[stack.length - 1];
+    // 되돌리기는 '스냅샷 이후 추가된 것'을 지운다 → 무엇이 사라지는지 미리 보여주고 확인받는다.
+    // (다른 사람이 그 사이 추가한 물량까지 지워질 수 있어, 확인 없이 실행하면 안 된다)
+    const keepO = new Set(snap.orders.map((o) => o.id));
+    const keepE = new Set(snap.entries.map((e) => e.id));
+    const lostOrders = allOrders.filter((o) => !keepO.has(o.id)).map((o) => o.product_name);
+    const lostEntries = schedule.filter((e) => !keepE.has(e.id))
+      .map((e) => `${e.product_name}${e.component_part ? `(${e.component_part})` : ""}`);
+    const lostMsg = [
+      lostOrders.length ? `\u00b7 주문 ${lostOrders.length}건: ${lostOrders.slice(0, 8).join(", ")}${lostOrders.length > 8 ? " 외" : ""}` : "",
+      lostEntries.length ? `\u00b7 설비배정 ${lostEntries.length}건: ${lostEntries.slice(0, 8).join(", ")}${lostEntries.length > 8 ? " 외" : ""}` : "",
+    ].filter(Boolean).join("\n");
+    const warn = lostMsg
+      ? "되돌리기를 하면 아래 항목이 삭제됩니다.\n(다른 사람이 방금 추가한 것도 포함될 수 있습니다)\n\n" + lostMsg + "\n\n계속할까요?"
+      : "직전 변경을 되돌립니다. 계속할까요?";
+    if (!window.confirm(warn)) return;
+    stack.pop();
     setUndoCount(stack.length);
     setLoading(true);
     suppressUndoPushRef.current = true; // 복원 후의 fetchAll이 되돌린 상태를 다시 쌓지 않게
@@ -673,21 +689,8 @@ export default function ScheduleBoard() {
       setLoading(false);
     }
   };
-  const undoRef = useRef(undo);
-  undoRef.current = undo;
-  // Ctrl+Z 되돌리기 (입력창에 포커스된 경우는 브라우저 기본 실행취소를 방해하지 않음)
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.key.toLowerCase() !== "z") return;
-      const t = e.target as HTMLElement | null;
-      const tag = t?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || t?.isContentEditable) return;
-      e.preventDefault();
-      undoRef.current();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  // (안전) Ctrl+Z 단축키는 제거했다. 실수로 눌러 라인 전체가 이전 상태로 되돌아가면서
+  //  그 사이 다른 사람이 추가한 물량까지 삭제되는 사고가 있었기 때문. 되돌리기는 버튼 + 확인창으로만.
   // 탭(라인) 전환 시 그 라인의 되돌리기 가능 단계 수를 즉시 반영
   useEffect(() => { setUndoCount(undoStacksRef.current[processLine]?.length || 0); }, [processLine]);
 
@@ -2570,7 +2573,7 @@ export default function ScheduleBoard() {
                 onClick={undo}
                 disabled={undoCount === 0}
                 className={`text-xs border px-2 py-1 whitespace-nowrap ${undoCount === 0 ? "border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed" : "border-amber-500 bg-amber-50 text-amber-700 font-medium hover:bg-amber-100"}`}
-                title={undoCount === 0 ? "되돌릴 변경이 없습니다 (새로고침하면 이력이 초기화됩니다)" : `직전 변경 되돌리기 (Ctrl+Z) · ${undoCount}단계 가능`}
+                title={undoCount === 0 ? "되돌릴 변경이 없습니다 (새로고침하면 이력이 초기화됩니다)" : `직전 변경 되돌리기 · ${undoCount}단계 가능 (실행 전 확인창이 뜹니다)`}
               >
                 ↩ 되돌리기{undoCount > 0 ? ` (${undoCount})` : ""}
               </button>

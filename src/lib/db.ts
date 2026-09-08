@@ -337,6 +337,22 @@ async function initializeDb(db: Client) {
       // column already exists
     }
   }
+  // 삭제 이력(감사 로그): 누가·언제·무엇을 지웠는지 추적. 개인 계정이 없으므로 접속 PC(디바이스 쿠키)·IP로 구분한다.
+  await db.execute(`CREATE TABLE IF NOT EXISTS audit_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    action TEXT NOT NULL DEFAULT '',
+    process_line TEXT NOT NULL DEFAULT '',
+    target TEXT NOT NULL DEFAULT '',
+    detail TEXT NOT NULL DEFAULT '',
+    role TEXT NOT NULL DEFAULT '',
+    device TEXT NOT NULL DEFAULT '',
+    device_name TEXT NOT NULL DEFAULT '',
+    ip TEXT NOT NULL DEFAULT '',
+    via TEXT NOT NULL DEFAULT ''
+  )`);
+  try { await db.execute(`CREATE INDEX IF NOT EXISTS idx_audit_at ON audit_log(at)`); } catch {}
+
   // 기존 윤전 편집 항목(entry_edited=1)은 비고도 이미 '항목별'이었으므로, 새 비고 플래그를 켜
   // 배포 후에도 그 항목들의 비고가 그대로 유지되게 한다(멱등 — 이미 켜진 건 건드리지 않음).
   try {

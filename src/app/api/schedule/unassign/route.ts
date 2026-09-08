@@ -4,6 +4,7 @@ import { getDb } from '@/lib/db';
 import { recalcMachine } from '@/lib/calc';
 import { parseParts, parsePartDurations, sumDurations } from '@/lib/parts';
 import { guardEntry } from '@/lib/permits';
+import { logAudit } from '@/lib/audit';
 
 export async function POST(req: NextRequest) {
   const { entry_id } = await req.json();
@@ -59,6 +60,19 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  {
+    const d = await db.execute({
+      sql: `SELECT o.product_name, o.process_line, se.component_part, m.name AS mname
+            FROM schedule_entries se JOIN orders o ON se.order_id=o.id JOIN machines m ON se.machine_id=m.id
+            WHERE se.id = ?`, args: [entry_id] });
+    const v = d.rows[0] as Record<string, unknown> | undefined;
+    await logAudit(req, {
+      action: 'unassign',
+      line: String(v?.process_line ?? ''),
+      target: `배정 취소(대기로): ${v?.product_name ?? '(?)'}${v?.component_part ? `(${v.component_part})` : ''} @${v?.mname ?? '?'}`,
+      detail: { entry_id: Number(entry_id) },
+    });
+  }
   await db.batch([
     { sql: 'DELETE FROM schedule_entries WHERE id = ?', args: [entry_id] },
     { sql: "UPDATE orders SET status = 'pending' WHERE id = ?", args: [Number(entry.order_id)] },

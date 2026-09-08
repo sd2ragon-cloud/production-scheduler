@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { guardLine } from '@/lib/permits';
+import { logAudit } from '@/lib/audit';
 
 // 되돌리기(Undo) 복원: 클라이언트가 보관한 '이전 상태 스냅샷'으로 해당 라인의
 // orders / schedule_entries / buckets 를 정확히 되돌린다.
@@ -71,6 +72,38 @@ export async function POST(req: NextRequest) {
   for (const id of curO.filter((id) => !keepO.has(id))) stmts.push({ sql: 'DELETE FROM orders WHERE id = ?', args: [id] });
   pushUpsert('buckets', bCols, buckets.map((b) => ({ ...b, process_line: line })));
   for (const id of curB.filter((id) => !keepB.has(id))) stmts.push({ sql: 'DELETE FROM buckets WHERE id = ?', args: [id] });
+
+  // 되돌리기로 '사라지는' 항목을 미리 조회해 감사 로그에 남긴다.
+  // (되돌리기는 스냅샷 이후 추가된 주문·배정을 삭제하므로, 아무도 '삭제'를 누르지 않아도 데이터가 없어질 수 있다)
+  const delE = curE.filter((id) => !keepE.has(id));
+  const delO = curO.filter((id) => !keepO.has(id));
+  if (delE.length || delO.length) {
+    let lost = '';
+    try {
+      const parts: string[] = [];
+      if (delO.length) {
+        const r = await db.execute(`SELECT product_name FROM orders WHERE id IN (${delO.join(',')})`);
+        parts.push('주문 ' + r.rows.map((x) => String((x as Record<string, unknown>).product_name)).join(', '));
+      }
+      if (delE.length) {
+        const r = await db.execute(
+          `SELECT o.product_name, se.component_part, m.name AS mname FROM schedule_entries se
+           JOIN orders o ON se.order_id = o.id JOIN machines m ON se.machine_id = m.id
+           WHERE se.id IN (${delE.join(',')})`);
+        parts.push('배정 ' + r.rows.map((x) => {
+          const v = x as Record<string, unknown>;
+          return `${v.product_name}${v.component_part ? `(${v.component_part})` : ''}@${v.mname}`;
+        }).join(', '));
+      }
+      lost = parts.join(' / ');
+    } catch { lost = `주문 ${delO.length}건, 배정 ${delE.length}건`; }
+    await logAudit(req, {
+      action: 'undo_restore',
+      line,
+      target: `되돌리기로 제거: ${lost}`,
+      detail: { deletedOrderIds: delO, deletedEntryIds: delE },
+    });
+  }
 
   // 한 트랜잭션으로 원자적 실행(중간 실패 시 전체 롤백 → 부분 손상 방지).
   if (stmts.length) await db.batch(stmts, 'write');
