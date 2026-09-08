@@ -45,10 +45,13 @@ foreach ($c in @("C:\Program Files\Tailscale\tailscale.exe","C:\Program Files (x
 # Tailscale's local API rejects callers that are not elevated, which is the usual cause here
 # (see the -RunLevel Highest task registration below).
 $script:tsErrLogged = $false
+$script:tsRawLogged = $false
+$script:tsLastRaw = ""
 function TsJson($cliArgs) {
   $errFile = Join-Path $env:TEMP ("ts-" + [guid]::NewGuid().ToString("N") + ".err")
   try {
     $out = & cmd.exe /c ('"' + $ts + '" ' + $cliArgs + ' 2>"' + $errFile + '"') | Out-String
+    $script:tsLastRaw = $out
     if ($out -and $out.Trim()) { return ($out | ConvertFrom-Json) }
     if (-not $script:tsErrLogged) {
       $script:tsErrLogged = $true
@@ -95,6 +98,20 @@ try {
 $state = ""
 $st = TsJson "status --json"
 if ($st) { $state = [string]$st.BackendState }
+# backend keeps reading as '' even after the elevation fix, and no stderr line is logged either,
+# which means the JSON parsed but BackendState came back empty. Log the head of the raw output
+# once so we can tell a permission problem from an unexpected output shape.
+if (-not $state -and -not $script:tsRawLogged) {
+  $script:tsRawLogged = $true
+  $raw = [string]$script:tsLastRaw
+  if ($raw -and $raw.Trim()) {
+    $snip = $raw.Substring(0, [Math]::Min(200, $raw.Length)) -replace '[
+]+', ' '
+    Log ("DIAG parsed=" + [bool]$st + " but BackendState empty. raw[0..200]=" + $snip)
+  } else {
+    Log ("DIAG tailscale status produced NO stdout at all (parsed=" + [bool]$st + ")")
+  }
+}
 if ($state -ne "Running") {
   Log ("tailscale backend='" + $state + "' -> running 'tailscale up'")
   try { & cmd.exe /c ('"' + $ts + '" up 2>NUL') | Out-Null } catch { Log ("tailscale up error: " + $_.Exception.Message) }
