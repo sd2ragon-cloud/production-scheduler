@@ -125,4 +125,28 @@ try {
   if (-not $listening) { $serverUp = $false; Log "WARN: no server listening on port 3000" }
 } catch {}
 
-Log ("ok backend='" + $state + "' serverUp=" + $serverUp + " url='" + $url + "'")
+# 6) Keep the GitHub auto-update watcher alive.
+# It runs from the HKCU Run key in a console window. If that window is closed -- or the script
+# exits and cmd parks on its `pause` -- deploys stop silently: commits pile up on GitHub while
+# the laptop keeps serving old code, and nothing on screen says so. That is exactly what
+# happened on 2026-09-08 (two commits never reached the server). Launch the ps1 directly rather
+# than auto-update.bat, so a failing run cannot leave a cmd window stuck on `pause`.
+$autoUp = $true
+try {
+  $running = Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -ErrorAction SilentlyContinue |
+             Where-Object { $_.CommandLine -and $_.CommandLine -match 'auto-update\.ps1' }
+  if (-not $running) {
+    $autoUp = $false
+    $ps1 = Join-Path $deployDir "auto-update.ps1"
+    if (Test-Path $ps1) {
+      Log "auto-update watcher is NOT running -> restarting it (deploys were stalled)"
+      Start-Process -FilePath "powershell.exe" `
+        -ArgumentList @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $ps1) `
+        -WorkingDirectory $proj -WindowStyle Minimized
+    } else {
+      Log ("WARN: auto-update watcher not running and " + $ps1 + " is missing")
+    }
+  }
+} catch { Log ("auto-update check error: " + $_.Exception.Message) }
+
+Log ("ok backend='" + $state + "' serverUp=" + $serverUp + " autoUpdate=" + $autoUp + " url='" + $url + "'")
