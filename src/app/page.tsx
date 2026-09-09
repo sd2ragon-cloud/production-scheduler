@@ -918,7 +918,7 @@ export default function ScheduleBoard() {
     setLoading(false);
   };
 
-  // === 위치별 독립 삭제 (확인창 없음) ===
+  // === 위치별 독립 삭제 (영구 삭제이므로 각 진입점에서 확인받는다) ===
   // 설비 배정 / 1차 배정 칸 / 배정 대기를 각각 '그 위치의 것'만 제거한다. 한 곳을 지워도 다른 곳은 유지.
   const deleteWholeOrder = async (orderId: number) => {
     setLoading(true);
@@ -929,6 +929,32 @@ export default function ScheduleBoard() {
 
   // 설비 배정 항목 삭제: 그 설비의 배정만 제거(다른 설비·1차 배정·대기 구성은 유지).
   const handleDeleteEntry = async (entry: ScheduleEntry) => {
+    // 이 삭제는 '배정 취소'와 달리 되돌아오지 않는다. 다른 설비에 없는 구성은 주문 사양에서도
+    // 지워지고, 마지막 위치였다면 주문 자체가 사라진다. 무엇이 영구히 없어지는지 먼저 알린다.
+    {
+      const others = schedule.filter((s) => s.order_id === entry.order_id && s.id !== entry.id);
+      const elsewhereParts = new Set<string>();
+      for (const s of others) parseParts(s.component_part).forEach((x) => elsewhereParts.add(x));
+      const entryParts = parseParts(entry.component_part);
+      const gone = entryParts.filter((x) => !elsewhereParts.has(x));
+      const ord = allOrders.find((o) => o.id === entry.order_id);
+      const orderParts = parseParts(ord?.component || "");
+      const wholeGone = orderParts.length > 0
+        ? (orderParts.filter((x) => !gone.includes(x)).length === 0 && others.length === 0)
+        : others.length === 0;
+
+      const title = `${entry.product_name}${entry.component_part ? `(${entry.component_part})` : ""}`;
+      let msg = `'${title}' 배정을 ${entry.machine_name}에서 삭제할까요?\n\n`;
+      if (wholeGone) {
+        msg += "이 주문의 마지막 위치라 주문이 통째로 삭제됩니다.\n배정 대기로 돌아오지 않습니다.";
+      } else if (gone.length > 0) {
+        msg += `구성 '${gone.join(", ")}'은(는) 주문에서도 영구히 없어집니다.\n배정 대기로 돌아오지 않습니다.`;
+      } else {
+        msg += "다른 설비에 같은 구성이 있어 주문 사양은 유지됩니다.";
+      }
+      msg += "\n\n대기로 되돌리려면 삭제 대신 '배정 취소'를 쓰세요.";
+      if (!window.confirm(msg)) return;
+    }
     setLoading(true);
     await fetch("/api/schedule/delete-entry", {
       method: "POST",
@@ -942,8 +968,14 @@ export default function ScheduleBoard() {
   // 카드 삭제(배정 대기=bucketId undefined / 1차 배정 칸=bucketId): 그 위치에 보이는 구성만 제거.
   // 설비에 배정된 구성·다른 위치 구성은 유지. 단일/무구성 주문은 한 곳에만 있으므로 주문 삭제.
   const handleDeleteCardLocation = async (order: Order, bucketId?: number) => {
+    const where = bucketId === undefined ? "배정 대기" : "1차 배정 칸";
+    const undoHint = "\n\n되돌리려면 상단 '되돌리기'를 쓰세요.";
     const parts = parseParts(order.component);
-    if (parts.length < 2) return deleteWholeOrder(order.id);
+    if (parts.length < 2) {
+      // 구성이 하나뿐(또는 없음)이면 이 카드가 곧 주문 전체다.
+      if (!window.confirm(`'${order.product_name}' 주문을 삭제할까요?\n\n${where}에 있는 이 주문이 영구히 없어집니다.${undoHint}`)) return;
+      return deleteWholeOrder(order.id);
+    }
     const locParts = partsAtLocation(order, bucketId);
     const totals = partTotals(order.component, order.part_durations, order.duration_minutes);
     const alloc: Record<string, number> = {};
@@ -960,7 +992,19 @@ export default function ScheduleBoard() {
         keep[p] = Number(totals[p]) || 0; // 다른 위치(설비 배정·다른 칸) 구성은 유지.
       }
     }
-    if (Object.keys(keep).length === 0) return deleteWholeOrder(order.id);
+    if (Object.keys(keep).length === 0) {
+      if (!window.confirm(`'${order.product_name}' 주문을 삭제할까요?\n\n${where}에서 남은 구성을 모두 빼면 주문에 아무것도 남지 않아 주문이 통째로 없어집니다.${undoHint}`)) return;
+      return deleteWholeOrder(order.id);
+    }
+    {
+      // 이 위치에서 빠지는 구성 중, 설비 배정분도 없어 주문에서 완전히 사라지는 것들.
+      const gone = locParts.filter((x) => !(x in keep));
+      let msg = `'${order.product_name}'의 구성 '${locParts.join(", ")}'을(를) ${where}에서 삭제할까요?\n\n`;
+      msg += gone.length > 0
+        ? `그중 '${gone.join(", ")}'은(는) 주문에서도 영구히 없어집니다.\n설비에 배정된 구성은 그대로 유지됩니다.`
+        : "설비에 배정된 분량은 그대로 유지됩니다.";
+      if (!window.confirm(msg + undoHint)) return;
+    }
     setLoading(true);
     await fetch(`/api/orders/${order.id}/drop-waiting`, {
       method: "POST",
