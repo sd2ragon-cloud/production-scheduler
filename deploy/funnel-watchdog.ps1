@@ -91,13 +91,12 @@ function TsJson($cliArgs) {
 
 # 1) Self-register the scheduled task (every 5 min) if it is missing.
 try {
+  # Register only when the task is missing. An earlier version also re-registered whenever the
+  # task was not RunLevel Highest, on the theory that `tailscale status --json` needed elevation.
+  # That diagnosis was wrong -- the real cause was console-codepage decoding of tailscale's UTF-8
+  # output (see TsJson) -- and the requested elevation never stuck, so the task was being
+  # re-registered every 5 minutes forever. Reverted.
   $existing = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
-  # Re-register an existing task that runs unelevated: `tailscale status --json` needs elevation,
-  # and without it this watchdog is blind (backend always reads as '').
-  if ($existing -and $existing.Principal.RunLevel -ne "Highest") {
-    Log "existing task is not elevated -> re-registering with RunLevel Highest"
-    $existing = $null
-  }
   if (-not $existing) {
     $action  = New-ScheduledTaskAction -Execute "powershell.exe" `
                  -Argument ("-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"" + $selfPath + "`"")
@@ -106,9 +105,8 @@ try {
                  -RepetitionDuration (New-TimeSpan -Days 3650)
     $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
     Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Settings $settings `
-      -User $env:USERNAME -RunLevel Highest `
       -Description "Keep Tailscale Funnel alive for production-scheduler (external access self-heal)" -Force | Out-Null
-    Log "registered scheduled task '$taskName' (every 5 min, elevated)"
+    Log "registered scheduled task '$taskName' (every 5 min)"
   }
 } catch { Log ("task register error: " + $_.Exception.Message) }
 
