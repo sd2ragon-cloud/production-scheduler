@@ -96,7 +96,11 @@ interface ScheduleEntry {
   start_time: string;
   end_time: string;
   mark_color?: string; // 관리자가 #번호 클릭으로 칠하는 표시 색상(여러 관리자 공유)
+  plate_done_at?: string; // CTP 판 출력완료 시각(''=미출력) — 매엽·윤전
 }
+
+// 서버가 순서 변경 응답에 담아 주는 '판 미출력인데 곧 시작' 경고(lib/plates.ts)
+type PlateWarning = { entry_id: number; machine: string; label: string; start: string };
 
 const DAY_NAMES = ["일", "월", "화", "수", "목", "금", "토"];
 
@@ -217,6 +221,7 @@ export default function ScheduleBoard() {
   const undoStacksRef = useRef<Record<string, UndoSnap[]>>({});
   const committedRef = useRef<{ line: string; sig: string; orders: Order[]; entries: ScheduleEntry[]; buckets: Bucket[] } | null>(null);
   const suppressUndoPushRef = useRef(false); // 되돌리기로 인한 fetchAll에선 스냅샷을 쌓지 않게
+  const fetchSeqRef = useRef(0); // fetchAll 호출 순번(늦게 도착한 자동 새로고침 응답 폐기용)
   // 수정창을 연 시점의 서버 주문 값. 저장할 때 함께 보내 '그 사이 남이 바꿨는지'를 서버가 판정한다.
   const editBaseRef = useRef<Record<string, unknown> | null>(null);
   const [undoCount, setUndoCount] = useState(0); // 현재 라인의 되돌리기 가능 단계 수(버튼 활성화용)
@@ -289,8 +294,10 @@ export default function ScheduleBoard() {
   const [printView, setPrintView] = useState<"order" | "full">("order");
   const wantPrint = useRef(false);
 
-  const fetchAll = useCallback(async () => {
+  // background=true: 자동 새로고침. 다른 사람의 변경을 받아오기만 하고 되돌리기 스냅샷은 쌓지 않는다.
+  const fetchAll = useCallback(async (opts?: { background?: boolean }) => {
     const line = processLine; // 이 fetch가 담당하는 라인
+    const seq = ++fetchSeqRef.current;
     const qs = `?process_line=${encodeURIComponent(line)}`;
     // 식사시간(breaks)은 전 공정 공통이라 process_line 필터 없이 받는다.
     const [machRes, orderRes, schedRes, bucketRes, breakRes, dtRes, noteRes] = await Promise.all([
@@ -305,6 +312,8 @@ export default function ScheduleBoard() {
     const noteData = await noteRes.json().catch(() => ({ note: "" }));
     // 응답이 도착했을 때 사용자가 이미 다른 탭으로 옮겼다면(느린/순서 뒤바뀐 응답) 이 데이터는 폐기한다.
     if (processLineRef.current !== line) return;
+    // 자동 새로고침 응답이 그 사이 시작된 다른 조회(사용자 작업)보다 늦게 오면 오래된 데이터이므로 버린다.
+    if (opts?.background && seq !== fetchSeqRef.current) return;
     setBreaks(Array.isArray(breakData) ? breakData : []);
     setDowntimes(Array.isArray(dtData) ? dtData : []);
     setWorkNote(typeof noteData?.note === "string" ? noteData.note : "");
@@ -333,7 +342,9 @@ export default function ScheduleBoard() {
     const safeBuckets: Bucket[] = Array.isArray(bucketData) ? bucketData : [];
     const newSig = JSON.stringify({ o: safeOrders, e: schedData, b: safeBuckets });
     const prevSnap = committedRef.current;
-    if (suppressUndoPushRef.current) {
+    if (opts?.background) {
+      // 자동 새로고침: 기준 상태만 갱신(아래 committedRef), 스택에는 쌓지 않음
+    } else if (suppressUndoPushRef.current) {
       suppressUndoPushRef.current = false; // 되돌리기가 유발한 fetch는 저장하지 않음(핑퐁 방지)
     } else if (prevSnap && prevSnap.line === line && prevSnap.sig !== newSig) {
       const stack = (undoStacksRef.current[line] = undoStacksRef.current[line] || []);
@@ -373,6 +384,24 @@ export default function ScheduleBoard() {
   }, [processLine]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  // 자동 새로고침(30초): 다른 사람(다른 PC)이 바꾼 순서·배정을 F5 없이 반영한다.
+  // 드래그·편집·입력 중이거나 작업 처리 중이면 건너뛴다(작업 방해·입력값 유실 방지).
+  const autoRefreshBlockedRef = useRef(false);
+  useEffect(() => {
+    autoRefreshBlockedRef.current = loading || dragOrderId != null || dragEntryId != null || dragSplit != null || dragAll ||
+      dragParts.length > 0 || waitReorderId != null || editingOrderId != null || editEntryId != null ||
+      editRollEntryId != null || editMachineId != null;
+  });
+  useEffect(() => {
+    const t = setInterval(() => {
+      if (document.hidden || autoRefreshBlockedRef.current) return;
+      const a = document.activeElement as HTMLElement | null;
+      if (a && (a.tagName === "INPUT" || a.tagName === "TEXTAREA" || a.tagName === "SELECT" || a.isContentEditable)) return;
+      fetchAll({ background: true });
+    }, 30000);
+    return () => clearInterval(t);
+  }, [fetchAll]);
 
   // 로드된 데이터가 현재 탭(라인)과 일치할 때만 설비·물량을 렌더한다(탭 전환 직후 이전 라인 데이터 노출 방지).
   const linesReady = dataLine === processLine;
@@ -652,7 +681,7 @@ export default function ScheduleBoard() {
   };
 
   // 되돌리기(Undo): 현재 라인의 스택에서 '직전 상태'를 꺼내 서버로 복원한다.
-  const undo = async () => {
+  const undo = async (opts?: { skipConfirm?: boolean }) => {
     if (!isAdmin) return;
     const line = processLine;
     const stack = undoStacksRef.current[line];
@@ -672,7 +701,7 @@ export default function ScheduleBoard() {
     const warn = lostMsg
       ? "되돌리기를 하면 아래 항목이 삭제됩니다.\n(다른 사람이 방금 추가한 것도 포함될 수 있습니다)\n\n" + lostMsg + "\n\n계속할까요?"
       : "직전 변경을 되돌립니다. 계속할까요?";
-    if (!window.confirm(warn)) return;
+    if (!opts?.skipConfirm && !window.confirm(warn)) return;
     stack.pop();
     setUndoCount(stack.length);
     setLoading(true);
@@ -691,6 +720,26 @@ export default function ScheduleBoard() {
       setLoading(false);
     }
   };
+  // 판(CTP) 경고: 순서 변경 결과 '판이 아직 출력되지 않았는데 곧(2시간 내) 시작'하는 작업이 생기면 확인창.
+  // [취소]를 누르면 방금 변경을 되돌린다. (서버가 응답의 plate_warnings로 알려준다)
+  const readPlateWarnings = async (res: Response): Promise<PlateWarning[]> => {
+    try {
+      const d = await res.json();
+      return Array.isArray(d?.plate_warnings) ? d.plate_warnings : [];
+    } catch { return []; }
+  };
+  const confirmPlateWarnings = async (warnings: PlateWarning[]) => {
+    const uniq = Array.from(new Map(warnings.map((w) => [w.entry_id, w])).values());
+    if (uniq.length === 0) return;
+    const list = uniq.slice(0, 8).map((w) => `· ${w.machine}  ${w.start.slice(11, 16)} 시작  ${w.label}`).join("\n");
+    const more = uniq.length > 8 ? `\n· 외 ${uniq.length - 8}건` : "";
+    const keep = window.confirm(
+      `⚠ 판(CTP) 출력이 아직 안 된 작업이 곧 시작됩니다.\n\n${list}${more}\n\n` +
+      "[확인] 이대로 진행 — CTP에 꼭 알려주세요 (CTP 화면에도 변경 알림이 뜹니다)\n[취소] 방금 변경 되돌리기",
+    );
+    if (!keep) await undo({ skipConfirm: true });
+  };
+
   // (안전) Ctrl+Z 단축키는 제거했다. 실수로 눌러 라인 전체가 이전 상태로 되돌아가면서
   //  그 사이 다른 사람이 추가한 물량까지 삭제되는 사고가 있었기 때문. 되돌리기는 버튼 + 확인창으로만.
   // 탭(라인) 전환 시 그 라인의 되돌리기 가능 단계 수를 즉시 반영
@@ -752,7 +801,7 @@ export default function ScheduleBoard() {
   const handleAssign = async (orderId: number, machineId: number, part: string = "", allocMinutes: number = 0, beforeEntryId: number | null = null, merge: boolean = false, mergeEntryId: number | null = null) => {
     setLoading(true);
     const startTime = machineStartTimes[machineId] || "08:00";
-    await fetch("/api/schedule/assign", {
+    const res = await fetch("/api/schedule/assign", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       // merge=true면 같은 제품 행(merge_entry_id)에 합치고, 아니면 드롭 위치에 독립 행으로 둔다.
@@ -761,6 +810,7 @@ export default function ScheduleBoard() {
     await fetchAll();
     await markMoved(orderId, machineId);
     setLoading(false);
+    await confirmPlateWarnings(await readPlateWarnings(res));
   };
 
   // 주문의 남은 파트 전체를 한 설비에 배정 (각 파트의 남은 시간만큼).
@@ -771,6 +821,7 @@ export default function ScheduleBoard() {
     setLoading(true);
     const startTime = machineStartTimes[machineId] || "08:00";
     const allParts = parseParts(order.component);
+    const warns: PlateWarning[] = [];
     const parts = onlyParts.length ? allParts.filter((p) => onlyParts.includes(p)) : allParts;
     const totals = partTotals(order.component, order.part_durations, order.duration_minutes);
     const present = new Set<string>();
@@ -784,11 +835,12 @@ export default function ScheduleBoard() {
     }
     if (allParts.length === 0) {
       // 구성 없는 주문: 통째 배정
-      await fetch("/api/schedule/assign", {
+      const res = await fetch("/api/schedule/assign", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ order_id: orderId, machine_id: machineId, start_time: startTime, component_part: "", before_entry_id: beforeEntryId, merge: true }),
       });
+      warns.push(...(await readPlateWarnings(res)));
     } else {
       for (const p of parts) {
         const t = Number(totals[p]) || 0;
@@ -801,16 +853,18 @@ export default function ScheduleBoard() {
           continue;
         }
         // merge:true → 카드 본문(전체) 배정은 같은 제품 구성을 한 행으로 묶는다
-        await fetch("/api/schedule/assign", {
+        const res = await fetch("/api/schedule/assign", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ order_id: orderId, machine_id: machineId, start_time: startTime, component_part: p, alloc_minutes: allocMin, before_entry_id: beforeEntryId, merge: true }),
         });
+        warns.push(...(await readPlateWarnings(res)));
       }
     }
     await fetchAll();
     await markMoved(orderId, machineId);
     setLoading(false);
+    await confirmPlateWarnings(warns);
   };
 
   const handleReorderParts = async (entryId: number, parts: string[]) => {
@@ -831,7 +885,7 @@ export default function ScheduleBoard() {
   const handleMovePart = async (entryId: number, part: string, targetMachineId: number, srcMachineId: number, moveMinutes: number = 0, beforeEntryId: number | null = null, merge: boolean = false, mergeEntryId: number | null = null) => {
     setLoading(true);
     const movedOid = schedule.find((s) => s.id === entryId)?.order_id ?? null;
-    await fetch("/api/schedule/move-part", {
+    const res = await fetch("/api/schedule/move-part", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -851,6 +905,7 @@ export default function ScheduleBoard() {
     // 같은 설비 내 재배치=순서변경(노랑), 다른 설비로 이동=이동(분홍).
     await markMoved(movedOid, targetMachineId, srcMachineId === targetMachineId ? "amber" : "rose");
     setLoading(false);
+    await confirmPlateWarnings(await readPlateWarnings(res));
   };
 
   // 통째(구성 미분할) 배정 행을 다른 설비로 이동/분할. moveMinutes가 행 전체보다 작으면 분할 생산.
@@ -858,7 +913,7 @@ export default function ScheduleBoard() {
   const handleMoveEntry = async (entryId: number, targetMachineId: number, srcMachineId: number, moveMinutes: number = 0, beforeEntryId: number | null = null, merge: boolean = false, mergeEntryId: number | null = null) => {
     setLoading(true);
     const movedOid = schedule.find((s) => s.id === entryId)?.order_id ?? null;
-    await fetch("/api/schedule/move-entry", {
+    const res = await fetch("/api/schedule/move-entry", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -875,6 +930,7 @@ export default function ScheduleBoard() {
     await fetchAll();
     await markMoved(movedOid, targetMachineId);
     setLoading(false);
+    await confirmPlateWarnings(await readPlateWarnings(res));
   };
 
   const handleUnassign = async (entryId: number) => {
@@ -1125,13 +1181,14 @@ export default function ScheduleBoard() {
     const movedOid = dragEntryId != null ? (schedule.find((s) => s.id === dragEntryId)?.order_id ?? null) : null;
     const seqMap = new Map(entryIds.map((id, i) => [id, i + 1] as const));
     setSchedule((prev) => prev.map((e) => (seqMap.has(e.id) ? { ...e, sequence: seqMap.get(e.id)! } : e)));
-    await fetch("/api/schedule/reorder", {
+    const res = await fetch("/api/schedule/reorder", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ machine_id: machineId, entry_ids: entryIds }),
     });
     await fetchAll();
     await markMoved(movedOid, machineId, "amber"); // 설비 내 순서변경 = 노랑
+    await confirmPlateWarnings(await readPlateWarnings(res));
   };
 
   // 배정 대기 카드 순서 변경(위/아래 드래그). orderedIds = 재정렬 대상 주문 id들의 새 순서.
@@ -2675,7 +2732,7 @@ export default function ScheduleBoard() {
           <div className="flex items-center gap-1.5 flex-wrap justify-end">
             {isAdmin && (
               <button
-                onClick={undo}
+                onClick={() => undo()}
                 disabled={undoCount === 0}
                 className={`text-xs border px-2 py-1 whitespace-nowrap ${undoCount === 0 ? "border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed" : "border-amber-500 bg-amber-50 text-amber-700 font-medium hover:bg-amber-100"}`}
                 title={undoCount === 0 ? "되돌릴 변경이 없습니다 (새로고침하면 이력이 초기화됩니다)" : `직전 변경 되돌리기 · ${undoCount}단계 가능 (실행 전 확인창이 뜹니다)`}
@@ -2972,6 +3029,14 @@ export default function ScheduleBoard() {
                           <td className="px-1.5 py-0">
                             <div className="flex items-center gap-1 overflow-x-auto jobscroll">
                             <span className={`font-medium shrink-0 ${isJechae ? "text-[13px] text-black" : "text-[12px]"}`}>{isRoll ? (() => { const comp = entry.component_part || entry.component || ""; return `${entry.product_name}${comp ? `(${comp})` : ""}`; })() : entry.product_name}{rollTag(entry.quantity_sheets)}</span>
+                            {!isJechae && (entry.plate_done_at ? (
+                              <span className="shrink-0 px-1 text-[10px] font-bold leading-4 border border-green-400 bg-green-50 text-green-700" title={`CTP 판 출력완료 ${entry.plate_done_at.slice(5, 16)}`}>판✓</span>
+                            ) : (() => {
+                              const t = new Date(String(entry.start_time).replace(" ", "T")).getTime();
+                              return Number.isFinite(t) && t - Date.now() <= 2 * 3600e3 ? (
+                                <span className="shrink-0 px-1 text-[10px] font-bold leading-4 border border-red-400 bg-red-50 text-red-700" title="CTP 판이 아직 출력되지 않았습니다(2시간 내 시작)">판✗</span>
+                              ) : null;
+                            })())}
                             {(() => {
                               // 윤전은 제품명 * 수량만 표기(요청) — 구성 칩/구분 칩을 표시하지 않는다.
                               if (isRoll) return null;

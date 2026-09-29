@@ -9,6 +9,7 @@ import { type AdminRole } from './factory-config';
 const PW_KEY: Record<AdminRole, string> = {
   sheet: 'admin_pw_sheet',
   wireless: 'admin_pw_wireless',
+  ctp: 'admin_pw_ctp',
 };
 
 function hash(plain: string, salt: string): string {
@@ -65,6 +66,7 @@ export async function rolePasswordStatus(): Promise<Record<AdminRole, boolean>> 
   return {
     sheet: await hasRolePassword('sheet'),
     wireless: await hasRolePassword('wireless'),
+    ctp: await hasRolePassword('ctp'),
   };
 }
 

@@ -15,7 +15,7 @@ const AuthContext = createContext<AuthState | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [role, setRole] = useState<AdminRole | null>(null);
-  const [passwords, setPasswords] = useState<Record<AdminRole, boolean>>({ sheet: true, wireless: true });
+  const [passwords, setPasswords] = useState<Record<AdminRole, boolean>>({ sheet: true, wireless: true, ctp: true });
   const [loaded, setLoaded] = useState(false);
 
   const refresh = useCallback(async () => {
@@ -24,7 +24,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const d = await r.json();
       setRole(d.role ?? null);
       if (d.passwords && typeof d.passwords === "object") {
-        setPasswords({ sheet: !!d.passwords.sheet, wireless: !!d.passwords.wireless });
+        setPasswords({ sheet: !!d.passwords.sheet, wireless: !!d.passwords.wireless, ctp: !!d.passwords.ctp });
       }
     } catch {
       /* 네트워크 오류 시 기본값(보기 전용) 유지 */

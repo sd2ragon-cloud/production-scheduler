@@ -5,6 +5,7 @@ import { recalcMachine } from '@/lib/calc';
 import { parseParts, parsePartDurations, sumDurations, partTotals } from '@/lib/parts';
 import { isDoubleSided, effectiveMinutes } from '@/lib/print';
 import { guardOrder, guardMachine } from '@/lib/permits';
+import { snapshotPlates, flagPlateChanges } from '@/lib/plates';
 
 const DEFAULT_PART_MINUTES = 60;
 
@@ -17,6 +18,7 @@ export async function POST(req: NextRequest) {
   if (denyM) return denyM;
   const part = typeof component_part === 'string' ? component_part : '';
   const db = await getDb();
+  const plateBefore = await snapshotPlates([Number(machine_id)]);
 
   const orderResult = await db.execute({ sql: 'SELECT quantity_sheets, duration_minutes, component, part_durations, product_name, notes FROM orders WHERE id = ?', args: [order_id] });
   const order = orderResult.rows[0] as unknown as { quantity_sheets: number; duration_minutes: number; component: string; part_durations: string; product_name: string; notes: string } | undefined;
@@ -144,6 +146,7 @@ export async function POST(req: NextRequest) {
   await db.execute({ sql: 'UPDATE orders SET status = ? WHERE id = ?', args: [newStatus, order_id] });
 
   await recalcMachine(machine_id, today, start_time);
+  const plate_warnings = await flagPlateChanges(plateBefore, [Number(machine_id)]);
 
-  return NextResponse.json({ success: true });
+  return NextResponse.json({ success: true, plate_warnings });
 }

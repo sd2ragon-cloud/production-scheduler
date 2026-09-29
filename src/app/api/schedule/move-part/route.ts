@@ -5,6 +5,7 @@ import { recalcMachine } from '@/lib/calc';
 import { parseParts, parsePartDurations, sumDurations, partTotals } from '@/lib/parts';
 import { isDoubleSided, effectiveMinutes } from '@/lib/print';
 import { guardEntry, guardMachine } from '@/lib/permits';
+import { snapshotPlates, flagPlateChanges } from '@/lib/plates';
 
 const DEFAULT_PART_MINUTES = 60;
 
@@ -35,6 +36,7 @@ export async function POST(req: NextRequest) {
   const srcMachine = Number(src.machine_id);
   const targetMachine = Number(target_machine_id);
   const srcMode = src.print_mode || 'single';
+  const plateBefore = await snapshotPlates([srcMachine, targetMachine]);
   // 대상 설비의 기본 인쇄 모드
   const tgtMachineResult = await db.execute({ sql: 'SELECT name, process_line FROM machines WHERE id = ?', args: [targetMachine] });
   const tgtMachine = tgtMachineResult.rows[0] as unknown as { name: string; process_line: string } | undefined;
@@ -169,5 +171,13 @@ export async function POST(req: NextRequest) {
   await recalcMachine(srcMachine, today, typeof source_start_time === 'string' ? source_start_time : undefined);
   await recalcMachine(targetMachine, today, typeof target_start_time === 'string' ? target_start_time : undefined);
 
-  return NextResponse.json({ success: true });
+  // CTP 알림: 다른 설비로 옮겨 새로 생긴 행은 '이동'으로 표시.
+  const plateNotes: Record<number, string> = {};
+  if (newEntryId !== null && srcMachine !== targetMachine) {
+    const srcName = String(((await db.execute({ sql: 'SELECT name FROM machines WHERE id = ?', args: [srcMachine] })).rows[0] as Record<string, unknown> | undefined)?.name ?? '');
+    plateNotes[newEntryId] = `${srcName}→${tgtMachineName} 이동 (${partStr})`;
+  }
+  const plate_warnings = await flagPlateChanges(plateBefore, [srcMachine, targetMachine], plateNotes);
+
+  return NextResponse.json({ success: true, plate_warnings });
 }

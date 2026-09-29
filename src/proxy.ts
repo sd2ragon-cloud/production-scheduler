@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { isAdminRequest } from '@/lib/auth-token';
+import { getAdminRole } from '@/lib/auth-token';
 
 // 서버측 권한 차단(이 Next 16에서는 middleware가 proxy로 바뀜, 기본 Node 런타임).
 // 규칙: 조회(GET/HEAD/OPTIONS)와 로그인 엔드포인트(/api/auth)는 누구나. 그 외 모든 쓰기
@@ -19,7 +19,13 @@ export function proxy(req: NextRequest) {
   if (req.nextUrl.pathname === '/api/auth') {
     return NextResponse.next();
   }
-  if (isAdminRequest(req)) {
+  const role = getAdminRole(req);
+  // CTP 담당자는 판 출력 체크(/api/plates)만 쓸 수 있다(식사시간 등 라인 없는 공통 설정도 변경 불가).
+  if (role === 'ctp') {
+    if (req.nextUrl.pathname === '/api/plates') return NextResponse.next();
+    return NextResponse.json({ error: 'CTP 담당자는 판 출력 체크만 할 수 있습니다.' }, { status: 403 });
+  }
+  if (role) {
     return NextResponse.next();
   }
   return NextResponse.json({ error: '관리자만 변경할 수 있습니다. 우측 상단에서 관리자 로그인하세요.' }, { status: 403 });

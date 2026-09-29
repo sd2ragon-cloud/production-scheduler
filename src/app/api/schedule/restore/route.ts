@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { guardLine } from '@/lib/permits';
 import { logAudit } from '@/lib/audit';
+import { snapshotPlates, flagPlateChanges, plateMachineIdsOfLine } from '@/lib/plates';
 
 // 되돌리기(Undo) 복원: 클라이언트가 보관한 '이전 상태 스냅샷'으로 해당 라인의
 // orders / schedule_entries / buckets 를 정확히 되돌린다.
@@ -45,14 +46,15 @@ export async function POST(req: NextRequest) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const stmts: { sql: string; args: any[] }[] = [];
   // 실제 테이블 컬럼만 골라 upsert(원래 id 유지). id 없는 행은 건너뜀.
+  // keepCurrent: 이미 있는 행이면 현재 값을 유지할 컬럼(다른 사람이 바꾼 값 — 예: CTP의 판 출력 체크).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const pushUpsert = (table: string, colSet: Set<string>, rows: any[]) => {
+  const pushUpsert = (table: string, colSet: Set<string>, rows: any[], keepCurrent: string[] = []) => {
     for (const row of rows) {
       if (!row || typeof row !== 'object') continue;
       const keys = Object.keys(row).filter((k) => colSet.has(k));
       if (!keys.includes('id')) continue;
       const ph = keys.map(() => '?').join(', ');
-      const upd = keys.filter((k) => k !== 'id').map((k) => `${k} = excluded.${k}`).join(', ');
+      const upd = keys.filter((k) => k !== 'id' && !keepCurrent.includes(k)).map((k) => `${k} = excluded.${k}`).join(', ');
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const args = keys.map((k) => (row[k] === undefined ? null : row[k])) as any[];
       const sql = `INSERT INTO ${table} (${keys.join(', ')}) VALUES (${ph})` +
@@ -67,7 +69,8 @@ export async function POST(req: NextRequest) {
 
   // 순서: 주문 upsert → 배정 upsert(주문 FK 충족) → 여분 배정 삭제 → 여분 주문 삭제 → 칸 복원/정리.
   pushUpsert('orders', oCols, orders.map((o) => ({ ...o, process_line: line })));
-  pushUpsert('schedule_entries', eCols, entries);
+  // 판 출력 상태·변경 알림은 CTP 쪽 정보라 되돌리기로 지우지 않는다.
+  pushUpsert('schedule_entries', eCols, entries, ['plate_done_at', 'plate_done_by', 'changed_at', 'change_note']);
   for (const id of curE.filter((id) => !keepE.has(id))) stmts.push({ sql: 'DELETE FROM schedule_entries WHERE id = ?', args: [id] });
   for (const id of curO.filter((id) => !keepO.has(id))) stmts.push({ sql: 'DELETE FROM orders WHERE id = ?', args: [id] });
   pushUpsert('buckets', bCols, buckets.map((b) => ({ ...b, process_line: line })));
@@ -106,7 +109,10 @@ export async function POST(req: NextRequest) {
   }
 
   // 한 트랜잭션으로 원자적 실행(중간 실패 시 전체 롤백 → 부분 손상 방지).
+  const plateIds = await plateMachineIdsOfLine(line);
+  const plateBefore = await snapshotPlates(plateIds);
   if (stmts.length) await db.batch(stmts, 'write');
+  const plate_warnings = await flagPlateChanges(plateBefore, plateIds);
 
-  return NextResponse.json({ success: true });
+  return NextResponse.json({ success: true, plate_warnings });
 }

@@ -5,6 +5,7 @@ import { recalcMachine } from '@/lib/calc';
 import { parseParts, parsePartDurations, sumDurations, partTotals } from '@/lib/parts';
 import { isDoubleSided, effectiveMinutes } from '@/lib/print';
 import { guardEntry, guardMachine } from '@/lib/permits';
+import { snapshotPlates, flagPlateChanges } from '@/lib/plates';
 
 // 구성 분할이 없는 '통째' 배정 행(component_part="")을 다른 설비로 옮긴다.
 // move_minutes(실제 소요시간 기준)가 행의 전체보다 작으면 그만큼만 분할 이동(원본은 나머지 유지),
@@ -19,11 +20,12 @@ export async function POST(req: NextRequest) {
 
   const srcResult = await db.execute({ sql: 'SELECT * FROM schedule_entries WHERE id = ?', args: [entry_id] });
   const src = srcResult.rows[0] as unknown as
-    | { id: number; order_id: number; machine_id: number; sequence: number; base_minutes: number; duration_minutes: number; component_part: string; part_durations: string; print_mode: string }
+    | { id: number; order_id: number; machine_id: number; sequence: number; base_minutes: number; duration_minutes: number; component_part: string; part_durations: string; print_mode: string; plate_done_at: string }
     | undefined;
   if (!src) {
     return NextResponse.json({ error: 'not found' }, { status: 404 });
   }
+  const plateBefore = await snapshotPlates([Number(src.machine_id), Number(target_machine_id)]);
 
   const orderId = Number(src.order_id);
   const srcMachine = Number(src.machine_id);
@@ -172,5 +174,13 @@ export async function POST(req: NextRequest) {
   await recalcMachine(srcMachine, today, typeof source_start_time === 'string' ? source_start_time : undefined);
   await recalcMachine(targetMachine, today, typeof target_start_time === 'string' ? target_start_time : undefined);
 
-  return NextResponse.json({ success: true });
+  // CTP 알림: 다른 설비로 옮겨 새로 생긴 행은 '이동'으로 표시(판은 설비가 바뀌어 다시 확인 필요).
+  const plateNotes: Record<number, string> = {};
+  if (newEntryId !== null && srcMachine !== targetMachine) {
+    const srcName = String(((await db.execute({ sql: 'SELECT name FROM machines WHERE id = ?', args: [srcMachine] })).rows[0] as Record<string, unknown> | undefined)?.name ?? '');
+    plateNotes[newEntryId] = `${srcName}→${tgtMachineName} ${fullMove ? '이동' : '분할'}${String(src.plate_done_at || '') ? ` (${srcName} 판 출력완료였음)` : ''}`;
+  }
+  const plate_warnings = await flagPlateChanges(plateBefore, [srcMachine, targetMachine], plateNotes);
+
+  return NextResponse.json({ success: true, plate_warnings });
 }

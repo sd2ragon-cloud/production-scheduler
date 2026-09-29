@@ -353,6 +353,17 @@ async function initializeDb(db: Client) {
   )`);
   try { await db.execute(`CREATE INDEX IF NOT EXISTS idx_audit_at ON audit_log(at)`); } catch {}
 
+  // CTP(판 출력) 연동: 매엽·윤전 설비 배정 항목별 판 출력 상태와 '순서 변경' 알림.
+  //  · plate_done_at/by : CTP가 판을 출력하고 체크한 시각·체크한 사람(PC 이름 또는 역할)
+  //  · changed_at/note  : 순서변경·이동·신규배정으로 시작이 앞당겨진 시각과 사유(CTP 화면 알림용)
+  for (const col of ['plate_done_at', 'plate_done_by', 'changed_at', 'change_note']) {
+    try {
+      await db.execute(`ALTER TABLE schedule_entries ADD COLUMN ${col} TEXT NOT NULL DEFAULT ''`);
+    } catch {
+      // column already exists
+    }
+  }
+
   // 기존 윤전 편집 항목(entry_edited=1)은 비고도 이미 '항목별'이었으므로, 새 비고 플래그를 켜
   // 배포 후에도 그 항목들의 비고가 그대로 유지되게 한다(멱등 — 이미 켜진 건 건드리지 않음).
   try {
