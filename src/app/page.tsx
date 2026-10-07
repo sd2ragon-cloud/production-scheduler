@@ -3518,14 +3518,15 @@ export default function ScheduleBoard() {
                               <div key={p} className={`grid ${(!usesQuantity || jechaeMulti) ? "grid-cols-3" : "grid-cols-2"} gap-1 items-center`}>
                                 <span className="text-[11px] text-gray-700 truncate" title={p}>{p}</span>
                                 <input
-                                  type="number" min="0" step="0.5" placeholder={pi === 0 ? "시간(전체 자동)" : "시간"}
-                                  title={pi === 0 ? "최상단에 입력하면 아래 구성도 같은 값으로 자동 입력됩니다(개별 수정 가능)" : undefined}
+                                  type="number" min="0" step="0.5" placeholder={pi === 0 && editingOrderId === null ? "시간(전체 자동)" : "시간"}
+                                  title={pi === 0 && editingOrderId === null ? "최상단에 입력하면 아래 구성도 같은 값으로 자동 입력됩니다(개별 수정 가능)" : undefined}
                                   className="border px-2 py-1 text-xs w-full min-w-0"
                                   value={newOrder.partHours[p] || ""}
                                   onChange={(e) => {
                                     const v = Number(e.target.value);
-                                    // 최상단(첫 구성) 입력 시 아래 구성들도 같은 값으로 자동 채움. 이후 각 칸 개별 수정 가능.
-                                    if (pi === 0) {
+                                    // 새 주문 등록: 최상단(첫 구성) 입력 시 아래 구성들도 같은 값으로 자동 채움(이후 각 칸 개별 수정 가능).
+                                    // 기존 주문 수정: 구성별 시간이 이미 있으므로 최상단을 고쳐도 아래 구성은 그대로 둔다(각 칸 별도 수정).
+                                    if (pi === 0 && editingOrderId === null) {
                                       const filled = { ...newOrder.partHours };
                                       for (const q of newParts) filled[q] = v;
                                       setNewOrder({ ...newOrder, partHours: filled });
