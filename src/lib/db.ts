@@ -353,6 +353,19 @@ async function initializeDb(db: Client) {
   )`);
   try { await db.execute(`CREATE INDEX IF NOT EXISTS idx_audit_at ON audit_log(at)`); } catch {}
 
+  // 1회 정리: 신규 설비 기본 휴무를 '일요일만'→'토·일'로 바꾸면서, 아직 근무 설정이 하나도 없는
+  // (요일 근무체제·날짜 지정 모두 비어 있고 휴무가 일요일뿐인) 설비도 주말 휴무로 맞춘다. (예: MB4-4)
+  try {
+    const done = await db.execute({ sql: 'SELECT value FROM settings WHERE key = ?', args: ['mig_weekend_off_default'] });
+    if (done.rows.length === 0) {
+      await db.execute(`UPDATE machines SET off_days = '[0,6]', works_saturday = 0, works_sunday = 0
+        WHERE off_days = '[0]' AND COALESCE(day_shifts, '') = '' AND COALESCE(date_shifts, '') IN ('', '{}')`);
+      await db.execute({ sql: `INSERT INTO settings (key, value) VALUES ('mig_weekend_off_default', '1') ON CONFLICT(key) DO NOTHING`, args: [] });
+    }
+  } catch {
+    // settings/machines 컬럼이 아직 없으면 다음 기동 때 처리
+  }
+
   // CTP(판 출력) 연동: 매엽·윤전 설비 배정 항목별 판 출력 상태와 '순서 변경' 알림.
   //  · plate_done_at/by : CTP가 판을 출력하고 체크한 시각·체크한 사람(PC 이름 또는 역할)
   //  · changed_at/note  : 순서변경·이동·신규배정으로 시작이 앞당겨진 시각과 사유(CTP 화면 알림용)

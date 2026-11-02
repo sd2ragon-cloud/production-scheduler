@@ -31,7 +31,8 @@ export async function POST(req: NextRequest) {
   const nextOrder = Number((maxResult.rows[0] as unknown as { max_order: number }).max_order) + 1;
 
   const result = await db.execute({
-    sql: `INSERT INTO machines (name, description, speed_sheets_per_hour, setup_time_minutes, capabilities, work_start_hour, work_end_hour, works_saturday, works_sunday, factory, process_line, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    // 신규 설비 기본 휴무 = 토·일(주말). 지정값(off_days)이 오면 그 값을 쓴다.
+    sql: `INSERT INTO machines (name, description, speed_sheets_per_hour, setup_time_minutes, capabilities, work_start_hour, work_end_hour, works_saturday, works_sunday, factory, process_line, sort_order, off_days) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       body.name,
       body.description || '',
@@ -45,6 +46,9 @@ export async function POST(req: NextRequest) {
       body.factory || '본공장',
       body.process_line || '매엽',
       nextOrder,
+      JSON.stringify(Array.isArray(body.off_days)
+        ? Array.from(new Set(body.off_days.map(Number).filter((n: number) => n >= 0 && n <= 6)))
+        : [0, 6]),
     ],
   });
 
