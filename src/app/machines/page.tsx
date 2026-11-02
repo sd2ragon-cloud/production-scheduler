@@ -61,8 +61,14 @@ function hoursSummary(m: Machine): string {
 }
 
 // 근무체제 기반 요약(설정이 있으면). 같은 체제끼리 요일을 묶어 "월·화·수 정상(주) · 토 정시(주)"처럼.
+// 요일 근무체제는 없고 달력(날짜별)만 쓰는 설비: 지정 안 한 날은 휴무로 계산된다(lib/calc.ts와 동일 규칙).
+function calendarOnly(m: Machine): boolean {
+  return Object.keys(parseDayShifts(m.day_shifts)).length === 0 && Object.keys(parseDateShifts(m.date_shifts)).length > 0;
+}
+
 function shiftSummary(m: Machine): string {
   const ds = parseDayShifts(m.day_shifts);
+  if (calendarOnly(m)) return "달력 지정일만 근무";
   if (Object.keys(ds).length === 0) return hoursSummary(m); // 구버전 → 시간 요약
   const order = [1, 2, 3, 4, 5, 6, 0];
   const groups: { key: string; days: number[] }[] = [];
@@ -78,6 +84,7 @@ function shiftSummary(m: Machine): string {
 // 휴무 요일(근무체제 설정이 있으면 체제 없는 요일, 없으면 off_days)
 function offDaysOfMachine(m: Machine): number[] {
   const ds = parseDayShifts(m.day_shifts);
+  if (calendarOnly(m)) return []; // 요약에 '달력 지정일만 근무'로 표시
   if (Object.keys(ds).length === 0) return parseOff(m.off_days);
   return [0, 1, 2, 3, 4, 5, 6].filter((d) => !(ds[d]?.length));
 }

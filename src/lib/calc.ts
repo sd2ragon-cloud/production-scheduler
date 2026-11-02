@@ -145,9 +145,12 @@ export async function recalcMachine(machineId: number, baseDate?: string, _start
 
   // 근무체제(교대) 사용 여부. 설정이 있으면 요일별 근무체제로, 없으면 구버전 시작/종료(또는 day_hours)로.
   const dayShifts = parseDayShifts(machine.day_shifts);
-  const useShifts = Object.keys(dayShifts).length > 0;
   // 일자별 예외(특정 날짜의 근무체제). 있으면 그 날짜는 요일 템플릿 대신 이걸 쓴다(빈 배열=그 날 휴무).
   const dateShifts = parseDateShifts(machine.date_shifts);
+  // 설비 관리 달력으로 날짜를 지정해 쓰는 설비는(요일 근무체제가 비어 있어도) 달력 기준으로 계산한다.
+  // 달력은 지정 안 한 날을 '휴무'로 보여주므로, 구버전 기본값(일요일만 휴무·08~22시)으로 폴백하면
+  // 신규 설비에서 토요일 등이 근무로 계산되는 불일치가 생긴다(예: MB8-3).
+  const useShifts = Object.keys(dayShifts).length > 0 || Object.keys(dateShifts).length > 0;
 
   const shiftWindows = (names: string[]): [number, number][] =>
     names.map((n) => SHIFTS[n]).filter(Boolean).map((s) => [s.start, s.end] as [number, number]);
